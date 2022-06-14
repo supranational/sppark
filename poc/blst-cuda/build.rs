@@ -2,30 +2,36 @@ use std::env;
 use std::path::PathBuf;
 
 fn feature_check() {
-    #[cfg(all(feature = "bn254", feature = "bls12_377"))]
-    compile_error!("Multiple curves are not supported, please select only one");
-    #[cfg(all(feature = "bn254", feature = "bls12_381"))]
-    compile_error!("Multiple curves are not supported, please select only one");
-    #[cfg(all(feature = "bls12_377", feature = "bls12_381"))]
-    compile_error!("Multiple curves are not supported, please select only one");
-    #[cfg(not(any(
-        feature = "bn254",
-        feature = "bls12_377",
-        feature = "bls12_381"
-    )))]
-    compile_error!(
-        "Can't run without selecting any curves, please select a curve"
-    );
+    let curves = ["bn254", "bls12_377", "bls12_381"];
+    let curves_as_features: Vec<String> = (0..curves.len())
+        .map(|i| format!("CARGO_FEATURE_{}", curves[i].to_uppercase()))
+        .collect();
+
+    let mut curve_counter = 0;
+    for curve_feature in curves_as_features.iter() {
+        curve_counter += env::var(&curve_feature).is_ok() as i32;
+    }
+
+    match curve_counter {
+        0 => panic!("Can't run without selecting any curves, please select a curve. Available curves are\n{:#?}\n", curves),
+        2.. => panic!("Multiple curves are not supported, please select only one."),
+        _ => (),
+    };
 }
 
 fn main() {
     feature_check();
 
+    #[allow(unused_variables)]
+    let curve = "";
     #[cfg(feature = "bn254")]
+    #[allow(unused_variables)]
     let curve = "FEATURE_BN254";
     #[cfg(feature = "bls12_377")]
+    #[allow(unused_variables)]
     let curve = "FEATURE_BLS12_377";
     #[cfg(feature = "bls12_381")]
+    #[allow(unused_variables)]
     let curve = "FEATURE_BLS12_381";
 
     // account for cross-compilation [by examining environment variable]
@@ -109,7 +115,7 @@ fn main() {
         nvcc.file("cuda/pippenger_inf.cu").compile("blst_cuda_msm");
 
         println!("cargo:rustc-cfg=feature=\"cuda\"");
-        println!("cargo:rerun-if-changed={}", "cuda");
+        println!("cargo:rerun-if-changed=cuda");
         println!("cargo:rerun-if-env-changed=CXXFLAGS");
     }
 }
