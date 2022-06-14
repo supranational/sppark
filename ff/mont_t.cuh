@@ -9,7 +9,11 @@
 # include <cstdint>
 
 # define inline __device__ __forceinline__
-# define asm __asm__ __volatile__
+# ifdef __GNUC__
+#  define asm __asm__ __volatile__
+# else
+#  define asm asm volatile
+# endif
 
 //
 // To instantiate declare modulus as __device__ __constant___ const and

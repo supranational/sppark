@@ -5,6 +5,8 @@
 #ifdef __NVCC__
 #include <cuda.h>
 
+#include <cstdint>
+
 namespace device {
 #define TO_CUDA_T(limb64) (uint32_t)(limb64), (uint32_t)(limb64>>32)
     static __device__ __constant__ const uint32_t BLS12_381_P[12] = {
