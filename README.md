@@ -45,7 +45,6 @@ We show how to interface with Rust and are open to discussions on how to interfa
 **Root** - Contains various configuration files, documentation, licensing.
 * **conversion** -
 * **ec** - Contains templates for elliptic curve operations such as addition and doubling for different point representations.
-* **rust** - Houses Rust crate definition.
 * **ff** - Contains CUDA template[s] for finite field operations and instantiations of a variety of fields.
 * **hash** -
 * **memory** -
@@ -53,6 +52,7 @@ We show how to interface with Rust and are open to discussions on how to interfa
 * **msm** - Contains multi-scalar multiplication template[s] that can be instantiated for a variety of elliptic curves such as BLS12-381 and the Pasta curves
 * **ntt** -
 * **poc** - Proof-of-concept implementations, including benchmarking.
+* **rust** - Houses Rust crate definition.
 * **util** - General-purpose helper classes.
 
 ## Performance
