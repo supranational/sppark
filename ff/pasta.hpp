@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #ifdef __NVCC__
-#include <cuda.h>
+#include <cstdint>
 
 namespace device {
     static __device__ __constant__ const uint32_t Vesta_P[8] = {

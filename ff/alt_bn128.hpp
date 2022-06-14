@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #ifdef __NVCC__
-#include <cuda.h>
-
 #include <cstdint>
 
 namespace device {
