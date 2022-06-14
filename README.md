@@ -45,7 +45,7 @@ We show how to interface with Rust and are open to discussions on how to interfa
 **Root** - Contains various configuration files, documentation, licensing.
 * **conversion** -
 * **ec** - Contains templates for elliptic curve operations such as addition and doubling for different point representations.
-* **elements** - Houses Rust meta-crate definition.
+* **rust** - Houses Rust crate definition.
 * **ff** - Contains CUDA template[s] for finite field operations and instantiations of a variety of fields.
 * **hash** -
 * **memory** -
@@ -57,7 +57,7 @@ We show how to interface with Rust and are open to discussions on how to interfa
 
 ## Performance
 
-Simplified benchmark results can be collected by end users by executing proof-of-concept applications. "Simplified" refers to the fact that there is always room for application-specific tuning. Intention is to give a general "taste." Just in case, benchmarks are likely to require high-end GPUs and one can't expect that they will execute on a laptop unmodified.
+Simplified benchmark results can be collected by end users by exercising proof-of-concept applications. "Simplified" refers to the fact that there is always room for application-specific tuning. Intention is to give a general "taste." Just in case, benchmarks are likely to require high-end GPUs and one can't expect that they will execute on a laptop unmodified.
 
 ## License
 
