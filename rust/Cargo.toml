@@ -1,0 +1,19 @@
+[package]
+name = "sppark"
+version = "0.1.0"
+edition = "2018"
+description = "Zero-knowledge template library"
+repository = "https://github.com/supranational/sppark"
+license = "Apache-2.0"
+links = "sppark"
+include = [
+    "/Cargo.toml",
+    "/build.rs",
+    "/src/**",
+    "/sppark/ec/**",
+    "/sppark/ff/**",
+    "/sppark/msm/**",
+    "/sppark/util/**",
+]
+
+[dependencies]
