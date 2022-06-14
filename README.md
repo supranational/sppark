@@ -16,7 +16,7 @@ sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitive
 
 ## Status
 
-**This library is under active development**
+**This library is under active development [with a list of planned significant improvements]**
 
 ## General notes on implementation
 
