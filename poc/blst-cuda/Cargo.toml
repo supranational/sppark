@@ -21,6 +21,8 @@ quiet = []
 [dependencies]
 blst = "^0"
 sppark = { path = "../../rust" }
+rand = "^0"
+rand_chacha = "^0"
 ark-std = "0.3.0"
 ark-ff = "0.3.0"
 ark-ec = { version = "0.3.0", features = [ "parallel" ] }
@@ -34,10 +36,8 @@ which = "^4.0"
 
 [dev-dependencies]
 criterion = { version = "0.3", features = [ "html_reports" ] }
-rand = "^0"
-rand_chacha = "^0"
 rayon = "1.5"
 
 [[bench]]
-name = "main"
+name = "msm"
 harness = false

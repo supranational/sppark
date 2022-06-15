@@ -1,3 +1,7 @@
+// Copyright Supranational LLC
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(feature = "bls12_377")]
 use ark_bls12_377::{Fr, G1Affine, G1Projective};
 #[cfg(feature = "bls12_381")]
@@ -10,6 +14,8 @@ use ark_std::Zero;
 use blst::*;
 
 sppark::cuda_error!();
+
+pub mod util;
 
 #[cfg_attr(feature = "quiet", allow(improper_ctypes))]
 extern "C" {
