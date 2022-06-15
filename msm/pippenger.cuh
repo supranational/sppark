@@ -308,18 +308,18 @@ static point_t pippenger_final(const bucket_t ret[NWINS][NTHREADS][2])
 
 template<typename... Types>
 inline void launch_coop(void(*f)(Types...),
-                        dim3 gridDim, dim3 blockDim,
+                        dim3 gridDim, dim3 blockDim, cudaStream_t stream,
                         Types... args)
 {
     void* va_args[sizeof...(args)] = { &args... };
     CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
-                                        va_args));
+                                        va_args, 0, stream));
 }
 
 class stream_t {
     cudaStream_t stream;
 public:
-    stream_t()  { cudaStreamCreate(&stream); }
+    stream_t()  { cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking); }
     ~stream_t() { cudaStreamDestroy(stream); }
     inline operator decltype(stream)() { return stream; }
 };
@@ -349,6 +349,11 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
     bucket_t (*d_none)[NWINS][NTHREADS][2] = nullptr;
     affine_t *d_points = nullptr;
     scalar_t *d_scalars = nullptr;
+#ifndef CUDA_API_PER_THREAD_DEFAULT_STREAM
+    stream_t stream;
+#else
+    cudaStream_t stream = nullptr;
+#endif
 
     cudaDeviceProp prop;
     if (cudaGetDeviceProperties(&prop, 0) != cudaSuccess || prop.major < 7)
@@ -381,7 +386,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         CUDA_OK(cudaMemcpy(d_scalars, scalars, npoints*sizeof(*d_scalars),
                            cudaMemcpyHostToDevice));
 
-        launch_coop(pippenger, dim3(NWINS, N), NTHREADS,
+        launch_coop(pippenger, dim3(NWINS, N), NTHREADS, stream,
                     (const affine_t*)d_points, npoints,
                     (const scalar_t*)d_scalars, mont,
                     d_buckets, d_none);
@@ -392,11 +397,11 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         void *p = d_points;
         d_points = nullptr;
         CUDA_OK(cudaFree(p));
-        CUDA_OK(cudaStreamSynchronize(0));
+        CUDA_OK(cudaStreamSynchronize(stream));
     } catch (const cuda_error& e) {
         if (d_points != nullptr)
             cudaFree(d_points);
-        cudaStreamSynchronize(0);
+        cudaStreamSynchronize(stream);
         out->inf();
 #ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
         return RustError{e.code(), e.what()};
