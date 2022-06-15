@@ -324,10 +324,10 @@ public:
     inline operator decltype(stream)() { return stream; }
 };
 
-template<class bucket_t> class result_2_20 {
+template<class bucket_t> class result_t {
     bucket_t ret[NWINS][NTHREADS][2];
 public:
-    result_2_20() {}
+    result_t() {}
     inline operator decltype(ret)&() { return ret; }
 };
 
@@ -362,7 +362,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
     size_t N = (prop.multiProcessorCount*256) / (NTHREADS*NWINS);
     size_t delta = ((npoints+N-1)/N+WARP_SZ-1) & (0U-WARP_SZ);
     N = (npoints+delta-1) / delta;
-    vector<result_2_20<bucket_t>> res(N);
+    vector<result_t<bucket_t>> res(N);
 
     try {
         size_t n = (npoints+WARP_SZ-1) & ((size_t)0-WARP_SZ);
