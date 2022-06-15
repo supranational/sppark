@@ -13,7 +13,7 @@ fn feature_check() {
     }
 
     match curve_counter {
-        0 => panic!("Can't run without selecting any curves, please select a curve. Available curves are\n{:#?}\n", curves),
+        0 => panic!("Can't run without a curve being specified, please select one with --features=<curve>. Available options are\n{:#?}\n", curves),
         2.. => panic!("Multiple curves are not supported, please select only one."),
         _ => (),
     };
@@ -22,17 +22,14 @@ fn feature_check() {
 fn main() {
     feature_check();
 
-    #[allow(unused_variables)]
-    let curve = "";
-    #[cfg(feature = "bn254")]
-    #[allow(unused_variables)]
-    let curve = "FEATURE_BN254";
-    #[cfg(feature = "bls12_377")]
-    #[allow(unused_variables)]
-    let curve = "FEATURE_BLS12_377";
-    #[cfg(feature = "bls12_381")]
-    #[allow(unused_variables)]
-    let curve = "FEATURE_BLS12_381";
+    let mut curve = "";
+    if cfg!(feature = "bn254") {
+        curve = "FEATURE_BN254";
+    } else if cfg!(feature = "bls12_377") {
+        curve = "FEATURE_BLS12_377";
+    } else if cfg!(feature = "bls12_381") {
+        curve = "FEATURE_BLS12_381";
+    }
 
     // account for cross-compilation [by examining environment variable]
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
