@@ -16,6 +16,7 @@ force-adx = [ "blst/force-adx" ]
 bn254 = ["ark-bn254/curve"]
 bls12_377 = ["ark-bls12-377/curve"]
 bls12_381 = ["ark-bls12-381/curve"]
+quiet = []
 
 [dependencies]
 blst = "^0"

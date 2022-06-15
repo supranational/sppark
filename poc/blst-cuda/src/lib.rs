@@ -11,6 +11,7 @@ use blst::*;
 
 sppark::cuda_error!();
 
+#[cfg_attr(feature = "quiet", allow(improper_ctypes))]
 extern "C" {
     fn mult_pippenger(
         out: *mut blst_p1,
