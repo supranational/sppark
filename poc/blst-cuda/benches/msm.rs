@@ -9,7 +9,7 @@ use ark_bls12_377::G1Affine;
 #[cfg(feature = "bls12_381")]
 use ark_bls12_381::G1Affine;
 #[cfg(feature = "bn254")]
-use ark_bn254::{Fr, G1Affine};
+use ark_bn254::G1Affine;
 use ark_ff::BigInteger256;
 
 use std::str::FromStr;
