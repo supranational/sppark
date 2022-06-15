@@ -7,9 +7,8 @@ sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitive
   * [Status](#status)
   * [General notes on implementation](#general-notes-on-implementation)
   * [Platform and Language Compatibility](#platform-and-language-compatibility)
-  * [Introductory Tutorial](#introductory-tutorial)
+  * [Introductory Integration Tutorial](#introductory-integration-tutorial)
     + [Multi-scalar Multiplication (MSM)](#multi-scalar-mutliplication-(MSM))
-  * [Build](#build)
   * [Repository Structure](#repository-structure)
   * [Performance](#performance)
   * [License](#license)
@@ -28,15 +27,11 @@ This library primarily supports x86_64 with Nvidia's Volta+ GPU hardware platfor
 
 We show how to interface with Rust and are open to discussions on how to interface with Go. Caveat lector. Achieving highest possible GPU performance requires interfacing with target language memory management, possibly its async facilities, and might even require changes to object's data layout. These are hard to generalize and consequently are also a matter of discussion, likely on a case-by-case basis.
 
-## Introductory Tutorial
+## Introductory Integration Tutorial
 
 [TBD]
 
 ### Multi-scalar Multiplication (MSM)
-
-[TBD]
-
-## Build
 
 [TBD]
 
@@ -58,6 +53,8 @@ We show how to interface with Rust and are open to discussions on how to interfa
 ## Performance
 
 Simplified benchmark results can be collected by end users by exercising proof-of-concept applications. "Simplified" refers to the fact that there is always room for application-specific tuning. Intention is to give a general "taste." Just in case, benchmarks are likely to require high-end GPUs and one can't expect that they will execute on a laptop unmodified.
+
+Caveat lector. As you compile PoC applications you might get warnings about not FFI-safe types. Alarming as they are, the fact that tests pass means that it works out nevertheless. However, this is **not** to say that they should be ignored and that one can proceed to build production code upon it. We intend to work with external software maintainers to resolve these warnings.
 
 ## License
 
