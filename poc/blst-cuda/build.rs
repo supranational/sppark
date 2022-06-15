@@ -98,6 +98,7 @@ fn main() {
         nvcc.flag("-arch=sm_70");
         nvcc.flag("-maxrregcount=255");
         nvcc.flag("--default-stream=per-thread");
+        nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
         nvcc.define(curve, None);
         if let Some(def) = cc_opt {
