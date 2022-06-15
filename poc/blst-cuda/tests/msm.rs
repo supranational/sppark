@@ -24,19 +24,14 @@ fn msm_correctness() {
     let (points, scalars) =
         util::generate_points_scalars::<G1Affine>(1usize << npoints_npow);
 
-    let msm_result =
-        multi_scalar_mult_arkworks(points.as_slice(), unsafe {
-            std::mem::transmute::<&[_], &[BigInteger256]>(
-                scalars.as_slice(),
-            )
-        })
-        .into_affine();
+    let msm_result = multi_scalar_mult_arkworks(points.as_slice(), unsafe {
+        std::mem::transmute::<&[_], &[BigInteger256]>(scalars.as_slice())
+    })
+    .into_affine();
 
     let arkworks_result =
         VariableBaseMSM::multi_scalar_mul(points.as_slice(), unsafe {
-            std::mem::transmute::<&[_], &[BigInteger256]>(
-                scalars.as_slice(),
-            )
+            std::mem::transmute::<&[_], &[BigInteger256]>(scalars.as_slice())
         })
         .into_affine();
 
