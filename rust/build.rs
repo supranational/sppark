@@ -17,7 +17,22 @@ fn main() {
             .parent()
             .expect("can't access parent of current directory")
             .into();
-        println!("cargo:rerun-if-changed={}", base_dir.to_string_lossy());
+        println!(
+            "cargo:rerun-if-changed={}",
+            base_dir.join("ec").to_string_lossy()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
+            base_dir.join("ff").to_string_lossy()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
+            base_dir.join("msm").to_string_lossy()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
+            base_dir.join("util").to_string_lossy()
+        );
     }
     // pass DEP_SPPARK_* variables to dependents
     println!("cargo:ROOT={}", base_dir.to_string_lossy());
