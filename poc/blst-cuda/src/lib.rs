@@ -78,6 +78,3 @@ pub fn multi_scalar_mult_arkworks<G: AffineCurve>(
 
     ret
 }
-
-#[cfg(tests)]
-include!("tests.rs");
