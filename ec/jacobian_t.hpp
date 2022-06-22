@@ -28,10 +28,12 @@ public:
     class affine_t { friend jacobian_t;
         field_t X, Y;
 
+    public:
+        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
+
         inline __device__ bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
-    public:
         inline affine_t& operator=(const jacobian_t& a)
         {
             Y = 1/a.Z;

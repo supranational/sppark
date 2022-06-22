@@ -39,10 +39,10 @@ public:
     class affine_t { friend xyzz_t;
         field_t X, Y;
 
+    public:
         inline __device__ bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
-    public:
         inline affine_t& operator=(const xyzz_t& a)
         {
             Y = 1/a.ZZZ;
@@ -53,6 +53,9 @@ public:
             return *this;
         }
         inline affine_t(const xyzz_t& a)  { *this = a; }
+
+        inline operator jacobian_t<field_t>() const
+        {   return jacobian_t<field_t>{ X, Y, field_t::one() };   }
     };
 
     inline operator affine_t() const      { return affine_t(*this); }
