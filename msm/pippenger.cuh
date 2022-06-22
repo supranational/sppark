@@ -249,7 +249,6 @@ void pippenger(const affine_t* points, size_t npoints,
 
 #include <cassert>
 #include <vector>
-using namespace std;
 
 #include <util/exception.cuh>
 #include <util/rusterror.h>
@@ -366,7 +365,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
     size_t N = (prop.multiProcessorCount*256) / (NTHREADS*NWINS);
     size_t delta = ((npoints+N-1)/N+WARP_SZ-1) & (0U-WARP_SZ);
     N = (npoints+delta-1) / delta;
-    vector<result_t<bucket_t>> res(N);
+    std::vector<result_t<bucket_t>> res(N);
 
     try {
         size_t n = (npoints+WARP_SZ-1) & ((size_t)0-WARP_SZ);
@@ -420,7 +419,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         point_t p;
         tile_t() {}
     };
-    vector<tile_t> grid(NWINS*N);
+    std::vector<tile_t> grid(NWINS*N);
 
     size_t y = NWINS-1, total = 0;
 
@@ -439,7 +438,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         }
     }
 
-    vector<atomic<size_t>> row_sync(NWINS); /* zeroed */
+    std::vector<std::atomic<size_t>> row_sync(NWINS); /* zeroed */
     counter_t<size_t> counter(0);
     channel_t<size_t> ch;
 
