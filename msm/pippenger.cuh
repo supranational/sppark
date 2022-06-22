@@ -254,6 +254,7 @@ using namespace std;
 
 static thread_pool_t da_pool;
 
+template<class point_t, class bucket_t>
 static point_t integrate_row(const bucket_t row[NTHREADS][2], int wbits = WBITS)
 {
     size_t i = NTHREADS-1;
@@ -445,7 +446,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
             for (size_t work; (work = counter++) < total;) {
                 auto item = &grid[work];
                 auto y = item->y;
-                item->p = integrate_row((res[item->x])[y], item->dy);
+                item->p = integrate_row<point_t>((res[item->x])[y], item->dy);
                 if (++row_sync[y] == N)
                     ch.send(y);
             }
