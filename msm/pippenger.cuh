@@ -47,8 +47,6 @@ void pippenger(const affine_t* points, size_t npoints,
 
 #include <cooperative_groups.h>
 
-static __shared__ bucket_t scratch[NTHREADS];
-
 // Transposed scalar_t
 class scalar_T {
     uint32_t val[sizeof(scalar_t)/sizeof(uint32_t)][WARP_SZ];
@@ -80,7 +78,7 @@ constexpr static __device__ int dlog2(int n)
 
 static __device__ int is_unique(int wval, int dir=0)
 {
-    int* const wvals = (int *)scratch;
+    extern __shared__ int wvals[];
     const uint32_t tid = threadIdx.x;
     dir &= 1;   // force logical operations on predicates
 
@@ -206,6 +204,7 @@ void pippenger(const affine_t* points, size_t npoints,
     if (NTHREADS > WARP_SZ && sizeof(bucket_t) > 128)
         __syncthreads();
 
+    extern __shared__ bucket_t scratch[];
     uint32_t i = 1<<(WBITS-NTHRBITS);
     row += tid * i;
     bucket_t res, acc = row[--i];
@@ -308,12 +307,13 @@ static point_t pippenger_final(const bucket_t ret[NWINS][NTHREADS][2])
 
 template<typename... Types>
 inline void launch_coop(void(*f)(Types...),
-                        dim3 gridDim, dim3 blockDim, cudaStream_t stream,
+                        dim3 gridDim, dim3 blockDim,
+                        size_t shared_sz, cudaStream_t stream,
                         Types... args)
 {
     void* va_args[sizeof...(args)] = { &args... };
     CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
-                                        va_args, 0, stream));
+                                        va_args, shared_sz, stream));
 }
 
 class stream_t {
@@ -386,7 +386,8 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         CUDA_OK(cudaMemcpy(d_scalars, scalars, npoints*sizeof(*d_scalars),
                            cudaMemcpyHostToDevice));
 
-        launch_coop(pippenger, dim3(NWINS, N), NTHREADS, stream,
+        launch_coop(pippenger, dim3(NWINS, N), NTHREADS,
+                               sizeof(bucket_t)*NTHREADS, stream,
                     (const affine_t*)d_points, npoints,
                     (const scalar_t*)d_scalars, mont,
                     d_buckets, d_none);
