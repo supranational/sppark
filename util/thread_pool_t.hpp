@@ -95,11 +95,16 @@ public:
     // call work(size_t idx) with idx=[0..num_items) in parallel, e.g.
     // pool.par_map(20, [&](size_t i) { std::cout << i << std::endl; });
     template<class Workable>
-    void par_map(size_t num_items, Workable work, size_t max_workers = 0)
+    void par_map(size_t num_items, size_t stride, Workable work,
+                 size_t max_workers = 0)
     {
-        size_t num_workers = std::min(size(), num_items);
+        size_t num_steps = (num_items + stride - 1) / stride;
+        size_t num_workers = std::min(size(), num_steps);
         if (max_workers > 0)
             num_workers = std::min(num_workers, max_workers);
+
+        if (num_steps == num_workers)
+            stride = (num_items + num_steps - 1) / num_steps;
 
         std::atomic<size_t> counter(0);
         std::atomic<size_t> done(num_workers);
@@ -107,11 +112,16 @@ public:
         std::condition_variable barrier;
 
         while (num_workers--) {
-            spawn([&, num_items]() {
+            spawn([&, num_items, stride, num_steps]() {
                 size_t idx;
                 while ((idx = counter.fetch_add(1, std::memory_order_relaxed))
-                            < num_items)
-                    work(idx);
+                            < num_steps) {
+                    size_t off = idx * stride, n = stride;
+                    if (off + n > num_items)
+                        n = num_items - off;
+                    while (n--)
+                        work(off++);
+                }
                 if (--done == 0) {
                     std::unique_lock<std::mutex> lock(b_mtx);
                     barrier.notify_one();
@@ -122,6 +132,9 @@ public:
         std::unique_lock<std::mutex> lock(b_mtx);
         barrier.wait(lock, [&] { return done == 0; });
     }
+    template<class Workable>
+    void par_map(size_t num_items, Workable work, size_t max_workers = 0)
+    {   par_map(num_items, 1, work, max_workers);   }
 };
 
 template<class T> class channel_t {
