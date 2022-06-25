@@ -164,7 +164,7 @@ static breakdown(size_t nbits, size_t window, size_t ncpus)
 
     if (nbits > window * ncpus) {
         nx = 1;
-        if ((window + (wnd = num_bits(ncpus / 4)) > 18) {
+        if (window + (wnd = num_bits(ncpus / 4)) > 18) {
             wnd = window - wnd;
         } else {
             wnd = (nbits / window + ncpus - 1) / ncpus;
