@@ -185,13 +185,13 @@ void pippenger(const affine_t* points, size_t npoints,
     int dir = 1;
     for (uint32_t i = tid; true; ) {
         int wval = -1;
+        affine_t point;
 
         if (i < npoints) {
             wval = get_wval(scalars[i], bit0, wbits);
             wval += wval ? bias : 0;
+            point = points[i];
         }
-
-        affine_t point = points[i];
 
         int uniq = is_unique(wval, dir^=1) | wval==0;
         if (uniq < 0)   // all |wval|-s are negative, all done
