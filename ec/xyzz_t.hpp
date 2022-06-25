@@ -40,6 +40,8 @@ public:
         field_t X, Y;
 
     public:
+        inline __device__ affine() {}
+
         inline __device__ bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
