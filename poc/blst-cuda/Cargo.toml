@@ -19,7 +19,7 @@ bls12_381 = ["ark-bls12-381/curve"]
 quiet = []
 
 [dependencies]
-blst = "^0"
+blst = "^0.3.9"
 sppark = { path = "../../rust" }
 rand = "^0"
 rand_chacha = "^0"
