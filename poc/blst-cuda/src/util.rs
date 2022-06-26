@@ -22,13 +22,12 @@ pub fn generate_points_scalars<G: AffineCurve>(
         );
     // Sprinkle in some infinity points
     points[3] = G::zero();
-    let mut scalars = (0..rand_gen)
+    let scalars = (0..len)
         .map(|_| G::ScalarField::rand(&mut rng))
         .collect::<Vec<_>>();
 
     while points.len() < len {
         points.append(&mut points.clone());
-        scalars.append(&mut scalars.clone());
     }
 
     (points, scalars)
