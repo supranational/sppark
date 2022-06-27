@@ -379,15 +379,15 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         d_buckets = reinterpret_cast<decltype(d_buckets)>(d_scalars + n);
 
         if (ffi_affine_sz != sizeof(*d_points))
-            CUDA_OK(cudaMemcpy2D(d_points, sizeof(*d_points),
-                                 points, ffi_affine_sz,
-                                 ffi_affine_sz, npoints,
-                                 cudaMemcpyHostToDevice));
+            CUDA_OK(cudaMemcpy2DAsync(d_points, sizeof(*d_points),
+                                      points, ffi_affine_sz,
+                                      ffi_affine_sz, npoints,
+                                      cudaMemcpyHostToDevice, stream));
         else
-            CUDA_OK(cudaMemcpy(d_points, points, npoints*sizeof(*d_points),
-                               cudaMemcpyHostToDevice));
-        CUDA_OK(cudaMemcpy(d_scalars, scalars, npoints*sizeof(*d_scalars),
-                           cudaMemcpyHostToDevice));
+            CUDA_OK(cudaMemcpyAsync(d_points, points, npoints*sizeof(*d_points),
+                                    cudaMemcpyHostToDevice, stream));
+        CUDA_OK(cudaMemcpyAsync(d_scalars, scalars, npoints*sizeof(*d_scalars),
+                                cudaMemcpyHostToDevice, stream));
 
         launch_coop(pippenger, dim3(NWINS, N), NTHREADS,
                                sizeof(bucket_t)*NTHREADS, stream,
@@ -395,8 +395,8 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
                     (const scalar_t*)d_scalars, mont,
                     d_buckets, d_none);
 
-        CUDA_OK(cudaMemcpy(res[0], d_buckets, N*sizeof(res[0]),
-                           cudaMemcpyDeviceToHost));
+        CUDA_OK(cudaMemcpyAsync(res[0], d_buckets, N*sizeof(res[0]),
+                                cudaMemcpyDeviceToHost, stream));
 
         void *p = d_points;
         d_points = nullptr;
