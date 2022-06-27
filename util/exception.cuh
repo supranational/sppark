@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+#ifndef __EXCEPTION_CUH__
+#define __EXCEPTION_CUH__
+
 #include <cstdio>
 #include <string>
 #include <stdexcept>
@@ -33,3 +36,5 @@ inline std::string fmt(const char* fmt, Types... args)
         throw cuda_error(code, str);                        \
     }                                                       \
 } while(0)
+
+#endif
