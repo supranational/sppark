@@ -104,6 +104,8 @@ fn main() {
         nvcc.flag("--default-stream=per-thread");
         //nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
+        #[cfg(feature = "cuda-mobile")]
+        nvcc.define("NTHREADS", "128");
         nvcc.define(curve, None);
         if let Some(def) = cc_opt {
             nvcc.define(def, None);
