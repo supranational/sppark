@@ -85,6 +85,7 @@ static __device__ int is_unique(int wval, int dir=0)
     const uint32_t tid = threadIdx.x;
     dir &= 1;   // force logical operations on predicates
 
+    NTHREADS > WARP_SZ ? __syncthreads() : __syncwarp();
     wvals[tid] = wval;
     NTHREADS > WARP_SZ ? __syncthreads() : __syncwarp();
 
