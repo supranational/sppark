@@ -360,7 +360,7 @@ public:
     {
         assert(this->npoints == 0 || npoints <= this->npoints);
 
-        size_t batch = npoints >= 1<<21 ? npoints>>20 : 1;
+        size_t batch = npoints >= 1<<21 ? npoints>>21 : 1;
         size_t stride = (npoints + batch - 1) / batch;
         stride = (stride+WARP_SZ-1) & (0U-WARP_SZ);
 
