@@ -101,7 +101,6 @@ fn main() {
         nvcc.cuda(true);
         nvcc.flag("-arch=sm_70");
         nvcc.flag("-maxrregcount=255");
-        nvcc.flag("--default-stream=per-thread");
         //nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
         #[cfg(feature = "cuda-mobile")]
@@ -114,6 +113,8 @@ fn main() {
             nvcc.include(include);
         }
         if let Some(include) = env::var_os("DEP_SPPARK_ROOT") {
+            let root = PathBuf::from(&include);
+            nvcc.file(root.join("util/all_gpus.cu"));
             nvcc.include(include);
         }
         nvcc.file("cuda/pippenger_inf.cu").compile("blst_cuda_msm");
