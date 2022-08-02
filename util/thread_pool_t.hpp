@@ -62,7 +62,7 @@ public:
             tid.join();
     }
 
-    size_t size() { return threads.size(); }
+    size_t size() const { return threads.size(); }
 
     template<class Workable> void spawn(Workable work)
     {
@@ -176,6 +176,7 @@ public:
         if (ptr->ref_cnt.fetch_sub(1, std::memory_order_seq_cst) == 1)
             delete ptr;
     }
+    counter_t& operator=(const counter_t& r) = delete;
     size_t ref_cnt() const  { return ptr->ref_cnt; }
     T operator++(int) const { return ptr->val.fetch_add(1, std::memory_order_relaxed); }
     T operator++() const    { return ptr->val++ + 1; }
