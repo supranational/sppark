@@ -428,20 +428,28 @@ public:
     inline mont_t& operator*=(const mont_t& a)
     {   return *this = *this * a;   }
 
+    inline mont_t& sqr()
+    {
+        union { wide_t w; mont_t s[2]; } ret = { wide_t(*this) };
+        ret.s[0].mul_by_1();
+        return *this = ret.s[0] + ret.s[1];
+    }
     // simplified exponentiation, but mind the ^ operator's precedence!
     inline mont_t& operator^=(unsigned p)
     {
         if (p < 2)
             asm("trap;");
 
-        union { wide_t w; mont_t s[2]; } ret = { wide_t(*this) };
-        ret.s[0].mul_by_1();
-        ret.s[0] += ret.s[1];
-
-        for (p -= 2; p--;)
-            ret.s[0] *= *this;
-
-        return *this = ret.s[0];
+        mont_t sqr = *this;
+        for (; (p&1) == 0; p >>= 1)
+            sqr.sqr();
+        *this = sqr;
+        for (p >>= 1; p; p >>= 1) {
+            sqr.sqr();
+            if (p&1)
+                *this *= sqr;
+        }
+        return *this;
     }
     friend inline mont_t operator^(mont_t a, unsigned p)
     {   return a ^= p;   }
