@@ -253,9 +253,7 @@ void pippenger(const affine_t* points, size_t npoints,
 
 #include <util/exception.cuh>
 #include <util/rusterror.h>
-#include <util/thread_pool_t.hpp>
-
-static thread_pool_t da_pool;
+#include <util/gpu_t.cuh>
 
 template<class point_t, class bucket_t>
 static point_t integrate_row(const bucket_t row[NTHREADS][2], int wbits = WBITS)
@@ -309,25 +307,6 @@ static point_t pippenger_final(const bucket_t ret[NWINS][NTHREADS][2])
 }
 #endif
 
-template<typename... Types>
-inline void launch_coop(void(*f)(Types...),
-                        dim3 gridDim, dim3 blockDim,
-                        size_t shared_sz, cudaStream_t stream,
-                        Types... args)
-{
-    void* va_args[sizeof...(args)] = { &args... };
-    CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
-                                        va_args, shared_sz, stream));
-}
-
-class stream_t {
-    cudaStream_t stream;
-public:
-    stream_t()  { cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking); }
-    ~stream_t() { cudaStreamDestroy(stream); }
-    inline operator decltype(stream)() { return stream; }
-};
-
 template<class bucket_t> class result_t {
     bucket_t ret[NWINS][NTHREADS][2];
 public:
@@ -335,78 +314,217 @@ public:
     inline operator decltype(ret)&() { return ret; }
 };
 
-//
-// This could be called from distinct threads. For example as
-// std::thread([=]() { mult_pippenger(out, points, npoints, scalars); })
-// Since we compile with --default-stream=per-thread, the otherwise
-// synchronous operations should overlap with other threads [according to
-// https://developer.nvidia.com/blog/gpu-pro-tip-cuda-7-streams-simplify-concurrency/].
-//
+template<class bucket_t, class point_t, class affine_t, class scalar_t>
+class msm_t {
+    gpu_t& gpu;
+    size_t npoints;
+    size_t N;
+    bucket_t (*d_buckets)[NWINS][1<<WBITS];
+    affine_t *d_points;
+
+public:
+    msm_t(const affine_t points[], size_t np, size_t ffi_affine_sz = sizeof(affine_t),
+          size_t device_id = 0)
+        : gpu(select_gpu(device_id)), npoints(np), d_points(nullptr)
+    {
+        N = (gpu.sm_count()*256) / (NTHREADS*NWINS);
+        if (npoints) {
+            size_t delta = ((npoints+N-1)/N+WARP_SZ-1) & (0U-WARP_SZ);
+            N = (npoints+delta-1) / delta;
+        }
+
+        size_t blob_sz = N * sizeof(d_buckets[0]);
+        size_t n = (npoints+WARP_SZ-1) & ((size_t)0-WARP_SZ);
+        blob_sz += n * sizeof(*d_points);
+
+        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(blob_sz));
+        if (points) {
+            d_points = reinterpret_cast<decltype(d_points)>(d_buckets + N);
+            gpu.HtoD(d_points, points, npoints, ffi_affine_sz);
+        }
+    }
+    inline msm_t(vec_t<affine_t> points, size_t ffi_affine_sz = sizeof(affine_t),
+                 size_t device_id = 0)
+        : msm_t(points, points.size(), ffi_affine_sz, device_id) {};
+    inline msm_t(size_t device_id = 0)
+        : msm_t(nullptr, 0, 0, device_id) {};
+    ~msm_t()
+    {
+        gpu.sync();
+        if (d_buckets) gpu.Dfree(d_buckets);
+    }
+
+    RustError invoke(point_t& out, const affine_t* points_, size_t npoints,
+                                   const scalar_t* scalars, bool mont = true,
+                                   size_t ffi_affine_sz = sizeof(affine_t))
+    {
+        assert(this->npoints == 0 || npoints <= this->npoints);
+
+        size_t batch = npoints >= 1<<21 ? npoints>>20 : 1;
+        size_t stride = (npoints + batch - 1) / batch;
+        stride = (stride+WARP_SZ-1) & (0U-WARP_SZ);
+
+        size_t N = this->N;
+        size_t delta = ((stride+N-1)/N+WARP_SZ-1) & (0U-WARP_SZ);
+        N = (stride+delta-1) / delta;
+
+        bucket_t (*d_none)[NWINS][NTHREADS][2] = nullptr;
+        std::vector<result_t<bucket_t>> res(N);
+
+        out.inf();
+        point_t p;
+
+        try {
+            // |points| being nullptr means the points are pre-loaded to
+            // |d_points|, allocate double-stride, not |npoints|.
+            const char* points = reinterpret_cast<const char*>(points_);
+
+            size_t d_sz = batch > 1 ? stride*2 : stride;
+            auto d_scalars = dev_ptr_t<scalar_t>(d_sz);
+            auto d_points_ = dev_ptr_t<affine_t>(points ? d_sz : 0);
+            affine_t* d_points = points ? d_points_ : this->d_points;
+
+            size_t d_off = 0;   // device offset
+            size_t h_off = 0;   // host offset
+            size_t num = stride;
+
+            gpu[0].HtoD(&d_scalars[d_off], &scalars[h_off], num);
+            if (points)
+                gpu[0].HtoD(&d_points[d_off], &points[h_off*ffi_affine_sz],
+                            num,              ffi_affine_sz);
+            for (size_t i = 0; i < batch; i++) {
+                gpu[i&1].launch_coop(pippenger, dim3(NWINS, N), NTHREADS,
+                                                sizeof(bucket_t)*NTHREADS,
+                        (const affine_t*)&d_points[points ? d_off : h_off], num,
+                        (const scalar_t*)&d_scalars[d_off], mont,
+                        d_buckets, d_none);
+                if (i < batch - 1) {
+                    h_off += stride;
+                    num = h_off + stride <= npoints ? stride : npoints - h_off;
+                    size_t j = (i + 1) & 1;
+                    d_off = j * stride;
+                    gpu[j].HtoD(&d_scalars[d_off], &scalars[h_off], num);
+                    if (points)
+                        gpu[j].HtoD(&d_points[d_off], &points[h_off*ffi_affine_sz],
+                                    num,              ffi_affine_sz);
+                }
+                if (i > 0) {
+                    collect(p, res);
+                    out.add(p);
+                }
+                gpu[i&1].DtoH(res[0], d_buckets, N);
+                gpu[i&1].sync();
+            }
+        } catch (const cuda_error& e) {
+            gpu.sync();
+#ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
+            return RustError{e.code(), e.what()};
+#else
+            return RustError{e.code()}
+#endif
+        }
+
+#if 0
+        if (d_points == nullptr) {
+            gpu.Dfree(d_buckets);
+            d_buckets = nullptr;
+        }
+#endif
+
+        collect(p, res);
+        out.add(p);
+
+        return RustError{cudaSuccess};
+    }
+
+    RustError invoke(point_t& out, vec_t<scalar_t> scalars, bool mont = true)
+    {   return invoke(out, nullptr, scalars.size(), scalars, mont);   }
+
+    RustError invoke(point_t& out, vec_t<affine_t> points,
+                                   const scalar_t* scalars, bool mont = true,
+                                   size_t ffi_affine_sz = sizeof(affine_t))
+    {   return invoke(out, points, points.size(), scalars, mont, ffi_affine_sz);   }
+
+    RustError invoke(point_t& out, vec_t<affine_t> points,
+                                   vec_t<scalar_t> scalars, bool mont = true,
+                                   size_t ffi_affine_sz = sizeof(affine_t))
+    {   return invoke(out, points, points.size(), scalars, mont, ffi_affine_sz);   }
+
+private:
+    void collect(point_t& out, std::vector<result_t<bucket_t>> res)
+    {
+        struct tile_t {
+            size_t x, y, dy;
+            point_t p;
+            tile_t() {}
+        };
+        std::vector<tile_t> grid(NWINS*N);
+
+        size_t y = NWINS-1, total = 0;
+
+        while (total < N) {
+            grid[total].x  = total;
+            grid[total].y  = y;
+            grid[total].dy = NBITS - y*WBITS;
+            total++;
+        }
+
+        while (y--) {
+            for (size_t i = 0; i < N; i++, total++) {
+                grid[total].x  = grid[i].x;
+                grid[total].y  = y;
+                grid[total].dy = WBITS;
+            }
+        }
+
+        std::vector<std::atomic<size_t>> row_sync(NWINS); /* zeroed */
+        counter_t<size_t> counter(0);
+        channel_t<size_t> ch;
+
+        auto n_workers = min(gpu.ncpus(), total);
+        while (n_workers--) {
+            gpu.spawn([&, this, total, counter]() {
+                for (size_t work; (work = counter++) < total;) {
+                    auto item = &grid[work];
+                    auto y = item->y;
+                    item->p = integrate_row<point_t>((res[item->x])[y], item->dy);
+                    if (++row_sync[y] == N)
+                        ch.send(y);
+                }
+            });
+        }
+
+        out.inf();
+        size_t row = 0, ny = NWINS;
+        while (ny--) {
+            auto y = ch.recv();
+            row_sync[y] = -1U;
+            while (grid[row].y == y) {
+                while (row < total && grid[row].y == y)
+                    out.add(grid[row++].p);
+                if (y == 0)
+                    break;
+                for (size_t i = 0; i < WBITS; i++)
+                    out.dbl();
+                if (row_sync[--y] != -1U)
+                    break;
+            }
+        }
+    }
+};
+
 template<class bucket_t, class point_t, class affine_t, class scalar_t> static
 RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
                                        const scalar_t scalars[], bool mont = true,
-                         size_t ffi_affine_sz = sizeof(affine_t))
+                                       size_t ffi_affine_sz = sizeof(affine_t))
 {
     assert(WBITS > NTHRBITS);
 
-    bucket_t (*d_buckets)[NWINS][1<<WBITS] = nullptr;
-    bucket_t (*d_none)[NWINS][NTHREADS][2] = nullptr;
-    affine_t *d_points = nullptr;
-    scalar_t *d_scalars = nullptr;
-#ifndef CUDA_API_PER_THREAD_DEFAULT_STREAM
-    stream_t stream;
-#else
-    cudaStream_t stream = nullptr;
-#endif
-
-    cudaDeviceProp prop;
-    if (cudaGetDeviceProperties(&prop, 0) != cudaSuccess || prop.major < 7)
-        return RustError{cudaErrorInvalidDevice};
-
-    size_t N = (prop.multiProcessorCount*256) / (NTHREADS*NWINS);
-    size_t delta = ((npoints+N-1)/N+WARP_SZ-1) & (0U-WARP_SZ);
-    N = (npoints+delta-1) / delta;
-    std::vector<result_t<bucket_t>> res(N);
-
     try {
-        size_t n = (npoints+WARP_SZ-1) & ((size_t)0-WARP_SZ);
-        size_t blob_sz = n * sizeof(*d_points);
-        blob_sz += n * sizeof(*d_scalars);
-        blob_sz += N * sizeof(d_buckets[0]);
-
-        CUDA_OK(cudaMalloc(&d_points, blob_sz));
-
-        d_scalars = reinterpret_cast<decltype(d_scalars)>(d_points + n);
-        d_buckets = reinterpret_cast<decltype(d_buckets)>(d_scalars + n);
-
-        if (ffi_affine_sz != sizeof(*d_points))
-            CUDA_OK(cudaMemcpy2DAsync(d_points, sizeof(*d_points),
-                                      points, ffi_affine_sz,
-                                      ffi_affine_sz, npoints,
-                                      cudaMemcpyHostToDevice, stream));
-        else
-            CUDA_OK(cudaMemcpyAsync(d_points, points, npoints*sizeof(*d_points),
-                                    cudaMemcpyHostToDevice, stream));
-        CUDA_OK(cudaMemcpyAsync(d_scalars, scalars, npoints*sizeof(*d_scalars),
-                                cudaMemcpyHostToDevice, stream));
-
-        launch_coop(pippenger, dim3(NWINS, N), NTHREADS,
-                               sizeof(bucket_t)*NTHREADS, stream,
-                    (const affine_t*)d_points, npoints,
-                    (const scalar_t*)d_scalars, mont,
-                    d_buckets, d_none);
-
-        CUDA_OK(cudaMemcpyAsync(res[0], d_buckets, N*sizeof(res[0]),
-                                cudaMemcpyDeviceToHost, stream));
-
-        void *p = d_points;
-        d_points = nullptr;
-        CUDA_OK(cudaFree(p));
-        CUDA_OK(cudaStreamSynchronize(stream));
+        msm_t<bucket_t, point_t, affine_t, scalar_t> msm;
+        return msm.invoke(*out, vec_t<affine_t>{points, npoints},
+                                scalars, mont, ffi_affine_sz);
     } catch (const cuda_error& e) {
-        if (d_points != nullptr)
-            cudaFree(d_points);
-        cudaStreamSynchronize(stream);
         out->inf();
 #ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
         return RustError{e.code(), e.what()};
@@ -414,66 +532,6 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
         return RustError{e.code()}
 #endif
     }
-
-    struct tile_t {
-        size_t x, y, dy;
-        point_t p;
-        tile_t() {}
-    };
-    std::vector<tile_t> grid(NWINS*N);
-
-    size_t y = NWINS-1, total = 0;
-
-    while (total < N) {
-        grid[total].x  = total;
-        grid[total].y  = y;
-        grid[total].dy = NBITS - y*WBITS;
-        total++;
-    }
-
-    while (y--) {
-        for (size_t i = 0; i < N; i++, total++) {
-            grid[total].x  = grid[i].x;
-            grid[total].y  = y;
-            grid[total].dy = WBITS;
-        }
-    }
-
-    std::vector<std::atomic<size_t>> row_sync(NWINS); /* zeroed */
-    counter_t<size_t> counter(0);
-    channel_t<size_t> ch;
-
-    auto n_workers = min(da_pool.size(), total);
-    while (n_workers--) {
-        da_pool.spawn([&, total, N, counter]() {
-            for (size_t work; (work = counter++) < total;) {
-                auto item = &grid[work];
-                auto y = item->y;
-                item->p = integrate_row<point_t>((res[item->x])[y], item->dy);
-                if (++row_sync[y] == N)
-                    ch.send(y);
-            }
-        });
-    }
-
-    out->inf();
-    size_t row = 0, ny = NWINS;
-    while (ny--) {
-        auto y = ch.recv();
-        row_sync[y] = -1U;
-        while (grid[row].y == y) {
-            while (row < total && grid[row].y == y)
-                out->add(grid[row++].p);
-            if (y == 0)
-                break;
-            for (size_t i = 0; i < WBITS; i++)
-                out->dbl();
-            if (row_sync[--y] != -1U)
-                break;
-        }
-    }
-
-    return RustError{cudaSuccess};
 }
 
 #endif
