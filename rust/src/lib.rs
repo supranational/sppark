@@ -40,3 +40,43 @@ macro_rules! cuda_error {
         }
     };
 }
+
+use core::ffi::c_void;
+use core::mem::transmute;
+
+#[repr(C)]
+pub struct Gpu_Ptr<T> {
+    ptr: *const c_void,
+    phantom: core::marker::PhantomData<T>,
+}
+
+#[cfg(feature = "cuda")]
+impl<T> Drop for Gpu_Ptr<T> {
+    fn drop(&mut self) {
+        extern "C" {
+            fn drop_gpu_ptr_t(by_ref: &Gpu_Ptr<c_void>);
+        }
+        unsafe { drop_gpu_ptr_t(transmute::<&Gpu_Ptr<T>, &Gpu_Ptr<c_void>>(self)) };
+        self.ptr = core::ptr::null();
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl<T> Clone for Gpu_Ptr<T> {
+    fn clone(&self) -> Self {
+        extern "C" {
+            fn clone_gpu_ptr_t(ret: &mut Gpu_Ptr<c_void>, by_ref: &Gpu_Ptr<c_void>);
+        }
+        let mut ret = Self {
+            ptr: core::ptr::null(),
+            phantom: core::marker::PhantomData,
+        };
+        unsafe {
+            clone_gpu_ptr_t(
+                transmute::<&mut Gpu_Ptr<T>, &mut Gpu_Ptr<c_void>>(&mut ret),
+                transmute::<&Gpu_Ptr<T>, &Gpu_Ptr<c_void>>(self),
+            )
+        };
+        ret
+    }
+}
