@@ -17,3 +17,7 @@ include = [
 ]
 
 [dependencies]
+
+[build-dependencies]
+cc = "^1.0.70"
+which = "^4.0"

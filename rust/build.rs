@@ -36,4 +36,22 @@ fn main() {
     }
     // pass DEP_SPPARK_* variables to dependents
     println!("cargo:ROOT={}", base_dir.to_string_lossy());
+
+    // Detect if there is CUDA compiler and engage "cuda" feature accordingly
+    let nvcc = match env::var("NVCC") {
+        Ok(var) => which::which(var),
+        Err(_) => which::which("nvcc"),
+    };
+    if nvcc.is_ok() {
+        let util_dir = base_dir.join("util");
+        let mut nvcc = cc::Build::new();
+        nvcc.cuda(true);
+        nvcc.include(base_dir);
+        nvcc.file("src/lib.cpp")
+            .file(util_dir.join("all_gpus.cpp"))
+            .compile("sppark_cuda");
+        println!("cargo:rerun-if-changed=src/lib.cpp");
+        println!("cargo:rustc-cfg=feature=\"cuda\"");
+    }
+    println!("cargo:rerun-if-env-changed=NVCC");
 }
