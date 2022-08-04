@@ -1,3 +1,4 @@
+#include <cuda_runtime.h>
 #include "gpu_t.cuh"
 
 class gpus_t {
