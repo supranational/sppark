@@ -113,8 +113,6 @@ fn main() {
             nvcc.include(include);
         }
         if let Some(include) = env::var_os("DEP_SPPARK_ROOT") {
-            let root = PathBuf::from(&include);
-            nvcc.file(root.join("util/all_gpus.cu"));
             nvcc.include(include);
         }
         nvcc.file("cuda/pippenger_inf.cu").compile("blst_cuda_msm");
