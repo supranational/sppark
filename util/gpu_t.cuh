@@ -81,6 +81,7 @@ public:
     inline int sm_count() const         { return prop.multiProcessorCount; }
     inline void select() const          { cudaSetDevice(device_id); }
     stream_t& operator[](size_t i)      { return flipflop[i&1]; }
+    inline operator cudaStream_t()      { return zero; }
 
     inline size_t ncpus() const         { return pool.size(); }
     template<class Workable>
@@ -137,23 +138,27 @@ template<typename T> class gpu_ptr_t {
     inner *ptr;
 public:
     gpu_ptr_t(const T* p, int id) { ptr = new inner(p, id); }
-    gpu_ptr_t(const gpu_ptr_t& r)
-    {   (ptr = r.ptr)->ref_cnt.fetch_add(1, std::memory_order_relaxed);   }
+    gpu_ptr_t(const gpu_ptr_t& r) { *this = r; }
     ~gpu_ptr_t()
     {
-        if (ptr->ref_cnt.fetch_sub(1, std::memory_order_seq_cst) == 1) {
+        if (ptr && ptr->ref_cnt.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             int current_id;
             cudaGetDevice(&current_id);
             if (current_id != ptr->device_id)
                 cudaSetDevice(ptr->device_id);
-            cudaFree(ptr->ptr);
+            cudaFree((void*)ptr->ptr);
             if (current_id != ptr->device_id)
                 cudaSetDevice(current_id);
             delete ptr;
         }
     }
 
-    gpu_ptr_t& operator=(const gpu_ptr_t& r) = delete;
+    gpu_ptr_t& operator=(const gpu_ptr_t& r)
+    {
+        if (this != &r)
+            (ptr = r.ptr)->ref_cnt.fetch_add(1, std::memory_order_relaxed);
+        return *this;
+    }
     gpu_ptr_t& operator=(gpu_ptr_t&& r) noexcept
     {
         if (this != &r) {
@@ -163,10 +168,8 @@ public:
         return *this;
     }
 
-    inline operator T*() const                  { return ptr->ptr; }
+    inline operator const T*() const            { return ptr->ptr; }
     inline operator void*() const               { return (void*)ptr->ptr; }
-    inline const T& operator[](size_t i) const  { return ptr->ptr[i]; }
-    inline T& operator[](size_t i)              { return ptr->ptr[i]; }
 };
 
 // A simple way to pack a pointer and array's size length, but more
