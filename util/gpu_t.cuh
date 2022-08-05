@@ -81,7 +81,7 @@ public:
     inline int sm_count() const         { return prop.multiProcessorCount; }
     inline void select() const          { cudaSetDevice(device_id); }
     stream_t& operator[](size_t i)      { return flipflop[i&1]; }
-    inline operator cudaStream_t()      { return zero; }
+    inline operator cudaStream_t() const { return zero; }
 
     inline size_t ncpus() const         { return pool.size(); }
     template<class Workable>
