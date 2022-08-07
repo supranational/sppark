@@ -77,46 +77,46 @@ public:
     }
     gpu_t(int id = 0) : gpu_t(id, props(id)) {}
 
-    inline int id() const               { return device_id; }
-    inline int sm_count() const         { return prop.multiProcessorCount; }
-    inline void select() const          { cudaSetDevice(device_id); }
-    stream_t& operator[](size_t i)      { return flipflop[i&1]; }
-    inline operator cudaStream_t() const { return zero; }
+    inline int id() const                   { return device_id; }
+    inline int sm_count() const             { return prop.multiProcessorCount; }
+    inline void select() const              { cudaSetDevice(device_id); }
+    stream_t& operator[](size_t i) const    { return flipflop[i&1]; }
+    inline operator cudaStream_t() const    { return zero; }
 
-    inline size_t ncpus() const         { return pool.size(); }
+    inline size_t ncpus() const             { return pool.size(); }
     template<class Workable>
-    inline void spawn(Workable work)    { pool.spawn(work); }
+    inline void spawn(Workable work) const  { pool.spawn(work); }
 
-    inline void* Dmalloc(size_t sz)
+    inline void* Dmalloc(size_t sz) const
     {   void *d_ptr;
         CUDA_OK(cudaMalloc(&d_ptr, sz));
         return d_ptr;
     }
-    inline void Dfree(void* d_ptr)
+    inline void Dfree(void* d_ptr) const
     {   cudaFree(d_ptr);   }
 
     template<typename T>
     inline void HtoD(T* dst, const void* src, size_t nelems,
-                     size_t sz = sizeof(T))
+                     size_t sz = sizeof(T)) const
     {   zero.HtoD(dst, src, nelems, sz);   }
     template<typename T>
     inline void HtoD(T& dst, const void* src, size_t nelems,
-                     size_t sz = sizeof(T))
+                     size_t sz = sizeof(T)) const
     {   HtoD(&dst, src, nelems, sz);   }
 
     template<typename... Types>
     inline void launch_coop(void(*f)(Types...), dim3 gridDim, dim3 blockDim,
                                                 size_t shared_sz,
-                            Types... args)
+                            Types... args) const
     {   zero.launch_coop((const void*)f, gridDim, blockDim, shared_sz,
                          args...);
     }
 
     template<typename T>
-    inline void DtoH(T* dst, const void* src, size_t nelems)
+    inline void DtoH(T* dst, const void* src, size_t nelems) const
     {   zero.DtoH(dst, src, nelems);   }
     template<typename T>
-    inline void DtoH(T& dst, const void* src, size_t nelems)
+    inline void DtoH(T& dst, const void* src, size_t nelems) const
     {   DtoH(&dst, src, nelems);   }
 
     inline void sync() const
