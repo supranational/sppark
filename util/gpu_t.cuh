@@ -98,7 +98,7 @@ public:
     template<typename T>
     inline void HtoD(T* dst, const void* src, size_t nelems,
                      size_t sz = sizeof(T))
-    {   zero.HtoD(dst, src, sz, nelems);   }
+    {   zero.HtoD(dst, src, nelems, sz);   }
     template<typename T>
     inline void HtoD(T& dst, const void* src, size_t nelems,
                      size_t sz = sizeof(T))
