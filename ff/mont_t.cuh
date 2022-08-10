@@ -173,6 +173,8 @@ private:
 public:
     inline uint32_t& operator[](size_t i)               { return even[i]; }
     inline const uint32_t& operator[](size_t i) const   { return even[i]; }
+    inline size_t len() const                           { return n;       }
+
     inline mont_t() {}
     inline mont_t(const uint32_t *p)
     {
