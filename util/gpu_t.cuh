@@ -57,10 +57,13 @@ public:
 };
 
 class gpu_t {
+public:
+    static const size_t FLIP_FLOP = 3;
+private:
     int device_id;
     cudaDeviceProp prop;
     size_t total_mem;
-    mutable stream_t zero, flipflop[2];
+    mutable stream_t zero, flipflop[FLIP_FLOP];
     mutable thread_pool_t pool;
 
     inline static cudaDeviceProp props(int id)
@@ -80,7 +83,7 @@ public:
     inline int id() const                   { return device_id; }
     inline int sm_count() const             { return prop.multiProcessorCount; }
     inline void select() const              { cudaSetDevice(device_id); }
-    stream_t& operator[](size_t i) const    { return flipflop[i&1]; }
+    stream_t& operator[](size_t i) const    { return flipflop[i%FLIP_FLOP]; }
     inline operator cudaStream_t() const    { return zero; }
 
     inline size_t ncpus() const             { return pool.size(); }
@@ -119,8 +122,11 @@ public:
     inline void DtoH(T& dst, const void* src, size_t nelems) const
     {   DtoH(&dst, src, nelems);   }
 
-    inline void sync() const
-    {   zero.sync();   }
+    inline void sync() const {
+      zero.sync();
+      for (auto& f : flipflop)
+          f.sync();
+    }
 };
 
 
