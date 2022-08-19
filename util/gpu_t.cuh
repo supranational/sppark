@@ -111,7 +111,7 @@ public:
     inline void launch_coop(void(*f)(Types...), dim3 gridDim, dim3 blockDim,
                                                 size_t shared_sz,
                             Types... args) const
-    {   zero.launch_coop((const void*)f, gridDim, blockDim, shared_sz,
+    {   zero.launch_coop(f, gridDim, blockDim, shared_sz,
                          args...);
     }
 
