@@ -316,7 +316,7 @@ public:
 
 template<class bucket_t, class point_t, class affine_t, class scalar_t>
 class msm_t {
-    gpu_t& gpu;
+    const gpu_t& gpu;
     size_t npoints;
     size_t N;
     bucket_t (*d_buckets)[NWINS][1<<WBITS];
