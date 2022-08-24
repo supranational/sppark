@@ -83,14 +83,14 @@ private:
             size_t i = 0;
             uint32_t odd[2*n-2];
 
-            mul_n(even, a,  b[0]);
-            mul_n(odd, a+1, b[0]);
-            ++i; mad_row(&even[i+1], &odd[i-1], a, b[i]);
+            mul_n(even, &a[0], b[0]);
+            mul_n(odd,  &a[1], b[0]);
+            ++i; mad_row(&even[i+1], &odd[i-1], &a[0], b[i]);
 
             #pragma unroll
             while (i < n-2) {
-                ++i; mad_row(&odd[i],    &even[i],  a, b[i]);
-                ++i; mad_row(&even[i+1], &odd[i-1], a, b[i]);
+                ++i; mad_row(&odd[i],    &even[i],  &a[0], b[i]);
+                ++i; mad_row(&even[i+1], &odd[i-1], &a[0], b[i]);
             }
 
             // merge |even| and |odd|
@@ -120,8 +120,8 @@ private:
             uint32_t odd[2*n-2];
 
             // perform |a[i]|*|a[j]| for all j>i
-            mul_n(even+2, a+2, a[0], n-2);
-            mul_n(odd,    a+1, a[0], n);
+            mul_n(even+2, &a[2], a[0], n-2);
+            mul_n(odd,    &a[1], a[0], n);
 
             #pragma unroll
             while (i < n-4) {
@@ -404,8 +404,8 @@ public:
 
             #pragma unroll
             for (i = 0; i < n; i += 2) {
-                mad_n_redc(&even[0], &odd[0], a, b[i], i==0);
-                mad_n_redc(&odd[0], &even[0], a, b[i+1]);
+                mad_n_redc(&even[0], &odd[0], &a[0], b[i], i==0);
+                mad_n_redc(&odd[0], &even[0], &a[0], b[i+1]);
             }
 
             // merge |even| and |odd|
