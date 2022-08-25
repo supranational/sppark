@@ -133,7 +133,8 @@ public:
 
 
 size_t ngpus();
-gpu_t& select_gpu(int id = 0);
+const gpu_t& select_gpu(int id = 0);
+const std::vector<const gpu_t*>& all_gpus();
 extern "C" bool cuda_available();
 
 template<typename T> class gpu_ptr_t {

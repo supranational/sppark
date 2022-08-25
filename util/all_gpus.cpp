@@ -2,7 +2,7 @@
 #include "gpu_t.cuh"
 
 class gpus_t {
-    std::vector<gpu_t*> gpus;
+    std::vector<const gpu_t*> gpus;
 public:
     gpus_t()
     {
@@ -22,25 +22,25 @@ public:
     ~gpus_t()
     {   for (auto* ptr: gpus) delete ptr;   }
 
-    inline gpu_t* operator[](size_t i) const
-    {   return gpus[i];   }
-    inline size_t ngpus() const
-    {   return gpus.size();   }
-
-    static gpus_t& all()
+    static const auto& all()
     {
         static gpus_t all_gpus;
-        return all_gpus;
+        return all_gpus.gpus;
     }
 };
 
-gpu_t& select_gpu(int id)
+const gpu_t& select_gpu(int id)
 {
-    cudaSetDevice(id);
-    return *gpus_t::all()[id];
+    auto* gpu = gpus_t::all()[id];
+    gpu->select();
+    return *gpu;
 }
 
 size_t ngpus()
-{   return gpus_t::all().ngpus();   }
+{   return gpus_t::all().size();   }
 
-extern "C" bool cuda_available() { return gpus_t::all().ngpus() != 0; }
+const std::vector<const gpu_t*>& all_gpus()
+{   return gpus_t::all();   }
+
+extern "C" bool cuda_available()
+{   return gpus_t::all().size() != 0;   }
