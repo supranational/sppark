@@ -14,7 +14,7 @@ public:
             if (cudaGetDeviceProperties(&prop, id) == cudaSuccess &&
                 prop.major >= 7) {
                 cudaSetDevice(id);
-                gpus.push_back(new gpu_t(id, prop));
+                gpus.push_back(new gpu_t(gpus.size(), id, prop));
             }
         }
         cudaSetDevice(0);
