@@ -95,6 +95,8 @@ public:
     }
 
     inline int id() const                   { return gpu_id; }
+    inline operator int() const             { return gpu_id; }
+    inline const auto& props() const        { return prop; }
     inline int sm_count() const             { return prop.multiProcessorCount; }
     inline void select() const              { cudaSetDevice(cuda_id); }
     stream_t& operator[](size_t i) const    { return flipflop[i%FLIP_FLOP]; }
