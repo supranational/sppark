@@ -30,5 +30,7 @@ pub fn generate_points_scalars<G: AffineCurve>(
         points.append(&mut points.clone());
     }
 
+    points.truncate(len);
+
     (points, scalars)
 }
