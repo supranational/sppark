@@ -421,7 +421,7 @@ public:
 #ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
             return RustError{e.code(), e.what()};
 #else
-            return RustError{e.code()}
+            return RustError{e.code()};
 #endif
         }
 
@@ -530,7 +530,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
 #ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
         return RustError{e.code(), e.what()};
 #else
-        return RustError{e.code()}
+        return RustError{e.code()};
 #endif
     }
 }
