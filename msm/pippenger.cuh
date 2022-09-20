@@ -156,16 +156,18 @@ void pippenger(const affine_t* points, size_t npoints,
     bucket_t* row = buckets[blockIdx.y][bid];
 
     if (mont) {
+        uint32_t np = (npoints+WARP_SZ-1) & (0U-WARP_SZ);
         #pragma unroll 1
-        for (uint32_t i = NTHREADS*bid + tid; i < npoints; i += NTHREADS*NWINS) {
+        for (uint32_t i = NTHREADS*bid + tid; i < np; i += NTHREADS*NWINS) {
             scalar_t s = scalars_[i];
             s.from();
             scalars[i] = s;
         }
         cooperative_groups::this_grid().sync();
     } else { // if (typeid(scalars) != typeid(scalars_)) {
+        uint32_t np = (npoints+WARP_SZ-1) & (0U-WARP_SZ);
         #pragma unroll 1
-        for (uint32_t i = NTHREADS*bid + tid; i < npoints; i += NTHREADS*NWINS) {
+        for (uint32_t i = NTHREADS*bid + tid; i < np; i += NTHREADS*NWINS) {
             scalar_t s = scalars_[i];
             __syncwarp();
             scalars[i] = s;
@@ -387,7 +389,7 @@ public:
 
             size_t d_off = 0;   // device offset
             size_t h_off = 0;   // host offset
-            size_t num = stride;
+            size_t num = stride > npoints ? npoints : stride;
 
             gpu[0].HtoD(&d_scalars[d_off], &scalars[h_off], num);
             if (points)
