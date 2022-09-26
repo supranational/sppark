@@ -503,7 +503,7 @@ public:
         return ret;
     }
 
-    friend inline mont_t csel(const mont_t& a, const mont_t& b, int sel_a)
+    static inline mont_t csel(const mont_t& a, const mont_t& b, int sel_a)
     {
         mont_t ret;
         asm("{ .reg.pred %sel_a;");
