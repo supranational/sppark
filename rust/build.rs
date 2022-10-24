@@ -27,6 +27,10 @@ fn main() {
         );
         println!(
             "cargo:rerun-if-changed={}",
+            base_dir.join("ntt").to_string_lossy()
+        );
+        println!(
+            "cargo:rerun-if-changed={}",
             base_dir.join("msm").to_string_lossy()
         );
         println!(

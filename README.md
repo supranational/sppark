@@ -45,7 +45,7 @@ We show how to interface with Rust and are open to discussions on how to interfa
 * **memory** -
 * **merkle** -
 * **msm** - Contains multi-scalar multiplication template[s] that can be instantiated for a variety of elliptic curves such as BLS12-381 and the Pasta curves
-* **ntt** -
+* **ntt** - Contains NTT CUDA kernels.
 * **poc** - Proof-of-concept implementations, including benchmarking.
 * **rust** - Houses Rust crate definition.
 * **util** - General-purpose helper classes.
