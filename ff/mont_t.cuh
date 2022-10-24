@@ -62,7 +62,21 @@ private:
 
     class wide_t {
     private:
-        uint32_t even[2*n];
+        union {
+            uint32_t even[2*n];
+            mont_t s[2];
+        };
+
+    public:
+        inline uint32_t& operator[](size_t i)               { return even[i]; }
+        inline const uint32_t& operator[](size_t i) const   { return even[i]; }
+        inline operator mont_t()
+        {
+            s[0].mul_by_1();
+            return s[0] + s[1];
+        }
+
+        inline wide_t() {}
 
     private:
         static inline void mad_row(uint32_t* odd, uint32_t* even,
@@ -192,7 +206,6 @@ public:
     {
         size_t i;
         uint32_t tmp[n+1];
-        asm("{ .reg.pred %top;");
 
         asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(b[0]));
         for (i = 1; i < n; i++)
@@ -200,18 +213,8 @@ public:
         if (N%32 == 0)
             asm("addc.u32 %0, 0, 0;" : "=r"(tmp[n]));
 
-        asm("sub.cc.u32 %0, %1, %2;" : "=r"(tmp[0]) : "r"(even[0]), "r"(MOD[0]));
-        for (i = 1; i < n; i++)
-            asm("subc.cc.u32 %0, %1, %2;" : "=r"(tmp[i]) : "r"(even[i]), "r"(MOD[i]));
-        if (N%32 == 0)
-            asm("subc.u32 %0, %0, 0; setp.eq.u32 %top, %0, 0;" : "+r"(tmp[n]));
-        else
-            asm("subc.u32 %0, 0, 0; setp.eq.u32 %top, %0, 0;" : "=r"(tmp[n]));
+        final_sub(tmp[n], &tmp[0]);
 
-        for (i = 0; i < n; i++)
-            asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
-
-        asm("}");
         return *this;
     }
     friend inline mont_t operator+(mont_t a, const mont_t& b)
@@ -221,7 +224,6 @@ public:
     {
         size_t i;
         uint32_t tmp[n+1];
-        asm("{ .reg.pred %top;");
 
         while (l--) {
             asm("add.cc.u32 %0, %0, %0;" : "+r"(even[0]));
@@ -230,19 +232,9 @@ public:
             if (N%32 == 0)
                 asm("addc.u32 %0, 0, 0;" : "=r"(tmp[n]));
 
-            asm("sub.cc.u32 %0, %1, %2;" : "=r"(tmp[0]) : "r"(even[0]), "r"(MOD[0]));
-            for (i = 1; i < n; i++)
-                asm("subc.cc.u32 %0, %1, %2;" : "=r"(tmp[i]) : "r"(even[i]), "r"(MOD[i]));
-            if (N%32 == 0)
-                asm("subc.u32 %0, %0, 0; setp.eq.u32 %top, %0, 0;" : "+r"(tmp[n]));
-            else
-                asm("subc.u32 %0, 0, 0; setp.eq.u32 %top, %0, 0;" : "=r"(tmp[n]));
-
-            for (i = 0; i < n; i++)
-                asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
+            final_sub(tmp[n], &tmp[0]);
         }
 
-        asm("}");
         return *this;
     }
     friend inline mont_t operator<<(mont_t a, unsigned l)
@@ -389,18 +381,13 @@ public:
     friend inline mont_t operator*(const mont_t& a, const mont_t& b)
     {
         if (&a == &b && 0) {
-            union { wide_t w; mont_t s[2]; } ret = { wide_t(a) };
-            ret.s[0].mul_by_1();
-            return ret.s[0] += ret.s[1];
+            return wide_t{a};
         } else if (N%32 == 0) {
-            union { wide_t w; mont_t s[2]; } ret = { wide_t(a, b) };
-            ret.s[0].mul_by_1();
-            return ret.s[0] += ret.s[1];
+            return wide_t{a, b};
         } else {
             mont_t even;
             uint32_t odd[n+1];
             size_t i;
-            asm("{ .reg.pred %top;");
 
             #pragma unroll
             for (i = 0; i < n; i += 2) {
@@ -414,16 +401,8 @@ public:
                 asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i+1]));
             asm("addc.u32 %0, %0, 0;" : "+r"(even[i]));
 
-            // final subtraction
-            asm("sub.cc.u32 %0, %1, %2;" : "=r"(odd[0]) : "r"(even[0]), "r"(MOD[0]));
-            for (i = 1; i < n; i++)
-                asm("subc.cc.u32 %0, %1, %2;" : "=r"(odd[i]) : "r"(even[i]), "r"(MOD[i]));
-            asm("subc.u32 %0, 0, 0; setp.eq.u32 %top, %0, 0;" : "=r"(odd[i]));
+            even.final_sub(odd[n], &odd[0]);
 
-            for (i = 0; i < n; i++)
-                asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(odd[i]));
-
-            asm("}");
             return even;
         }
     }
@@ -431,11 +410,8 @@ public:
     {   return *this = *this * a;   }
 
     inline mont_t& sqr()
-    {
-        union { wide_t w; mont_t s[2]; } ret = { wide_t(*this) };
-        ret.s[0].mul_by_1();
-        return *this = ret.s[0] + ret.s[1];
-    }
+    {   return *this = wide_t{*this};   }
+
     // simplified exponentiation, but mind the ^ operator's precedence!
     inline mont_t& operator^=(unsigned p)
     {
@@ -551,6 +527,25 @@ private:
         for (i = 1; i < n-1; i++)
             asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i+1]));
         asm("addc.u32 %0, %0, 0;" : "+r"(even[i]));
+    }
+
+    inline void final_sub(uint32_t carry, uint32_t* tmp)
+    {
+        size_t i;
+        asm("{ .reg.pred %top;");
+
+        asm("sub.cc.u32 %0, %1, %2;" : "=r"(tmp[0]) : "r"(even[0]), "r"(MOD[0]));
+        for (i = 1; i < n; i++)
+            asm("subc.cc.u32 %0, %1, %2;" : "=r"(tmp[i]) : "r"(even[i]), "r"(MOD[i]));
+        if (N%32 == 0)
+            asm("subc.u32 %0, %0, 0; setp.eq.u32 %top, %0, 0;" : "+r"(carry));
+        else
+            asm("subc.u32 %0, 0, 0; setp.eq.u32 %top, %0, 0;" : "=r"(carry));
+
+        for (i = 0; i < n; i++)
+            asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
+
+        asm("}");
     }
 };
 
