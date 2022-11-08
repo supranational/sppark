@@ -65,7 +65,7 @@ void bit_rev_permutation_aux(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 
     index_t step = (index_t)1 << (lg_domain_size - 3);
     index_t group_idx = (threadIdx.x + blockDim.x * (index_t)blockIdx.x) >> 3;
-    uint32_t brev_limit = lg_domain_size - 8;
+    uint32_t brev_limit = lg_domain_size - 6;
     index_t brev_mask = ((index_t)1 << brev_limit) - 1;
     index_t group_idx_brev =
         (group_idx & ~brev_mask) | bit_rev(group_idx & brev_mask, brev_limit);
