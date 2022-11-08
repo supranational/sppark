@@ -43,7 +43,7 @@ protected:
                 (d_out, d_inp, lg_domain_size);
         else
             bit_rev_permutation_aux
-                <<<domain_size / 1024, 128, 1024 * sizeof(fr_t), stream>>>
+                <<<domain_size / 1024, 1024 / 8, 1024 * sizeof(fr_t), stream>>>
                 (d_out, d_inp, lg_domain_size);
     }
 
