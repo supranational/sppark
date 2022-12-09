@@ -47,6 +47,26 @@ fn main() {
         Err(_) => which::which("nvcc"),
     };
     if nvcc.is_ok() {
+        let cuda_version = std::process::Command::new(nvcc.unwrap())
+            .arg("--version")
+            .output()
+            .expect("impossible");
+        if !cuda_version.status.success() {
+            panic!("{:?}", cuda_version);
+        }
+        let cuda_version = String::from_utf8(cuda_version.stdout).unwrap();
+        let x = cuda_version
+            .find("release ")
+            .expect("can't find \"release X.Y,\" in --version output")
+            + 8;
+        let y = cuda_version[x..]
+            .find(",")
+            .expect("can't parse \"release X.Y,\" in --version output");
+        let v = cuda_version[x..x + y].parse::<f32>().unwrap();
+        if v < 11.0 {
+            panic!("Unsupported CUDA version {} < 11.0", v);
+        }
+
         let util_dir = base_dir.join("util");
         let mut nvcc = cc::Build::new();
         nvcc.cuda(true);
