@@ -42,7 +42,7 @@ static const int NTHRBITS = log2(NTHREADS);
 //
 __global__
 void pippenger(const affine_t* points, size_t npoints,
-               const scalar_t* scalars, bool mont,
+               scalar_t* scalars, bool mont,
                bucket_t (*buckets)[NWINS][1<<WBITS],
                bucket_t (*ret)[NWINS][NTHREADS][2] = nullptr);
 
@@ -126,7 +126,7 @@ static __device__ int get_wval(const scalar_t& d, uint32_t off, uint32_t bits)
 
 __global__
 void pippenger(const affine_t* points, size_t npoints,
-               const scalar_t* scalars_, bool mont,
+               scalar_t* scalars_, bool mont,
                bucket_t (*buckets)[NWINS][1<<WBITS],
                bucket_t (*ret)[NWINS][NTHREADS][2] /*= nullptr*/)
 {
@@ -147,7 +147,7 @@ void pippenger(const affine_t* points, size_t npoints,
             npoints = delta;
     }
 
-    scalars_T scalars = const_cast<scalar_t*>(scalars_);
+    scalars_T scalars = scalars_;
 
     const int NTHRBITS = dlog2(NTHREADS);
     const uint32_t tid = threadIdx.x;
@@ -399,7 +399,7 @@ public:
                 gpu[i&1].launch_coop(pippenger, dim3(NWINS, N), NTHREADS,
                                                 sizeof(bucket_t)*NTHREADS,
                         (const affine_t*)&d_points[points ? d_off : h_off], num,
-                        (const scalar_t*)&d_scalars[d_off], mont,
+                        &d_scalars[d_off], mont,
                         d_buckets, d_none);
                 if (i < batch - 1) {
                     h_off += stride;
