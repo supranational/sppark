@@ -75,6 +75,8 @@ private:
             s[0].mul_by_1();
             return s[0] + s[1];
         }
+        inline void final_sub(uint32_t carry, uint32_t* tmp)
+        {   s[1].final_sub(carry, tmp);   }
 
         inline wide_t() {}
 
@@ -569,6 +571,59 @@ private:
             asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
 
         asm("}");
+    }
+
+public:
+    static inline mont_t dot_product(const mont_t a[], const mont_t* b,
+                                     size_t len, size_t stride_b = 1)
+    {
+        size_t i;
+        mont_t tmp;
+        wide_t even;
+        uint32_t odd[2*n-2], carry;
+
+        for (i = 0; i < 2*n-2; i++)
+            even[i] = odd[i] = 0;
+        even[i] = even[i+1] = 0;
+
+        for (size_t j = 0; j < len; j++, b += stride_b) {
+            tmp = a[j];
+            carry = 0;
+
+            #pragma unroll
+            for (i = 0; i < n; i += 2) {
+                uint32_t bi;
+
+                cmad_n(&even[i], &tmp[0], bi = (*b)[i]);
+                asm("addc.u32 %0, %0, 0;" : "+r"(carry));
+                asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
+                    : "+r"(odd[n+i-1]), "+r"(carry));
+                cmad_n(&odd[i], &tmp[1], bi);
+                asm("addc.u32 %0, %0, 0;" : "+r"(carry));
+
+                cmad_n(&odd[i], &tmp[0], bi = (*b)[i+1]);
+                asm("addc.u32 %0, %0, 0;" : "+r"(carry));
+                asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
+                    : "+r"(even[n+i+1]), "+r"(carry));
+                cmad_n(&even[i+2], &tmp[1], bi);
+                asm("addc.u32 %0, %0, 0;" : "+r"(carry));
+            }
+
+            // reduce |even| modulo |MOD<<(n*32)|
+            even.final_sub(carry, &tmp[0]);
+        }
+
+        // merge |even| and |odd|
+        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[1]) : "r"(odd[0]));
+        for (i = 1; i < 2*n-2; i++)
+            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i+1]) : "r"(odd[i]));
+        asm("addc.cc.u32 %0, %0, 0; addc.u32 %1, 0, 0;"
+            : "+r"(even[i+1]), "=r"(carry));
+
+        // reduce |even| modulo |MOD<<(n*32)|
+        even.final_sub(carry, &tmp[0]);
+
+        return even;
     }
 };
 
