@@ -586,6 +586,7 @@ public:
             even[i] = odd[i] = 0;
         even[i] = even[i+1] = 0;
 
+        #pragma unroll
         for (size_t j = 0; j < len; j++, b += stride_b) {
             tmp = a[j];
             carry = 0;
@@ -623,7 +624,7 @@ public:
         // reduce |even| modulo |MOD<<(n*32)|
         even.final_sub(carry, &tmp[0]);
 
-        return even;
+        return even; // implict cast to mont_t performs the reduction
     }
 };
 
