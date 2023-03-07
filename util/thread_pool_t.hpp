@@ -20,6 +20,30 @@
 # include <sched.h>
 #endif
 
+class semaphore_t {
+private:
+    size_t counter;
+    std::mutex mtx;
+    std::condition_variable cvar;
+
+public:
+    semaphore_t() : counter(0) {}
+
+    void notify()
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        counter++;
+        cvar.notify_one();
+    }
+
+    void wait()
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cvar.wait(lock, [&] { return counter != 0; });
+        counter--;
+    }
+};
+
 class thread_pool_t {
 private:
     std::vector<std::thread> threads;
@@ -108,8 +132,7 @@ public:
 
         std::atomic<size_t> counter(0);
         std::atomic<size_t> done(num_workers);
-        std::mutex b_mtx;
-        std::condition_variable barrier;
+        semaphore_t barrier;
 
         while (num_workers--) {
             spawn([&, num_items, stride, num_steps]() {
@@ -122,15 +145,12 @@ public:
                     while (n--)
                         work(off++);
                 }
-                if (--done == 0) {
-                    std::unique_lock<std::mutex> lock(b_mtx);
-                    barrier.notify_one();
-                }
+                if (--done == 0)
+                    barrier.notify();
             });
         }
 
-        std::unique_lock<std::mutex> lock(b_mtx);
-        barrier.wait(lock, [&] { return done == 0; });
+        barrier.wait();
     }
     template<class Workable>
     void par_map(size_t num_items, Workable work, size_t max_workers = 0)
