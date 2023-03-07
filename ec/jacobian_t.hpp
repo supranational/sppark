@@ -5,15 +5,6 @@
 #ifndef __JACOBIAN_T_HPP__
 #define __JACOBIAN_T_HPP__
 
-#ifndef __CUDA_ARCH__
-# undef  __host__
-# define __host__
-# undef  __device__
-# define __device__
-# undef  __noinline__
-# define __noinline__
-#endif
-
 template<class field_t> class jacobian_t {
     field_t X, Y, Z;
 
@@ -29,9 +20,10 @@ public:
         field_t X, Y;
 
     public:
+        affine_t() {}
         affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
 
-        inline __device__ bool is_inf() const
+        inline bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
         inline affine_t& operator=(const jacobian_t& a)
@@ -48,7 +40,7 @@ public:
 
     inline operator affine_t() const      { return affine_t(*this); }
 
-    inline __device__ jacobian_t& operator=(const affine_t& a)
+    inline jacobian_t& operator=(const affine_t& a)
     {
         X = a.X;
         Y = a.Y;
@@ -56,8 +48,8 @@ public:
         return *this;
     }
 
-    inline __device__ bool is_inf() const { return (bool)(Z.is_zero()); }
-    inline __device__ void inf()          { Z.zero(); }
+    inline bool is_inf() const { return (bool)(Z.is_zero()); }
+    inline void inf()          { Z.zero(); }
 
     /*
      * Addition that can handle doubling [as well as points at infinity,
@@ -380,7 +372,6 @@ public:
     /*
      * Non-constant-time add-or-double.
      */
-    __device__ __noinline__
     void add(const jacobian_t& p2)
     {
 #ifdef __CUDA_ARCH__
@@ -468,7 +459,6 @@ public:
         *this = p3;
     }
 
-    __device__ __noinline__
     void add(const affine_t& p2)
     {
 #ifdef __CUDA_ARCH__
