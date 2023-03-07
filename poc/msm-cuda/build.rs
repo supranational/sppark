@@ -99,12 +99,9 @@ fn main() {
     if nvcc.is_ok() {
         let mut nvcc = cc::Build::new();
         nvcc.cuda(true);
-        nvcc.flag("-arch=sm_70");
-        nvcc.flag("-maxrregcount=255");
-        //nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
+        nvcc.flag("-arch=sm_80");
+        nvcc.flag("-gencode").flag("arch=compute_70,code=sm_70");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
-        #[cfg(feature = "cuda-mobile")]
-        nvcc.define("NTHREADS", "128");
         nvcc.define(curve, None);
         if let Some(def) = cc_opt {
             nvcc.define(def, None);
