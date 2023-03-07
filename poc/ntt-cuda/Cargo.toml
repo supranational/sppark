@@ -19,7 +19,8 @@ bls12_381 = []
 quiet = []
 
 [dependencies]
-blst = "=0.3.10"
+#blst = "=0.3.10"
+blst = { git = "https://github.com/supranational/blst" }
 sppark = { path = "../../rust" }
 
 [build-dependencies]
