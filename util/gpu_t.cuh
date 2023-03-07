@@ -50,7 +50,8 @@ public:
             CUDA_OK(cudaMemcpyAsync(dst, src, nelems*sizeof(T),
                                     cudaMemcpyHostToDevice, stream));
         else
-            CUDA_OK(cudaMemcpy2DAsync(dst, sizeof(T), src, sz, sz, nelems,
+            CUDA_OK(cudaMemcpy2DAsync(dst, sizeof(T), src, sz,
+                                      std::min(sizeof(T), sz), nelems,
                                       cudaMemcpyHostToDevice, stream));
     }
     template<typename T>
@@ -72,16 +73,24 @@ public:
     }
 
     template<typename T>
-    inline void DtoH(T* dst, const void* src, size_t nelems) const
-    {   CUDA_OK(cudaMemcpyAsync(dst, src, nelems*sizeof(T),
-                                cudaMemcpyDeviceToHost, stream));
+    inline void DtoH(T* dst, const void* src, size_t nelems,
+                     size_t sz = sizeof(T)) const
+    {   if (sz == sizeof(T))
+            CUDA_OK(cudaMemcpyAsync(dst, src, nelems*sizeof(T),
+                                    cudaMemcpyDeviceToHost, stream));
+        else
+            CUDA_OK(cudaMemcpy2DAsync(dst, sizeof(T), src, sz,
+                                      std::min(sizeof(T), sz), nelems,
+                                      cudaMemcpyDeviceToHost, stream));
     }
     template<typename T>
-    inline void DtoH(T& dst, const void* src, size_t nelems) const
-    {   DtoH(&dst, src, nelems);   }
+    inline void DtoH(T& dst, const void* src, size_t nelems,
+                     size_t sz = sizeof(T)) const
+    {   DtoH(&dst, src, nelems, sz);   }
     template<typename T>
-    inline void DtoH(std::vector<T> dst, const void* src) const
-    {   DtoH(&dst[0], src, dst.size());   }
+    inline void DtoH(std::vector<T> dst, const void* src,
+                     size_t sz = sizeof(T)) const
+    {   DtoH(&dst[0], src, dst.size(), sz);   }
 
     inline void sync() const
     {   CUDA_OK(cudaStreamSynchronize(stream));   }
@@ -157,14 +166,17 @@ public:
     }
 
     template<typename T>
-    inline void DtoH(T* dst, const void* src, size_t nelems) const
-    {   zero.DtoH(dst, src, nelems);   }
+    inline void DtoH(T* dst, const void* src, size_t nelems,
+                     size_t sz = sizeof(T)) const
+    {   zero.DtoH(dst, src, nelems, sz);   }
     template<typename T>
-    inline void DtoH(T& dst, const void* src, size_t nelems) const
-    {   DtoH(&dst, src, nelems);   }
+    inline void DtoH(T& dst, const void* src, size_t nelems,
+                     size_t sz = sizeof(T)) const
+    {   DtoH(&dst, src, nelems, sz);   }
     template<typename T>
-    inline void DtoH(std::vector<T> dst, const void* src) const
-    {   DtoH(&dst[0], src, dst.size());   }
+    inline void DtoH(std::vector<T> dst, const void* src,
+                     size_t sz = sizeof(T)) const
+    {   DtoH(&dst[0], src, dst.size(), sz);   }
 
     inline void sync() const
     {
