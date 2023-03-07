@@ -34,6 +34,7 @@ template<const size_t N, const uint32_t MOD[(N+31)/32], const uint32_t& M0,
 class __align__(((N+63)/64)&1 ? 8 : 16) mont_t {
 public:
     static const size_t nbits = N;
+    static constexpr size_t __device__ bit_length() { return N; }
 private:
     static const size_t n = (N+31)/32;
     uint32_t even[n];
@@ -382,9 +383,7 @@ private:
 public:
     friend inline mont_t operator*(const mont_t& a, const mont_t& b)
     {
-        if (&a == &b && 0) {
-            return wide_t{a};
-        } else if (N%32 == 0) {
+        if (N%32 == 0) {
             return wide_t{a, b};
         } else {
             mont_t even;
@@ -421,9 +420,13 @@ public:
             asm("trap;");
 
         mont_t sqr = *this;
-        for (; (p&1) == 0; p >>= 1)
-            sqr.sqr();
-        *this = sqr;
+        if ((p&1) == 0) {
+            do {
+                sqr.sqr();
+                p >>= 1;
+            } while ((p&1) == 0);
+            *this = sqr;
+        }
         for (p >>= 1; p; p >>= 1) {
             sqr.sqr();
             if (p&1)
@@ -432,7 +435,7 @@ public:
         return *this;
     }
     friend inline mont_t operator^(mont_t a, unsigned p)
-    {   return a ^= p;   }
+    {   return p == 2 ? (mont_t)wide_t{a} : a ^= p;   }
     inline mont_t operator()(unsigned p)
     {   return *this^p;   }
     friend inline mont_t sqr(const mont_t& a)
