@@ -67,7 +67,10 @@ public:
     inline void launch_coop(void(*f)(Types...), dim3 gridDim, dim3 blockDim,
                                                 size_t shared_sz,
                             Types... args) const
-    {   void* va_args[sizeof...(args)] = { &args... };
+    {
+        if (gpu_props(gpu_id).sharedMemPerBlock < shared_sz)
+            CUDA_OK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, shared_sz));
+        void* va_args[sizeof...(args)] = { &args... };
         CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
                                             va_args, shared_sz, stream));
     }
