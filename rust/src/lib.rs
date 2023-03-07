@@ -42,6 +42,7 @@ macro_rules! cuda_error {
 }
 
 use core::ffi::c_void;
+#[cfg(feature = "cuda")]
 use core::mem::transmute;
 
 #[repr(C)]
