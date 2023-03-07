@@ -85,6 +85,13 @@ public:
 
     inline void sync() const
     {   CUDA_OK(cudaStreamSynchronize(stream));   }
+
+    inline void notify(cudaHostFn_t cb, void* data)
+    {   CUDA_OK(cudaLaunchHostFunc(stream, cb, data));   }
+
+    template<class T>
+    inline void notify(T& sema)
+    {   notify([](void* s) { reinterpret_cast<T*>(s)->notify(); }, &sema);   }
 };
 
 class gpu_t {
