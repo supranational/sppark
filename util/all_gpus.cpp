@@ -1,4 +1,3 @@
-#include <cuda_runtime.h>
 #include "gpu_t.cuh"
 
 class gpus_t {
@@ -35,6 +34,9 @@ const gpu_t& select_gpu(int id)
     gpu->select();
     return *gpu;
 }
+
+const cudaDeviceProp& gpu_props(int id)
+{   return gpus_t::all()[id]->props();   }
 
 size_t ngpus()
 {   return gpus_t::all().size();   }
