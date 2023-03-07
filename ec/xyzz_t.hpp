@@ -5,7 +5,7 @@
 #ifndef __XYZZ_T_HPP__
 #define __XYZZ_T_HPP__
 
-#ifndef __CUDA_ARCH__
+#ifndef __CUDACC__
 # undef  __host__
 # define __host__
 # undef  __device__
@@ -18,12 +18,12 @@ template<class field_t> class xyzz_t {
     field_t X, Y, ZZZ, ZZ;
 
 public:
-#ifdef __NVCC__
+#ifdef __CUDACC__
     class affine_inf_t { friend xyzz_t;
         field_t X, Y;
         int inf[sizeof(field_t)%16 ? 2 : 4];
 
-        inline __device__ bool is_inf() const
+        inline __host__ __device__ bool is_inf() const
         {   return inf[0]&1 != 0;   }
     };
 #else
@@ -31,7 +31,7 @@ public:
         field_t X, Y;
         bool inf;
 
-        inline __device__ bool is_inf() const
+        inline __host__ __device__ bool is_inf() const
         {   return inf;   }
     };
 #endif
@@ -40,9 +40,10 @@ public:
         field_t X, Y;
 
     public:
-        inline __device__ affine_t() {}
+        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
+        inline __host__ __device__ affine_t() {}
 
-        inline __device__ bool is_inf() const
+        inline __host__ __device__ bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
         inline affine_t& operator=(const xyzz_t& a)
@@ -63,20 +64,29 @@ public:
     inline operator affine_t() const      { return affine_t(*this); }
 
     template<class affine_t>
-    inline __device__ xyzz_t& operator=(const affine_t& a)
+    inline __host__ __device__ xyzz_t& operator=(const affine_t& a)
     {
         X = a.X;
         Y = a.Y;
-        // this works as long as |a| was confirmed to be non-infinity
-        ZZZ = ZZ = field_t::one();
+        ZZZ = ZZ = czero(field_t::one(), a.is_inf());
         return *this;
     }
 
-    inline __device__ operator jacobian_t<field_t>() const
+    inline __host__ __device__ operator jacobian_t<field_t>() const
     {   return jacobian_t<field_t>{ X*ZZ, Y*ZZZ, ZZ };   }
 
-    inline __device__ bool is_inf() const { return (bool)(ZZZ.is_zero() & ZZ.is_zero()); }
-    inline __device__ void inf()          { ZZZ.zero(); ZZ.zero(); }
+    inline __host__ __device__ bool is_inf() const { return (bool)(ZZZ.is_zero() & ZZ.is_zero()); }
+    inline __host__ __device__ void inf()          { ZZZ.zero(); ZZ.zero(); }
+    inline __host__ __device__ void cneg(bool neg) { ZZZ.cneg(neg); }
+
+#ifdef __CUDA_ARCH__
+    static inline __device__ void prefetch(const xyzz_t* p_)
+    {
+        const unsigned char* p = (const unsigned char*)p_;
+        for (size_t i = 0; i < sizeof(*p_); i += 128)
+            asm("prefetch.global.L2 [%0];" :: "l"(p+i));
+    }
+#endif
 
     /*
      * http://hyperelliptic.org/EFD/g1p/auto-shortw-xyzz.html#addition-add-2008-s
@@ -84,7 +94,7 @@ public:
      * with twist to handle either input at infinity. Addition costs 12M+2S,
      * while conditional doubling - 4M+6M+3S.
      */
-    __device__ void add(const xyzz_t& p2)
+    __host__ __device__ void add(const xyzz_t& p2)
     {
         if (p2.is_inf()) {
             return;
@@ -166,7 +176,7 @@ public:
      * Addition costs 8M+2S, while conditional doubling - 2M+4M+3S.
      */
     template<class affine_t>
-    __device__ void add(const affine_t& p2, bool subtract = false)
+    __host__ __device__ void add(const affine_t& p2, bool subtract = false)
     {
 #ifdef __CUDA_ARCH__
         xyzz_t p31 = *this;
