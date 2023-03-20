@@ -23,6 +23,35 @@ const cudaDeviceProp& gpu_props(int id = 0);
 const std::vector<const gpu_t*>& all_gpus();
 extern "C" bool cuda_available();
 
+class event_t {
+    cudaEvent_t event;
+public:
+    event_t() : event(nullptr)
+    {   CUDA_OK(cudaEventCreate(&event, cudaEventDisableTiming));   }
+    event_t(cudaStream_t stream) : event(nullptr)
+    {
+        CUDA_OK(cudaEventCreate(&event, cudaEventDisableTiming));
+        CUDA_OK(cudaEventRecord(event, stream));
+    }
+    ~event_t()
+    {   if (event) cudaEventDestroy(event);   }
+    inline operator decltype(event)() const
+    {   return event;   }
+
+    inline void record(cudaStream_t stream)
+    {   CUDA_OK(cudaEventRecord(event, stream));   }
+    inline void wait(cudaStream_t stream)
+    {   CUDA_OK(cudaStreamWaitEvent(stream, event));   }
+};
+
+struct launch_params_t {
+    dim3 gridDim, blockDim;
+    size_t shared;
+
+    launch_params_t(dim3 g, dim3 b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
+    launch_params_t(int g, int b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
+};
+
 class stream_t {
     cudaStream_t stream;
     const int gpu_id;
@@ -70,10 +99,21 @@ public:
     {
         if (gpu_props(gpu_id).sharedMemPerBlock < shared_sz)
             CUDA_OK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, shared_sz));
+        if (gridDim.x == 0 || blockDim.x == 0) {
+            int blockSize, minGridSize;
+
+            CUDA_OK(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, f));
+            if (blockDim.x == 0) blockDim.x = blockSize;
+            if (gridDim.x == 0)  gridDim.x = minGridSize;
+        }
         void* va_args[sizeof...(args)] = { &args... };
         CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
                                             va_args, shared_sz, stream));
     }
+    template<typename... Types>
+    inline void launch_coop(void(*f)(Types...), const launch_params_t& lps,
+                            Types... args) const
+    {   launch_coop(f, lps.gridDim, lps.blockDim, lps.shared, args...);   }
 
     template<typename T>
     inline void DtoH(T* dst, const void* src, size_t nelems,
@@ -104,6 +144,11 @@ public:
     template<class T>
     inline void notify(T& sema)
     {   notify([](void* s) { reinterpret_cast<T*>(s)->notify(); }, &sema);   }
+
+    inline void record(cudaEvent_t event)
+    {   CUDA_OK(cudaEventRecord(event, stream));   }
+    inline void wait(cudaEvent_t event)
+    {   CUDA_OK(cudaStreamWaitEvent(stream, event));   }
 };
 
 class gpu_t {
@@ -136,6 +181,10 @@ public:
     inline size_t ncpus() const             { return pool.size(); }
     template<class Workable>
     inline void spawn(Workable work) const  { pool.spawn(work); }
+    template<class Workable>
+    inline void par_map(size_t num_items, size_t stride, Workable work,
+                        size_t max_workers = 0) const
+    {   pool.par_map(num_items, stride, work, max_workers);   }
 
     inline void* Dmalloc(size_t sz) const
     {   void *d_ptr = zero.Dmalloc(sz);
@@ -167,6 +216,10 @@ public:
     {   zero.launch_coop(f, gridDim, blockDim, shared_sz,
                          args...);
     }
+    template<typename... Types>
+    inline void launch_coop(void(*f)(Types...), const launch_params_t& lps,
+                            Types... args) const
+    {   zero.launch_coop(f, lps, args...);   }
 
     template<typename T>
     inline void DtoH(T* dst, const void* src, size_t nelems,
@@ -191,15 +244,15 @@ public:
 
 template<typename T> class gpu_ptr_t {
     struct inner {
-        const T* ptr;
+        T* ptr;
         std::atomic<size_t> ref_cnt;
         int real_id;
-        inline inner(const T* p) : ptr(p), ref_cnt(1)
+        inline inner(T* p) : ptr(p), ref_cnt(1)
         {   cudaGetDevice(&real_id);   }
     };
     inner *ptr;
 public:
-    gpu_ptr_t(const T* p)         { ptr = new inner(p); }
+    gpu_ptr_t(T* p)               { ptr = new inner(p); }
     gpu_ptr_t(const gpu_ptr_t& r) { *this = r; }
     ~gpu_ptr_t()
     {
@@ -230,8 +283,7 @@ public:
         return *this;
     }
 
-    inline operator const T*() const            { return ptr->ptr; }
-    inline operator void*() const               { return (void*)ptr->ptr; }
+    inline operator T*() const                  { return ptr->ptr; }
 };
 
 // A simple way to pack a pointer and array's size length, but more
@@ -273,6 +325,8 @@ public:
             CUDA_OK(cudaMalloc(&d_ptr, n * sizeof(T)));
         }
     }
+    dev_ptr_t(const dev_ptr_t& r) = delete;
+    dev_ptr_t& operator=(const dev_ptr_t& r) = delete;
     ~dev_ptr_t() { if (d_ptr) cudaFree((void*)d_ptr); }
 
     inline operator const T*() const            { return d_ptr; }
