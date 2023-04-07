@@ -95,7 +95,8 @@ void count_digits(const uint32_t src[], uint32_t base, uint32_t len,
 
 __device__ __forceinline__
 void scatter(uint2 dst[], const uint32_t src[], uint32_t base, uint32_t len,
-             uint32_t lshift, uint32_t rshift, uint32_t mask)
+             uint32_t lshift, uint32_t rshift, uint32_t mask,
+             uint32_t pidx[] = nullptr)
 {
     const uint32_t pack_mask = 0xffffffffU << lshift;
 
@@ -106,7 +107,8 @@ void scatter(uint2 dst[], const uint32_t src[], uint32_t base, uint32_t len,
         auto pck = pack(base+i, pack_mask, (val-1) << lshift);
         if (val) {
             uint32_t idx = atomicSub(&counters[(pck >> rshift) & mask], 1) - 1;
-            dst[idx] = uint2{pck, pack(base+i, 0x80000000, val)};
+            uint32_t pid = pidx ? pidx[base+i] : base+i;
+            dst[idx] = uint2{pck, pack(pid, 0x80000000, val)};
         }
     }
 }
@@ -339,6 +341,7 @@ void sort_row(uint32_t inout[], size_t len, uint2 temp[],
             auto pck = pack(i, pack_mask, (val-1) << lshift);
             if (val) {
                 auto idx = atomicAdd(&counters[0], 1);
+                //uint32_t pid = pidx ? pidx[i] : i;
                 temp[idx] = uint2{pck, pack(i, 0x80000000, val)};
             }
         }
