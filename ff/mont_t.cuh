@@ -35,8 +35,11 @@ class __align__(((N+63)/64)&1 ? 8 : 16) mont_t {
 public:
     static const size_t nbits = N;
     static constexpr size_t __device__ bit_length() { return N; }
-private:
+    static const uint32_t degree = 1;
+    using mem_t = mont_t;
+protected:
     static const size_t n = (N+31)/32;
+private:
     uint32_t even[n];
 
     static inline void mul_n(uint32_t* acc, const uint32_t* a, uint32_t bi,
@@ -470,6 +473,17 @@ public:
     static inline const mont_t& one()
     {   return *reinterpret_cast<const mont_t*>(ONE);   }
 
+    static inline mont_t one(int or_zero)
+    {
+        mont_t ret;
+        asm("{ .reg.pred %or_zero;");
+        asm("setp.ne.s32 %or_zero, %0, 0;" : : "r"(or_zero));
+        for (size_t i = 0; i < n; i++)
+            asm("selp.u32 %0, 0, %1, %or_zero;" : "=r"(ret[i]) : "r"(ONE[i]));
+        asm("}");
+        return ret;
+    }
+
     inline bool is_zero() const
     {
         size_t i;
@@ -636,6 +650,15 @@ public:
 
         for (size_t i = 0; i < n; i++)
             ret[i] = __shfl_down_sync(0xffffffff, even[i], off);
+
+        return ret;
+    }
+    inline mont_t shfl(uint32_t idx, uint32_t mask = 0xffffffff) const
+    {
+        mont_t ret;
+
+        for (size_t i = 0; i < n; i++)
+            ret[i] = __shfl_sync(mask, even[i], idx);
 
         return ret;
     }
