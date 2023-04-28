@@ -14,29 +14,49 @@
 # define __noinline__
 #endif
 
-template<class field_t> class xyzz_t {
+template<class field_t, class field_h = class field_t::mem_t>
+class xyzz_t {
     field_t X, Y, ZZZ, ZZ;
 
 public:
-#ifdef __CUDACC__
-    class affine_inf_t { friend xyzz_t;
-        field_t X, Y;
-        int inf[sizeof(field_t)%16 ? 2 : 4];
+    static const uint32_t degree = field_t::degree;
 
-        inline __host__ __device__ bool is_inf() const
-        {   return inf[0]&1 != 0;   }
+#ifdef __NVCC__
+    class mem_t { friend class xyzz_t;
+        field_h X, Y, ZZZ, ZZ;
+
+    public:
+        inline __device__ operator xyzz_t() const
+        {
+            xyzz_t p;
+            p.X   = X;
+            p.Y   = Y;
+            p.ZZZ = ZZZ;
+            p.ZZ  = ZZ;
+            return p;
+        }
+        inline __device__ mem_t& operator=(const xyzz_t& p)
+        {
+            X   = p.X;
+            Y   = p.Y;
+            ZZZ = p.ZZZ;
+            ZZ  = p.ZZ;
+        }
     };
+
+    inline __device__ xyzz_t& operator=(const mem_t& p)
+    {
+        X   = p.X;
+        Y   = p.Y;
+        ZZZ = p.ZZZ;
+        ZZ  = p.ZZ;
+        return *this;
+    }
 #else
-    class affine_inf_t { friend xyzz_t;
-        field_t X, Y;
-        bool inf;
-
-        inline __host__ __device__ bool is_inf() const
-        {   return inf;   }
-    };
+    using mem_t = xyzz_t;
 #endif
 
-    class affine_t { friend xyzz_t;
+    class affine_t { friend class xyzz_t; friend class affine_inf_t;
         field_t X, Y;
 
     public:
@@ -46,7 +66,7 @@ public:
         inline __host__ __device__ bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
-        inline affine_t& operator=(const xyzz_t& a)
+        inline __host__ affine_t& operator=(const xyzz_t& a)
         {
             Y = 1/a.ZZZ;
             X = Y * a.ZZ;   // 1/Z
@@ -55,25 +75,77 @@ public:
             Y *= a.Y;       // Y/Z^3
             return *this;
         }
-        inline affine_t(const xyzz_t& a)  { *this = a; }
+        inline __host__ affine_t(const xyzz_t& a)  { *this = a; }
 
+#ifdef __JACOBIAN_T_HPP__
         inline operator jacobian_t<field_t>() const
         {   return jacobian_t<field_t>{ X, Y, field_t::one() };   }
+#endif
+
+        inline __host__ __device__ operator xyzz_t() const
+        {
+            xyzz_t p;
+            p.X = X;
+            p.Y = Y;
+            p.ZZZ = p.ZZ = field_t::one(is_inf());
+            return p;
+        }
+
+        class mem_t { friend class affine_t;
+            field_h X, Y;
+
+        public:
+            inline __device__ operator affine_t() const
+            {
+                affine_t p;
+                p.X = X;
+                p.Y = Y;
+                return p;
+            }
+        };
     };
 
-    inline operator affine_t() const      { return affine_t(*this); }
+#ifdef __CUDACC__
+    class affine_inf_t { friend class xyzz_t;
+        field_h X, Y;
+        int inf[sizeof(field_t)%16 ? 2 : 4];
+
+        inline __host__ __device__ bool is_inf() const
+        {   return inf[0]&1 != 0;   }
+
+        inline __device__ operator affine_t() const
+        {
+            affine_t p;
+            p.X = X;
+            p.Y = Y;
+            return p;
+        }
+    };
+#else
+    class affine_inf_t { friend class xyzz_t;
+        field_h X, Y;
+        bool inf;
+
+        inline __host__ __device__ bool is_inf() const
+        {   return inf;   }
+    };
+#endif
 
     template<class affine_t>
     inline __host__ __device__ xyzz_t& operator=(const affine_t& a)
     {
         X = a.X;
         Y = a.Y;
-        ZZZ = ZZ = czero(field_t::one(), a.is_inf());
+        ZZZ = ZZ = field_t::one(a.is_inf());
         return *this;
     }
 
+    inline __host__ operator affine_t() const      { return affine_t(*this); }
+
+#ifdef __JACOBIAN_T_HPP__
     inline __host__ __device__ operator jacobian_t<field_t>() const
     {   return jacobian_t<field_t>{ X*ZZ, Y*ZZZ, ZZ };   }
+#endif
 
     inline __host__ __device__ bool is_inf() const { return (bool)(ZZZ.is_zero() & ZZ.is_zero()); }
     inline __host__ __device__ void inf()          { ZZZ.zero(); ZZ.zero(); }
