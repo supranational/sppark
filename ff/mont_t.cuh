@@ -590,7 +590,62 @@ private:
         asm("}");
     }
 
+    static inline void dot_n_redc(uint32_t *even, uint32_t *odd,
+                                  const uint32_t *a, uint32_t bi,
+                                  const uint32_t *c, uint32_t di, bool first = false)
+    {
+        if (first) {
+            mul_n(odd, a+1, bi);
+            cmad_n(odd, c+1, di);
+            mul_n(even, a, bi);
+            cmad_n(even, c, di);
+            asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
+        } else {
+            asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(odd[1]));
+            madc_n_rshift(odd, a+1, bi);
+            cmad_n(odd, c+1, di);
+            cmad_n(even, a, bi);
+            asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
+            cmad_n(even, c, di);
+            asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
+        }
+
+        uint32_t mi = even[0] * M0;
+
+        cmad_n(odd, MOD+1, mi);
+        cmad_n(even, MOD, mi);
+        asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
+    }
+
 public:
+    static inline mont_t dot_product(const mont_t& a, const mont_t& b,
+                                     const mont_t& c, const mont_t& d)
+    {
+        if (N%32 == 0 || N%32 > 30) {
+            return a*b + c*d;   // can be improved too...
+        } else {
+            size_t i;
+            mont_t even;
+            uint32_t odd[n+1];
+
+            #pragma unroll
+            for (i = 0; i < n; i += 2) {
+                dot_n_redc(&even[0], &odd[0], &a[0], b[i], &c[0], d[i], i==0);
+                dot_n_redc(&odd[0], &even[0], &a[0], b[i+1], &c[0], d[i+1]);
+            }
+
+            // merge |even| and |odd|
+            asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(odd[1]));
+            for (i = 1; i < n-1; i++)
+                asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i+1]));
+            asm("addc.u32 %0, %0, 0;" : "+r"(even[i]));
+
+            even.final_sub(odd[n], &odd[0]);
+
+            return even;
+        }
+    }
+
     static inline mont_t dot_product(const mont_t a[], const mont_t* b,
                                      size_t len, size_t stride_b = 1)
     {

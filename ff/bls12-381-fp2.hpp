@@ -51,7 +51,7 @@ public:
         auto t2 = b.shfl(id|1);
         t1.cneg((id&1) == 0);
 
-        return a*t0 + t1*t2;
+        return dot_product(a, t0, t1, t2);  // a*t0 + t1*t2;
     }
     inline fp2_t& operator*=(const fp2_t& a)
     {   return *this = *this * a;   }
