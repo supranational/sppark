@@ -37,12 +37,30 @@ namespace device {
 # ifdef __CUDA_ARCH__   // device-side field types
 # include "mont_t.cuh"
 typedef mont_t<255, device::Vesta_P, device::Pasta_M0,
-                    device::Vesta_RR, device::Vesta_one> vesta_t;
+                    device::Vesta_RR, device::Vesta_one> vesta_mont;
+struct vesta_t : public vesta_mont {
+    using mem_t = vesta_t;
+    __device__ __forceinline__ vesta_t() {}
+    __device__ __forceinline__ vesta_t(const vesta_mont& a) : vesta_mont(a) {}
+};
 typedef mont_t<255, device::Pallas_P, device::Pasta_M0,
-                    device::Pallas_RR, device::Pallas_one> pallas_t;
+                    device::Pallas_RR, device::Pallas_one> pallas_mont;
+struct pallas_t : public pallas_mont {
+    using mem_t = pallas_t;
+    __device__ __forceinline__ pallas_t() {}
+    __device__ __forceinline__ pallas_t(const pallas_mont& a) : pallas_mont(a) {}
+};
 # endif
 #endif
 
 #ifndef __CUDA_ARCH__   // host-side field types
 # include <pasta_t.hpp>
+#endif
+
+#if defined(FEATURE_PALLAS)
+typedef pallas_t fp_t;
+typedef vesta_t fr_t;
+#elif defined(FEATURE_VESTA)
+typedef vesta_t fp_t;
+typedef pallas_t fr_t;
 #endif

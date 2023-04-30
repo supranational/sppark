@@ -41,14 +41,29 @@ namespace device {
 # ifdef __CUDA_ARCH__   // device-side field types
 # include "mont_t.cuh"
 typedef mont_t<381, device::BLS12_381_P, device::BLS12_381_M0,
-                    device::BLS12_381_RR, device::BLS12_381_one> fp_t;
+                    device::BLS12_381_RR, device::BLS12_381_one> fp_mont;
+struct fp_t : public fp_mont {
+    using mem_t = fp_t;
+    __device__ __forceinline__ fp_t() {}
+    __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
+};
 typedef mont_t<255, device::BLS12_381_r, device::BLS12_381_m0,
-                    device::BLS12_381_rRR, device::BLS12_381_rone> fr_t;
+                    device::BLS12_381_rRR, device::BLS12_381_rone> fr_mont;
+struct fr_t : public fr_mont {
+    using mem_t = fr_t;
+    __device__ __forceinline__ fr_t() {}
+    __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
+};
 # endif
 #endif
 
 #ifndef __CUDA_ARCH__   // host-side field types
 # include <blst_t.hpp>
+
+# if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wsubobject-linkage"
+# endif
 
 static const vec384 BLS12_381_P = {
     TO_LIMB_T(0xb9feffffffffaaab), TO_LIMB_T(0x1eabfffeb153ffff),
@@ -66,7 +81,12 @@ static const vec384 BLS12_381_ONE = {   /* (1<<384)%P */
     TO_LIMB_T(0x5c071a97a256ec6d), TO_LIMB_T(0x15f65ec3fa80e493)
 };
 typedef blst_384_t<BLS12_381_P, 0x89f3fffcfffcfffd,
-                   BLS12_381_RR, BLS12_381_ONE> fp_t;
+                   BLS12_381_RR, BLS12_381_ONE> fp_mont;
+struct fp_t : public fp_mont {
+    using mem_t = fp_t;
+    inline fp_t() {}
+    inline fp_t(const fp_mont& a) : fp_mont(a) {}
+};
 
 static const vec256 BLS12_381_r = { 
     TO_LIMB_T(0xffffffff00000001), TO_LIMB_T(0x53bda402fffe5bfe),
@@ -81,5 +101,14 @@ static const vec256 BLS12_381_rONE = {  /* (1<<256)%r */
     TO_LIMB_T(0x998c4fefecbc4ff5), TO_LIMB_T(0x1824b159acc5056f)
 };
 typedef blst_256_t<BLS12_381_r, 0xfffffffeffffffff,
-                   BLS12_381_rRR, BLS12_381_rONE> fr_t;
+                   BLS12_381_rRR, BLS12_381_rONE> fr_mont;
+struct fr_t : public fr_mont {
+    using mem_t = fr_t;
+    inline fr_t() {}
+    inline fr_t(const fr_mont& a) : fr_mont(a) {}
+};
+
+# if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
+# endif
 #endif

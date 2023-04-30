@@ -20,7 +20,7 @@
 #  define WARP_SZ 32
 # endif
 
-class fp2_t : public fp_t {
+class fp2_t : public fp_mont {
 private:
     static inline uint32_t laneid()
     {   return threadIdx.x % WARP_SZ;   }
@@ -29,19 +29,19 @@ public:
     static const uint32_t degree = 2;
 
     class mem_t { friend fp2_t;
-        fp_t x[2];
+        fp_mont x[2];
 
-        inline fp_t& operator[](size_t i)               { return x[i]; }
-        inline const fp_t& operator[](size_t i) const   { return x[i]; }
+        inline fp_mont& operator[](size_t i)                { return x[i]; }
+        inline const fp_mont& operator[](size_t i) const    { return x[i]; }
     public:
         inline operator fp2_t() const           { return x[threadIdx.x&1]; }
         inline mem_t& operator=(const fp2_t& a) { x[threadIdx.x&1] = a;    }
     };
 
-    inline fp2_t()                          {}
-    inline fp2_t(const fp_t &a) : fp_t(a)   {}
-    inline fp2_t(const mem_t* p)            { *this = (*p)[threadIdx.x&1]; }
-    inline void store(mem_t *p) const       { (*p)[threadIdx.x&1] = *this; }
+    inline fp2_t()                              {}
+    inline fp2_t(const fp_mont &a) : fp_mont(a) {}
+    inline fp2_t(const mem_t* p)                { *this = (*p)[threadIdx.x&1]; }
+    inline void store(mem_t *p) const           { (*p)[threadIdx.x&1] = *this; }
 
     friend inline fp2_t operator*(const fp2_t& a, const fp2_t& b)
     {
@@ -59,8 +59,8 @@ public:
     inline fp2_t& sqr()
     {
         auto id = laneid();
-        fp_t t0 = shfl(id^1);
-        fp_t t1 = *this;
+        fp_mont t0 = shfl(id^1);
+        fp_mont t1 = *this;
 
         if ((id&1) == 0) {
             t1 = *this + t0;
@@ -77,33 +77,33 @@ public:
     {   if (p == 2) return a.sqr(); else asm("trap;");   }
 
     friend inline fp2_t operator+(const fp2_t& a, const fp2_t& b)
-    {   return (fp_t)a + (fp_t)b;   }
+    {   return (fp_mont)a + (fp_mont)b;   }
     inline fp2_t& operator+=(const fp2_t& b)
     {   return *this = *this + b;   }
 
     friend inline fp2_t operator-(const fp2_t& a, const fp2_t& b)
-    {   return (fp_t)a - (fp_t)b;   }
+    {   return (fp_mont)a - (fp_mont)b;   }
     inline fp2_t& operator-=(const fp2_t& b)
     {   return *this = *this - b;   }
 
     friend inline fp2_t operator<<(const fp2_t& a, unsigned l)
-    {   return (fp_t)a << l;   }
+    {   return (fp_mont)a << l;   }
     inline fp2_t& operator<<=(unsigned l)
     {   return *this = *this << l;   }
 
     inline fp2_t& cneg(bool flag)
-    {   fp_t::cneg(flag); return *this;  }
+    {   fp_mont::cneg(flag); return *this;  }
     friend inline fp2_t cneg(fp2_t a, bool flag)
     {   return a.cneg(flag);   }
 
     inline bool is_zero() const
     {
-        bool ret = fp_t::is_zero();
+        bool ret = fp_mont::is_zero();
         return ret & __shfl_xor_sync(0xFFFFFFFF, ret, 1);
     }
 
     static inline fp2_t one(int or_zero = 0)
-    {   return fp_t::one((laneid()&1) | or_zero);   }
+    {   return fp_mont::one((laneid()&1) | or_zero);   }
 };
 
 # undef inline

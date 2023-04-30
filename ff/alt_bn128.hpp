@@ -38,14 +38,29 @@ namespace device {
 # ifdef __CUDA_ARCH__   // device-side field types
 # include "mont_t.cuh"
 typedef mont_t<254, device::ALT_BN128_P, device::ALT_BN128_M0,
-                    device::ALT_BN128_RR, device::ALT_BN128_one> fp_t;
+                    device::ALT_BN128_RR, device::ALT_BN128_one> fp_mont;
+struct fp_t : public fp_mont {
+    using mem_t = fp_t;
+    __device__ __forceinline__ fp_t() {}
+    __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
+};
 typedef mont_t<254, device::ALT_BN128_r, device::ALT_BN128_m0,
-                    device::ALT_BN128_rRR, device::ALT_BN128_rone> fr_t;
+                    device::ALT_BN128_rRR, device::ALT_BN128_rone> fr_mont;
+struct fr_t : public fr_mont {
+    using mem_t = fr_t;
+    __device__ __forceinline__ fr_t() {}
+    __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
+};
 # endif
 #endif
 
 #ifndef __CUDA_ARCH__   // host-side field types
 # include <blst_t.hpp>
+
+# if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wsubobject-linkage"
+# endif
 
 static const vec256 ALT_BN128_P = {
     TO_LIMB_T(0x3c208c16d87cfd47), TO_LIMB_T(0x97816a916871ca8d),
@@ -60,7 +75,12 @@ static const vec256 ALT_BN128_ONE = {   /* (1<<256)%P */
     TO_LIMB_T(0x666ea36f7879462c), TO_LIMB_T(0x0e0a77c19a07df2f)
 };
 typedef blst_256_t<ALT_BN128_P, 0x87d20782e4866389u,
-                   ALT_BN128_RR, ALT_BN128_ONE> fp_t;
+                   ALT_BN128_RR, ALT_BN128_ONE> fp_mont;
+struct fp_t : public fp_mont {
+    using mem_t = fp_t;
+    inline fp_t() {}
+    inline fp_t(const fp_mont& a) : fp_mont(a) {}
+};
 
 static const vec256 ALT_BN128_r = {
     TO_LIMB_T(0x43e1f593f0000001), TO_LIMB_T(0x2833e84879b97091),
@@ -75,5 +95,14 @@ static const vec256 ALT_BN128_rONE = {  /* (1<<256)%r */
     TO_LIMB_T(0x666ea36f7879462e), TO_LIMB_T(0x0e0a77c19a07df2f)
 };
 typedef blst_256_t<ALT_BN128_r, 0xc2e1f593efffffffu,
-                   ALT_BN128_rRR, ALT_BN128_rONE> fr_t;
+                   ALT_BN128_rRR, ALT_BN128_rONE> fr_mont;
+struct fr_t : public fr_mont {
+    using mem_t = fr_t;
+    inline fr_t() {}
+    inline fr_t(const fr_mont& a) : fr_mont(a) {}
+};
+
+# if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
+# endif
 #endif
