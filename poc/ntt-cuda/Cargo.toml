@@ -19,7 +19,7 @@ bls12_381 = []
 quiet = []
 
 [dependencies]
-blst = "^0.3.9"
+blst = "=0.3.10"
 sppark = { path = "../../rust" }
 
 [build-dependencies]

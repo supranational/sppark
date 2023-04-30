@@ -20,7 +20,7 @@ quiet = []
 cuda-mobile = []
 
 [dependencies]
-blst = "^0.3.9"
+blst = "=0.3.10"
 sppark = { path = "../../rust" }
 rand = "^0"
 rand_chacha = "^0"
