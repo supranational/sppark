@@ -46,9 +46,10 @@ public:
     friend inline fp2_t operator*(const fp2_t& a, const fp2_t& b)
     {
         auto id = laneid();
-        auto t0 = b.shfl(id&~1);
-        auto t1 = a.shfl(id^1);
-        auto t2 = b.shfl(id|1);
+        auto mask = __activemask();
+        auto t0 = b.shfl(id&~1, mask);
+        auto t1 = a.shfl(id^1, mask);
+        auto t2 = b.shfl(id|1, mask);
         t1.cneg((id&1) == 0);
 
         return dot_product(a, t0, t1, t2);  // a*t0 + t1*t2;
@@ -59,12 +60,12 @@ public:
     inline fp2_t& sqr()
     {
         auto id = laneid();
-        fp_mont t0 = shfl(id^1);
+        fp_mont t0 = shfl(id^1, __activemask());
         fp_mont t1 = *this;
 
         if ((id&1) == 0) {
-            t1 = *this + t0;
-            t0 = *this - t0;
+            t1 = (fp_mont)*this + t0;
+            t0 = (fp_mont)*this - t0;
         }
         t0 *= t1;
         t1 = t0 << 1;
@@ -98,8 +99,14 @@ public:
 
     inline bool is_zero() const
     {
-        bool ret = fp_mont::is_zero();
-        return ret & __shfl_xor_sync(0xFFFFFFFF, ret, 1);
+        auto ret = __ballot_sync(__activemask(), fp_mont::is_zero());
+        return ((ret >> (laneid()&~1)) & 3) == 3;
+    }
+
+    inline bool is_zero(const fp2_t& a) const
+    {
+        auto ret = __ballot_sync(__activemask(), fp_mont::is_zero(a));
+        return ((ret >> (laneid()&~1)) & 3) == 3;
     }
 
     static inline fp2_t one(int or_zero = 0)
