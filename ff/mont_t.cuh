@@ -486,11 +486,22 @@ public:
 
     inline bool is_zero() const
     {
-        size_t i;
         uint32_t is_zero = even[0];
 
-        for (i = 1; i < n; i++)
+        for (size_t i = 1; i < n; i++)
             asm("or.b32 %0, %0, %1;" : "+r"(is_zero) : "r"(even[i]));
+
+        asm("set.eq.u32.u32 %0, %0, 0;" : "+r"(is_zero));
+
+        return is_zero;
+    }
+
+    inline bool is_zero(const mont_t& a) const
+    {
+        uint32_t is_zero = even[0] | a[0];
+
+        for (size_t i = 1; i < n; i++)
+            is_zero |= even[i] | a[i];
 
         asm("set.eq.u32.u32 %0, %0, 0;" : "+r"(is_zero));
 
