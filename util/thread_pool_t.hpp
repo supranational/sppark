@@ -91,7 +91,7 @@ public:
     template<class Workable> void spawn(Workable work)
     {
         std::unique_lock<std::mutex> lock(mtx);
-        fifo.emplace_back(job_t(work));
+        fifo.emplace_back(work);
         cvar.notify_one();  // wake up a worker thread
     }
 
