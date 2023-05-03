@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+#ifndef __SPPARK_FF_BLS12_377_HPP__
+#define __SPPARK_FF_BLS12_377_HPP__
+
 #ifdef __NVCC__
 #include <cstdint>
 
@@ -80,8 +83,8 @@ static const vec384 BLS12_377_ONE = {   /* (1<<384)%P */
     TO_LIMB_T(0x9f7db3a98a7d3ff2), TO_LIMB_T(0x7b4e97b76e7c6305),
     TO_LIMB_T(0x4cf495bf803c84e8), TO_LIMB_T(0x008d6661e2fdf49a)
 };
-typedef blst_384_t<BLS12_377_P, 0x8508bfffffffffffu,
-                   BLS12_377_RR, BLS12_377_ONE> fp_mont;
+typedef blst_384_t<377, BLS12_377_P, 0x8508bfffffffffffu,
+                        BLS12_377_RR, BLS12_377_ONE> fp_mont;
 struct fp_t : public fp_mont {
     using mem_t = fp_t;
     inline fp_t() {}
@@ -100,8 +103,8 @@ static const vec256 BLS12_377_rONE = {  /* (1<<256)%r */
     TO_LIMB_T(0x7d1c7ffffffffff3), TO_LIMB_T(0x7257f50f6ffffff2),
     TO_LIMB_T(0x16d81575512c0fee), TO_LIMB_T(0x0d4bda322bbb9a9d)
 };
-typedef blst_256_t<BLS12_377_r, 0xa117fffffffffffu,
-                   BLS12_377_rRR, BLS12_377_rONE> fr_mont;
+typedef blst_256_t<253, BLS12_377_r, 0xa117fffffffffffu,
+                        BLS12_377_rRR, BLS12_377_rONE> fr_mont;
 struct fr_t : public fr_mont {
     using mem_t = fr_t;
     inline fr_t() {}
@@ -111,4 +114,5 @@ struct fr_t : public fr_mont {
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif
+#endif
 #endif

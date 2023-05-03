@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+#ifndef __SPPARK_FF_ALT_BN128_HPP__
+#define __SPPARK_FF_ALT_BN128_HPP__
+
 #ifdef __NVCC__
 #include <cstdint>
 
@@ -74,8 +77,8 @@ static const vec256 ALT_BN128_ONE = {   /* (1<<256)%P */
     TO_LIMB_T(0xd35d438dc58f0d9d), TO_LIMB_T(0x0a78eb28f5c70b3d),
     TO_LIMB_T(0x666ea36f7879462c), TO_LIMB_T(0x0e0a77c19a07df2f)
 };
-typedef blst_256_t<ALT_BN128_P, 0x87d20782e4866389u,
-                   ALT_BN128_RR, ALT_BN128_ONE> fp_mont;
+typedef blst_256_t<254, ALT_BN128_P, 0x87d20782e4866389u,
+                        ALT_BN128_RR, ALT_BN128_ONE> fp_mont;
 struct fp_t : public fp_mont {
     using mem_t = fp_t;
     inline fp_t() {}
@@ -94,8 +97,8 @@ static const vec256 ALT_BN128_rONE = {  /* (1<<256)%r */
     TO_LIMB_T(0xac96341c4ffffffb), TO_LIMB_T(0x36fc76959f60cd29),
     TO_LIMB_T(0x666ea36f7879462e), TO_LIMB_T(0x0e0a77c19a07df2f)
 };
-typedef blst_256_t<ALT_BN128_r, 0xc2e1f593efffffffu,
-                   ALT_BN128_rRR, ALT_BN128_rONE> fr_mont;
+typedef blst_256_t<254, ALT_BN128_r, 0xc2e1f593efffffffu,
+                        ALT_BN128_rRR, ALT_BN128_rONE> fr_mont;
 struct fr_t : public fr_mont {
     using mem_t = fr_t;
     inline fr_t() {}
@@ -105,4 +108,5 @@ struct fr_t : public fr_mont {
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif
+#endif
 #endif
