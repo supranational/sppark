@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+#ifndef __SPPARK_FF_PASTA_HPP__
+#define __SPPARK_FF_PASTA_HPP__
+
 #ifdef __NVCC__
 #include <cstdint>
 
@@ -63,4 +66,5 @@ typedef vesta_t fr_t;
 #elif defined(FEATURE_VESTA)
 typedef vesta_t fp_t;
 typedef pallas_t fr_t;
+#endif
 #endif

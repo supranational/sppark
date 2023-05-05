@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __PIPPENGER_CUH__
-#define __PIPPENGER_CUH__
+#ifndef __SPPARK_MSM_PIPPENGER_CUH__
+#define __SPPARK_MSM_PIPPENGER_CUH__
 
 #include <cuda.h>
 #include <cooperative_groups.h>

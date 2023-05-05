@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __JACOBIAN_T_HPP__
-#define __JACOBIAN_T_HPP__
+#ifndef __SPPARK_EC_JACOBIAN_T_HPP__
+#define __SPPARK_EC_JACOBIAN_T_HPP__
 
 template<class field_t> class jacobian_t {
     field_t X, Y, Z;

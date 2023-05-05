@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __GPU_T_CUH__
-#define __GPU_T_CUH__
+#ifndef __SPPARK_UTIL_GPU_T_CUH__
+#define __SPPARK_UTIL_GPU_T_CUH__
 
 #ifndef __CUDACC__
 # include <cuda_runtime.h>

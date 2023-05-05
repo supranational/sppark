@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __XYZZ_T_HPP__
-#define __XYZZ_T_HPP__
+#ifndef __SPPARK_EC_XYZZ_T_HPP__
+#define __SPPARK_EC_XYZZ_T_HPP__
 
 #ifndef __CUDACC__
 # undef  __host__
@@ -82,9 +82,9 @@ public:
         }
         inline __host__ affine_t(const xyzz_t& a)  { *this = a; }
 
-#ifdef __JACOBIAN_T_HPP__
+#ifdef __SPPARK_EC_JACOBIAN_T_HPP__
         inline operator jacobian_t<field_t>() const
-        {   return jacobian_t<field_t>{ X, Y, field_t::one() };   }
+        {   return jacobian_t<field_t>{ X, Y, field_t::one(is_inf()) };   }
 #endif
 
         inline __host__ __device__ operator xyzz_t() const
@@ -147,7 +147,7 @@ public:
 
     inline __host__ operator affine_t() const      { return affine_t(*this); }
 
-#ifdef __JACOBIAN_T_HPP__
+#ifdef __SPPARK_EC_JACOBIAN_T_HPP__
     inline __host__ __device__ operator jacobian_t<field_t>() const
     {   return jacobian_t<field_t>{ X*ZZ, Y*ZZZ, ZZ };   }
 #endif

@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __PIPPENGER_HPP__
-#define __PIPPENGER_HPP__
+#ifndef __SPPARK_MSM_PIPPENGER_HPP__
+#define __SPPARK_MSM_PIPPENGER_HPP__
 
 #include <vector>
 #include <memory>

@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __THREAD_POOL_T_HPP__
-#define __THREAD_POOL_T_HPP__
+#ifndef __SPPARK_UTIL_THREAD_POOL_T_HPP__
+#define __SPPARK_UTIL_THREAD_POOL_T_HPP__
 
 #if __cplusplus < 201103L && !(defined(_MSVC_LANG) && _MSVC_LANG >= 201103L)
 # error C++11 or later is required.

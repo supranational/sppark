@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __EXCEPTION_CUH__
-#define __EXCEPTION_CUH__
+#ifndef __SPPARK_UTIL_EXCEPTION_CUH__
+#define __SPPARK_UTIL_EXCEPTION_CUH__
 
 #include <cstdio>
 #include <string>

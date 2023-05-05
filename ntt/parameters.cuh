@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __NTT_PARAMETERS_CUH__
-#define __NTT_PARAMETERS_CUH__
+#ifndef __SPPARK_NTT_PARAMETERS_CUH__
+#define __SPPARK_NTT_PARAMETERS_CUH__
 
 // Maximum domain size supported. Can be adjusted at will, but with the
 // target field in mind. Most fields handle up to 2^32 elements, BLS12-377

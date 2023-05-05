@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __RUSTERROR_H__
-#define __RUSTERROR_H__
+#ifndef __SPPARK_UTIL_RUSTERROR_H__
+#define __SPPARK_UTIL_RUSTERROR_H__
 
 #ifdef __cplusplus
 # include <string>
