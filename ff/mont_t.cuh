@@ -484,6 +484,18 @@ public:
         return ret;
     }
 
+    inline bool is_one() const
+    {
+        uint32_t is_zero = even[0] ^ ONE[0];
+
+        for (size_t i = 1; i < n; i++)
+            is_zero |= even[i] ^ ONE[i];
+
+        asm("set.eq.u32.u32 %0, %0, 0;" : "+r"(is_zero));
+
+        return is_zero;
+    }
+
     inline bool is_zero() const
     {
         uint32_t is_zero = even[0];
