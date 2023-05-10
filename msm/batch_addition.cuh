@@ -90,10 +90,10 @@ void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
     }
 #endif
 
+    cooperative_groups::this_grid().sync();
+
     if (xid == 0)
         ret[tid/warp_sz] = acc;
-
-    cooperative_groups::this_grid().sync();
 
     if (threadIdx.x + blockIdx.x == 0)
         current = 0;
