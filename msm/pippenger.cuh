@@ -321,7 +321,7 @@ public:
                                    row_sz);
 
         size_t bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
-        size_t points_sz = npoints * sizeof(d_points[0]);
+        size_t points_sz = points ? npoints * sizeof(d_points[0]) : 0;
 
         d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(bucket_sz + points_sz));
         if (points) {
