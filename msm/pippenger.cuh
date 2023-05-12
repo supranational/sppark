@@ -524,6 +524,11 @@ public:
                                    size_t ffi_affine_sz = sizeof(affine_t))
     {   return invoke(out, points, points.size(), scalars, mont, ffi_affine_sz);   }
 
+    RustError invoke(point_t& out, const std::vector<affine_t>& points,
+                                   const std::vector<scalar_t>& scalars, bool mont = true,
+                                   size_t ffi_affine_sz = sizeof(affine_t))
+    {   return invoke(out, points.data(), points.size(), scalars.data(), mont, ffi_affine_sz);   }
+
 private:
     point_t integrate_row(const result_t<bucket_t>& row, uint32_t lsbits)
     {
