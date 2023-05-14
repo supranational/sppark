@@ -169,6 +169,7 @@ public:
         CUDA_OK(cudaMemGetInfo(&freeMem, &total_mem));
     }
 
+    inline int cid() const                  { return cuda_id; }
     inline int id() const                   { return gpu_id; }
     inline operator int() const             { return gpu_id; }
     inline const auto& props() const        { return prop; }

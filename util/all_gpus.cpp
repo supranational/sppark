@@ -30,7 +30,15 @@ public:
 
 const gpu_t& select_gpu(int id)
 {
-    auto* gpu = gpus_t::all()[id];
+    auto& gpus = gpus_t::all();
+    if (id == -1) {
+        int cuda_id;
+        CUDA_OK(cudaGetDevice(&cuda_id));
+        for (auto* gpu: gpus)
+           if (gpu->cid() == cuda_id) return *gpu;
+        id = 0;
+    }
+    auto* gpu = gpus[id];
     gpu->select();
     return *gpu;
 }
