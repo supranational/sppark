@@ -302,7 +302,7 @@ class msm_t {
 
 public:
     msm_t(const affine_t points[], size_t np,
-          size_t ffi_affine_sz = sizeof(affine_t), size_t device_id = -1)
+          size_t ffi_affine_sz = sizeof(affine_t), int device_id = -1)
         : gpu(select_gpu(device_id)), d_points(nullptr), d_scalars(nullptr)
     {
         npoints = (np+WARP_SZ-1) & ((size_t)0-WARP_SZ);
@@ -331,9 +331,9 @@ public:
 
     }
     inline msm_t(vec_t<affine_t> points, size_t ffi_affine_sz = sizeof(affine_t),
-                 size_t device_id = -1)
+                 int device_id = -1)
         : msm_t(points, points.size(), ffi_affine_sz, device_id) {};
-    inline msm_t(size_t device_id = -1)
+    inline msm_t(int device_id = -1)
         : msm_t(nullptr, 0, 0, device_id) {};
     ~msm_t()
     {
