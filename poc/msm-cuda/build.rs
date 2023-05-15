@@ -101,6 +101,8 @@ fn main() {
         nvcc.cuda(true);
         nvcc.flag("-arch=sm_80");
         nvcc.flag("-gencode").flag("arch=compute_70,code=sm_70");
+        #[cfg(not(target_env = "msvc"))]
+        nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
         nvcc.define(curve, None);
         if let Some(def) = cc_opt {
