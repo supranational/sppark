@@ -14,7 +14,7 @@
 # define __noinline__
 #endif
 
-template<class field_t, class field_h = class field_t::mem_t>
+template<class field_t, class field_h = typename field_t::mem_t>
 class xyzz_t {
     field_t X, Y, ZZZ, ZZ;
 
