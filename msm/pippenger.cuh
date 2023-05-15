@@ -7,6 +7,7 @@
 
 #include <cuda.h>
 #include <cooperative_groups.h>
+#include <cassert>
 
 #include <util/vec2d_t.hpp>
 
@@ -270,7 +271,6 @@ void integrate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits)
 
 #ifndef __CUDA_ARCH__
 
-#include <cassert>
 #include <vector>
 
 #include <util/exception.cuh>
