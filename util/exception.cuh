@@ -12,7 +12,6 @@
 class cuda_error : public std::runtime_error {
     cudaError_t _code;
 public:
-    cuda_error() : std::runtime_error(nullptr), _code(cudaSuccess) {}
     cuda_error(cudaError_t err, const std::string& reason) : std::runtime_error{reason}
     {   _code = err;   }
     inline cudaError_t code() const
