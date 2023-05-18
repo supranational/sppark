@@ -19,7 +19,7 @@ class xyzz_t {
     field_t X, Y, ZZZ, ZZ;
 
 public:
-    static const uint32_t degree = field_t::degree;
+    static const unsigned int degree = field_t::degree;
 
 #ifdef __NVCC__
     class mem_t { friend class xyzz_t;
