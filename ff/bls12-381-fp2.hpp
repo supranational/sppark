@@ -125,7 +125,7 @@ class fp2_t {
     static const limb_t p0 = 0x89f3fffcfffcfffd;
 
 public:
-    static const uint32_t degree = 2;
+    static const unsigned int degree = 2;
     using mem_t = fp2_t;
 
     inline fp2_t() {}
