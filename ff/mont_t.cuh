@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#if defined(__CUDA_ARCH__) && !defined(__MONT_T_CUH__)
-# define __MONT_T_CUH__
+#if defined(__CUDA_ARCH__) && !defined(__SPPARK_FF_MONT_T_CUH__)
+# define __SPPARK_FF_MONT_T_CUH__
 
 # include <cstddef>
 # include <cstdint>
