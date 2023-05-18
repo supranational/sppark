@@ -11,12 +11,16 @@
 
 #include <util/vec2d_t.hpp>
 
+#include "sort.cuh"
+
 #ifndef WARP_SZ
 # define WARP_SZ 32
 #endif
-#define asm __asm__ __volatile__
-
-#include "sort.cuh"
+#ifdef __GNUC__
+# define asm __asm__ __volatile__
+#else
+# define asm asm volatile
+#endif
 
 /*
  * Break down |scalars| to signed |wbits|-wide digits.
@@ -267,7 +271,7 @@ void integrate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits)
     buckets[bid][2*tid] = p;
     buckets[bid][2*tid+1] = acc;
 }
-
+#undef asm
 
 #ifndef __CUDA_ARCH__
 

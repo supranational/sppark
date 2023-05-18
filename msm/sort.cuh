@@ -27,7 +27,11 @@ __global__ void sort(vec2d_t<uint32_t> inouts, size_t len, uint32_t win,
 #ifndef WARP_SZ
 # define WARP_SZ 32
 #endif
-#define asm __asm__ __volatile__
+#ifdef __GNUC__
+# define asm __asm__ __volatile__
+#else
+# define asm asm volatile
+#endif
 
 static const uint32_t N_COUNTERS = 1<<DIGIT_BITS;
 static const uint32_t N_SUMS = N_COUNTERS / SORT_BLOCKDIM;
@@ -369,5 +373,6 @@ __global__ void sort(vec2d_t<uint32_t> inouts, size_t len, uint32_t win,
              wbits, blockIdx.y==0 ? lsbits0 : lsbits1);
 }
 
+# undef asm
 #endif
 #endif
