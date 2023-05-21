@@ -6,6 +6,7 @@
 #define __SPPARK_UTIL_EXCEPTION_CUH__
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <stdexcept>
 
@@ -31,7 +32,9 @@ inline std::string fmt(const char* fmt, Types... args)
 #define CUDA_OK(expr) do {                                  \
     cudaError_t code = expr;                                \
     if (code != cudaSuccess) {                              \
-        auto str = fmt("%s@%d failed: %s", #expr, __LINE__, \
+        const char *file = std::strstr(__FILE__, "sppark"); \
+        auto str = fmt("%s@%s:%d failed: \"%s\"", #expr,    \
+                       file ? file : __FILE__, __LINE__,    \
                        cudaGetErrorString(code));           \
         throw cuda_error(code, str);                        \
     }                                                       \
