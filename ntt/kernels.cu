@@ -43,7 +43,7 @@ void swap(T& u1, T& u2)
 
 // Permutes the data in an array such that data[i] = data[bit_reverse(i)]
 // and data[bit_reverse(i)] = data[i]
-__global__
+__launch_bounds__(1024) __global__
 void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
 {
     index_t i = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
@@ -57,7 +57,7 @@ void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
     }
 }
 
-__global__
+__launch_bounds__(1024) __global__
 void bit_rev_permutation_aux(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
     extern __shared__ fr_t exchange[];
@@ -102,7 +102,7 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
     return root;
 }
 
-__global__
+__launch_bounds__(1024) __global__
 void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_blowup, bool bitrev,
                            const fr_t (*gen_powers)[WINDOW_SIZE])
 {
@@ -123,7 +123,7 @@ void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_blowup, bool bitrev,
     d_inout[idx] = r;
 }
 
-__global__
+__launch_bounds__(1024) __global__
 void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
                                   const fr_t (*gen_powers)[WINDOW_SIZE],
                                   uint32_t lg_domain_size, uint32_t lg_blowup)
