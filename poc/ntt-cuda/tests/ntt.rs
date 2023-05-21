@@ -27,7 +27,7 @@ fn test_against_arkworks() {
     >(
         rng: &mut R,
     ) {
-        for lg_domain_size in 1..24 {
+        for lg_domain_size in 1..20 + 4 * !cfg!(debug_assertions) as i32 {
             let domain_size = 1usize << lg_domain_size;
 
             let domain = D::new(domain_size).unwrap();
