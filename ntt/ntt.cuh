@@ -48,6 +48,8 @@ protected:
             bit_rev_permutation_aux
                 <<<domain_size / 1024, 1024 / 8, 1024 * sizeof(fr_t), stream>>>
                 (d_out, d_inp, lg_domain_size);
+
+        CUDA_OK(cudaGetLastError());
     }
 
 private:
@@ -68,6 +70,8 @@ private:
         else
             LDE_distribute_powers<<<domain_size / 512, 512, 0, stream>>>
                                  (inout, lg_blowup, bitrev, gen_powers);
+
+        CUDA_OK(cudaGetLastError());
     }
 
 protected:

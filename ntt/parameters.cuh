@@ -61,6 +61,7 @@ private:
     {
         fr_t* ret = (fr_t*)gpu.Dmalloc(num_blocks * block_size * sizeof(fr_t));
         generate_radixX_twiddles_X<<<16, block_size, 0, gpu>>>(ret, num_blocks, root);
+        CUDA_OK(cudaGetLastError());
         return ret;
     }
 
@@ -73,9 +74,9 @@ public:
 
         const size_t blob_sz = 64 + 128 + 256 + 512 + 32;
 
-        cudaGetSymbolAddress((void**)&radix6_twiddles,
-                             inverse ? inverse_radix6_twiddles
-                                     : forward_radix6_twiddles);
+        CUDA_OK(cudaGetSymbolAddress((void**)&radix6_twiddles,
+                                     inverse ? inverse_radix6_twiddles
+                                             : forward_radix6_twiddles));
         radix7_twiddles = (fr_t*)gpu.Dmalloc(blob_sz * sizeof(fr_t));
         radix8_twiddles = radix7_twiddles + 64;
         radix9_twiddles = radix8_twiddles + 128;
@@ -87,9 +88,11 @@ public:
                                                           roots[8],
                                                           roots[9],
                                                           roots[10]);
+        CUDA_OK(cudaGetLastError());
 
-        cudaMemcpyAsync(radix6_twiddles, radix10_twiddles + 512,
-                        32 * sizeof(fr_t), cudaMemcpyDeviceToDevice, gpu);
+        CUDA_OK(cudaMemcpyAsync(radix6_twiddles, radix10_twiddles + 512,
+                                32 * sizeof(fr_t), cudaMemcpyDeviceToDevice,
+                                gpu));
 
         radix6_twiddles_6 = twiddles_X(64, 64, roots[12]);
         radix6_twiddles_12 = twiddles_X(4096, 64, roots[18]);
@@ -105,10 +108,12 @@ public:
 
         generate_partial_twiddles<<<WINDOW_SIZE/32, 32, 0, gpu>>>
             (partial_twiddles, roots[MAX_LG_DOMAIN_SIZE]);
+        CUDA_OK(cudaGetLastError());
 
         generate_partial_twiddles<<<WINDOW_SIZE/32, 32, 0, gpu>>>
             (partial_group_gen_powers, inverse ? group_gen_inverse
                                                : group_gen);
+        CUDA_OK(cudaGetLastError());
     }
     NTTParameters(const NTTParameters&) = delete;
 

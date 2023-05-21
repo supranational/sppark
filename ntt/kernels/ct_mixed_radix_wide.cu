@@ -287,6 +287,8 @@ public:
         #undef NTT_CONFIGURATION
         #undef NTT_ARGUMENTS
 
+        CUDA_OK(cudaGetLastError());
+
         stage += radix;
     }
 };
