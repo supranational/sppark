@@ -364,6 +364,7 @@ private:
         breakdown<<<2*grid_size, 1024, sizeof(scalar_t)*1024, gpu[2]>>>(
             d_digits, d_scalars, len, nwins, wbits, mont
         );
+        CUDA_OK(cudaGetLastError());
 
         const size_t shared_sz = sizeof(uint32_t) << DIGIT_BITS;
 #if 0
@@ -462,6 +463,7 @@ public:
                 integrate<<<nwins, MSM_NTHREADS, sizeof(bucket_t)*MSM_NTHREADS, gpu[i&1]>>>(
                     d_buckets, nwins, wbits
                 );
+                CUDA_OK(cudaGetLastError());
 
                 if (i < batch-1) {
                     h_off += stride;
