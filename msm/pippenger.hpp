@@ -222,7 +222,7 @@ static void mult_pippenger(point_t& ret, const affine_t points[], size_t npoints
                            thread_pool_t* da_pool = nullptr)
 {
     typedef typename scalar_t::pow_t pow_t;
-    const size_t nbits = scalar_t::nbits;
+    size_t nbits = scalar_t::nbits;
     size_t window = window_size(npoints);
     size_t ncpus = da_pool ? da_pool->size() : 0;
 
