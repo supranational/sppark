@@ -42,6 +42,7 @@ public:
             ZZZ = p.ZZZ;
             ZZ  = p.ZZ;
         }
+        inline __device__ void inf() { ZZZ.zero(); ZZ.zero(); }
     };
 
     inline __device__ xyzz_t& operator=(const mem_t& p)
@@ -96,6 +97,7 @@ public:
             return p;
         }
 
+#ifdef __NVCC__
         class mem_t { friend class affine_t;
             field_h X, Y;
 
@@ -108,33 +110,34 @@ public:
                 return p;
             }
         };
+#else
+        using mem_t = affine_t;
+#endif
     };
 
-#ifdef __CUDACC__
     class affine_inf_t { friend class xyzz_t;
         field_h X, Y;
+#ifdef __CUDACC__
         int inf[sizeof(field_t)%16 ? 2 : 4];
 
         inline __host__ __device__ bool is_inf() const
         {   return inf[0]&1 != 0;   }
-
-        inline __device__ operator affine_t() const
-        {
-            affine_t p;
-            p.X = X;
-            p.Y = Y;
-            return p;
-        }
-    };
 #else
-    class affine_inf_t { friend class xyzz_t;
-        field_h X, Y;
         bool inf;
 
         inline __host__ __device__ bool is_inf() const
         {   return inf;   }
-    };
 #endif
+    public:
+        inline __device__ operator affine_t() const
+        {
+            bool inf = is_inf();
+            affine_t p;
+            p.X = czero(X, inf);
+            p.Y = czero(Y, inf);
+            return p;
+        }
+    };
 
     template<class affine_t>
     inline __host__ __device__ xyzz_t& operator=(const affine_t& a)
@@ -148,7 +151,7 @@ public:
     inline __host__ operator affine_t() const      { return affine_t(*this); }
 
 #ifdef __SPPARK_EC_JACOBIAN_T_HPP__
-    inline __host__ __device__ operator jacobian_t<field_t>() const
+    inline operator jacobian_t<field_t>() const
     {   return jacobian_t<field_t>{ X*ZZ, Y*ZZZ, ZZ };   }
 #endif
 
