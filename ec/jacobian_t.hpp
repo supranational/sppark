@@ -24,7 +24,7 @@ public:
         affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
 
         inline bool is_inf() const
-        {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
+        {   return (bool)(X.is_zero() & Y.is_zero());   }
 
         inline affine_t& operator=(const jacobian_t& a)
         {

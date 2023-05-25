@@ -69,7 +69,7 @@ public:
         {   return (bool)(X.is_zero(Y));   }
 #else
         inline __host__   bool is_inf() const
-        {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
+        {   return (bool)(X.is_zero() & Y.is_zero());   }
 #endif
 
         inline __host__ affine_t& operator=(const xyzz_t& a)
