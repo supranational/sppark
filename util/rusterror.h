@@ -23,6 +23,12 @@ struct RustError { /* to be returned exclusively by value */
     RustError(int e, const char *str) : code(e)
     {   message = str==nullptr ? nullptr : strdup(str);   }
     // no destructor[!], Rust takes care of the |message|
+
+    struct by_value {
+        int code;
+        char *message;
+    };
+    operator by_value() const { return {code, message}; }
 #endif
 };
 #ifndef __cplusplus
