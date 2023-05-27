@@ -262,7 +262,7 @@ public:
             cudaGetDevice(&current_id);
             if (current_id != ptr->real_id)
                 cudaSetDevice(ptr->real_id);
-            cudaFree((void*)ptr->ptr);
+            cudaFree(ptr->ptr);
             if (current_id != ptr->real_id)
                 cudaSetDevice(current_id);
             delete ptr;
@@ -285,6 +285,12 @@ public:
     }
 
     inline operator T*() const                  { return ptr->ptr; }
+
+    // facilitate return by value through FFI, as gpu_ptr_t<T>::by_value.
+    struct by_value         { inner *ptr; };
+    operator by_value() const
+    {   ptr->ref_cnt.fetch_add(1, std::memory_order_relaxed); return {ptr};   }
+    gpu_ptr_t(by_value v)   { ptr = v.ptr; }
 };
 
 // A simple way to pack a pointer and array's size length, but more
