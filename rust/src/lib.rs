@@ -52,12 +52,22 @@ pub struct Gpu_Ptr<T> {
 }
 
 #[cfg(feature = "cuda")]
+impl<T> Default for Gpu_Ptr<T> {
+    fn default() -> Self {
+        Self {
+            ptr: core::ptr::null(),
+            phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
 impl<T> Drop for Gpu_Ptr<T> {
     fn drop(&mut self) {
         extern "C" {
             fn drop_gpu_ptr_t(by_ref: &Gpu_Ptr<c_void>);
         }
-        unsafe { drop_gpu_ptr_t(transmute::<&Gpu_Ptr<T>, &Gpu_Ptr<c_void>>(self)) };
+        unsafe { drop_gpu_ptr_t(transmute::<&_, &_>(self)) };
         self.ptr = core::ptr::null();
     }
 }
@@ -66,18 +76,8 @@ impl<T> Drop for Gpu_Ptr<T> {
 impl<T> Clone for Gpu_Ptr<T> {
     fn clone(&self) -> Self {
         extern "C" {
-            fn clone_gpu_ptr_t(ret: &mut Gpu_Ptr<c_void>, by_ref: &Gpu_Ptr<c_void>);
+            fn clone_gpu_ptr_t(by_ref: &Gpu_Ptr<c_void>) -> Gpu_Ptr<c_void>;
         }
-        let mut ret = Self {
-            ptr: core::ptr::null(),
-            phantom: core::marker::PhantomData,
-        };
-        unsafe {
-            clone_gpu_ptr_t(
-                transmute::<&mut Gpu_Ptr<T>, &mut Gpu_Ptr<c_void>>(&mut ret),
-                transmute::<&Gpu_Ptr<T>, &Gpu_Ptr<c_void>>(self),
-            )
-        };
-        ret
+        unsafe { transmute::<_, _>(clone_gpu_ptr_t(transmute::<&_, &_>(self))) }
     }
 }
