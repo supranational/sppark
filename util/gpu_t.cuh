@@ -160,7 +160,7 @@ private:
     size_t total_mem;
     mutable stream_t zero = {gpu_id};
     mutable stream_t flipflop[FLIP_FLOP] = {gpu_id, gpu_id, gpu_id};
-    mutable thread_pool_t pool;
+    mutable thread_pool_t pool{"SPPARK_GPU_T_AFFINITY"};
 
 public:
     gpu_t(int id, int real_id, const cudaDeviceProp& p)

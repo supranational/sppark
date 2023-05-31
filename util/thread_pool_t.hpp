@@ -16,6 +16,8 @@
 #include <vector>
 #include <deque>
 #include <functional>
+#include <cstdlib>
+#include <cstring>
 #ifdef _GNU_SOURCE
 # include <sched.h>
 #endif
@@ -55,8 +57,7 @@ private:
     typedef std::function<void()> job_t;
     std::deque<job_t> fifo;
 
-public:
-    thread_pool_t(unsigned int num_threads = 0) : done(false)
+    void init(unsigned int num_threads)
     {
         if (num_threads == 0) {
             num_threads = std::thread::hardware_concurrency();
@@ -76,6 +77,58 @@ public:
 
         for (unsigned int i = 0; i < num_threads; i++)
             threads.push_back(std::thread([this]() { while (execute()); }));
+    }
+public:
+    thread_pool_t(unsigned int num_threads = 0) : done(false)
+    {   init(num_threads);   }
+
+    thread_pool_t(const char* affinity_env) : done(false)
+    {
+#ifdef _GNU_SOURCE
+        while ((affinity_env = getenv(affinity_env))) {
+            if (affinity_env[0] != '0')
+                break;
+            char base = affinity_env[1];
+            if (base == 'x')
+                base = 16;
+            else if (base == 'b')
+                base = 2;
+            else if (base >= '0' && base < '8')
+                base = 8;
+            else
+                break;
+
+            size_t len = strlen(affinity_env += 1 + (base != 8));
+            if (len == 0)
+                break;
+
+            cpu_set_t oset, nset;
+            CPU_ZERO(&oset);
+            CPU_ZERO(&nset);
+
+            if (sched_getaffinity(0, sizeof(oset), &oset) != 0)
+                break;
+
+            unsigned int num_threads = 0;
+            for (int cpu = 0; cpu < CPU_SETSIZE && len--;) {
+                char nibble = nibble_from_hex(affinity_env[len]);
+                for (char mask = 1; mask < base; mask <<= 1, cpu++) {
+                    if (nibble & mask) {
+                        CPU_SET(cpu, &nset);
+                        num_threads++;
+                    }
+                }
+            }
+
+            if (sched_setaffinity(0, sizeof(nset), &nset) != 0)
+                break;
+            init(num_threads);
+            sched_setaffinity(0, sizeof(oset), &oset);
+
+            return;
+        }
+#endif
+        init(0);
     }
 
     virtual ~thread_pool_t()
@@ -155,6 +208,24 @@ public:
     template<class Workable>
     void par_map(size_t num_items, Workable work, size_t max_workers = 0)
     {   par_map(num_items, 1, work, max_workers);   }
+
+#ifdef _GNU_SOURCE
+    static char nibble_from_hex(char c)
+    {
+        int mask, ret;
+
+        mask = (('a'-c-1) & (c-1-'f')) >> 31;
+        ret  = (10 + c - 'a') & mask;
+        mask = (('A'-c-1) & (c-1-'F')) >> 31;
+        ret |= (10 + c - 'A') & mask;
+        mask = (('0'-c-1) & (c-1-'9')) >> 31;
+        ret |= (c - '0') & mask;
+        mask = ((ret-1) & ~mask) >> 31;
+        ret |= 16 & mask;
+
+        return (char)ret;
+    }
+#endif
 };
 
 template<class T> class channel_t {
