@@ -24,8 +24,8 @@ macro_rules! cuda_error {
                 }
             }
 
-            impl From<Error> for String {
-                fn from(status: Error) -> Self {
+            impl From<&Error> for String {
+                fn from(status: &Error) -> Self {
                     let c_str = if let Some(ptr) = status.str {
                         unsafe { std::ffi::CStr::from_ptr(ptr.as_ptr()) }
                     } else {
@@ -35,6 +35,18 @@ macro_rules! cuda_error {
                         unsafe { std::ffi::CStr::from_ptr(cudaGetErrorString(status.code)) }
                     };
                     String::from(c_str.to_str().unwrap_or("unintelligible"))
+                }
+            }
+
+            impl From<Error> for String {
+                fn from(status: Error) -> Self {
+                    String::from(&status)
+                }
+            }
+
+            impl std::fmt::Display for Error {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "{}", String::from(self))
                 }
             }
         }
