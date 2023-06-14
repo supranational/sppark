@@ -141,7 +141,7 @@ public:
             gpu.select();
 
             size_t domain_size = (size_t)1 << lg_domain_size;
-            dev_ptr_t<fr_t> d_inout(domain_size);
+            dev_ptr_t<fr_t> d_inout{domain_size, gpu};
             gpu.HtoD(&d_inout[0], inout, domain_size);
 
             NTT_internal(&d_inout[0], lg_domain_size, order, direction, type, gpu);
@@ -168,7 +168,7 @@ public:
 
             size_t domain_size = (size_t)1 << lg_domain_size;
             size_t ext_domain_size = domain_size << lg_blowup;
-            dev_ptr_t<fr_t> d_ext_domain(ext_domain_size);
+            dev_ptr_t<fr_t> d_ext_domain{ext_domain_size, gpu};
             fr_t* d_domain = &d_ext_domain[ext_domain_size - domain_size];
 
             gpu.HtoD(&d_domain[0], inout, domain_size);
@@ -246,8 +246,7 @@ public:
             size_t ext_domain_size = domain_size << lg_blowup;
             // The 2nd to last 'domain_size' chunk will hold the original data
             // The last chunk will get the bit reversed iNTT data
-            dev_ptr_t<fr_t> d_inout(ext_domain_size + domain_size); // + domain_size for aux buffer
-            cudaDeviceSynchronize();
+            dev_ptr_t<fr_t> d_inout{ext_domain_size + domain_size, gpu}; // + domain_size for aux buffer
             fr_t* aux_data = &d_inout[ext_domain_size];
             fr_t* domain_data = &d_inout[ext_domain_size - domain_size]; // aligned to the end
             fr_t* ext_domain_data = &d_inout[0];

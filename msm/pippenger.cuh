@@ -429,7 +429,7 @@ public:
 
             size_t digits_sz = nwins * stride * sizeof(uint32_t);
 
-            dev_ptr_t<uint8_t> d_temp(temp_sz + digits_sz + points_sz);
+            dev_ptr_t<uint8_t> d_temp{temp_sz + digits_sz + points_sz, gpu[2]};
 
             vec2d_t<uint2> d_temps{&d_temp[0], stride};
             vec2d_t<uint32_t> d_digits{&d_temp[temp_sz], stride};
