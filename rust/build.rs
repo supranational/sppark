@@ -63,8 +63,8 @@ fn main() {
             .find(",")
             .expect("can't parse \"release X.Y,\" in --version output");
         let v = cuda_version[x..x + y].parse::<f32>().unwrap();
-        if v < 11.0 {
-            panic!("Unsupported CUDA version {} < 11.0", v);
+        if v < 11.4 {
+            panic!("Unsupported CUDA version {} < 11.4", v);
         }
 
         let util_dir = base_dir.join("util");
