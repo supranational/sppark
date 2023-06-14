@@ -333,6 +333,13 @@ public:
             CUDA_OK(cudaMalloc(&d_ptr, n * sizeof(T)));
         }
     }
+    dev_ptr_t(size_t nelems, stream_t& s) : d_ptr(nullptr)
+    {
+        if (nelems) {
+            size_t n = (nelems+WARP_SZ-1) & ((size_t)0-WARP_SZ);
+            CUDA_OK(cudaMallocAsync(&d_ptr, n * sizeof(T), s));
+        }
+    }
     dev_ptr_t(const dev_ptr_t& r) = delete;
     dev_ptr_t& operator=(const dev_ptr_t& r) = delete;
     ~dev_ptr_t() { if (d_ptr) cudaFree((void*)d_ptr); }
