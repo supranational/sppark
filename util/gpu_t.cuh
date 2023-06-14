@@ -253,6 +253,7 @@ template<typename T> class gpu_ptr_t {
     };
     inner *ptr;
 public:
+    gpu_ptr_t() : ptr(nullptr)    {}
     gpu_ptr_t(T* p)               { ptr = new inner(p); }
     gpu_ptr_t(const gpu_ptr_t& r) { *this = r; }
     ~gpu_ptr_t()
