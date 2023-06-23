@@ -355,7 +355,8 @@ static void mult_pippenger(point_t& ret, const std::vector<affine_t>& points,
                            const std::vector<scalar_t>& scalars, bool mont,
                            thread_pool_t* da_pool = nullptr)
 {
-    mult_pippenger<bucket_t>(ret, points.data(), points.size(),
+    mult_pippenger<bucket_t>(ret, points.data(),
+                                  std::min(points.size(), scalars.size()),
                                   scalars.data(), mont, da_pool);
 }
 #endif
