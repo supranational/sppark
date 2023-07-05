@@ -445,16 +445,31 @@ public:
     {   return a^2;   }
 
     inline void to()    { mont_t t = RR * *this; *this = t; }
-    inline void to(const uint32_t a[2*n])
+    inline void to(const uint32_t a[2*n], bool host_order = true)
     {
         size_t i;
 
-        for (i = 0; i < n; i++)
-            even[i] = a[n + i];
+        // load the most significant half
+        if (host_order) {
+            for (i = 0; i < n; i++)
+                even[i] = a[n + i];
+        } else {
+            for (i = 0; i < n; i++)
+                asm("prmt.b32 %0, %1, %1, 0x0123;" : "=r"(even[i]) : "r"(a[n - 1 - i]));
+        }
         to();
 
         uint32_t tmp[n];
-        mont_t lo{a};
+        mont_t lo;
+
+        // load the least significant half
+        if (host_order) {
+            for (i = 0; i < n; i++)
+                lo[i] = a[i];
+        } else {
+            for (i = 0; i < n; i++)
+                asm("prmt.b32 %0, %1, %1, 0x0123;" : "=r"(lo[i]) : "r"(a[2*n - 1 - i]));
+        }
         if (N%32 != 0)
             lo.final_sub(0, tmp);
 
@@ -469,6 +484,44 @@ public:
         to();
     }
     inline void from()  { mont_t t = *this; t.mul_by_1(); *this = t; }
+    inline void from(const uint32_t a[2*n], bool host_order = true)
+    {
+        size_t i;
+
+        // load the least significant half
+        if (host_order) {
+            for (i = 0; i < n; i++)
+                even[i] = a[i];
+        } else {
+            for (i = 0; i < n; i++)
+                asm("prmt.b32 %0, %1, 0, 0x0123;" : "=r"(even[i]) : "r"(a[2*n - 1 -i]));
+        }
+        mul_by_1();
+
+        uint32_t tmp[n];
+        mont_t hi;
+
+        // load the most significant half
+        if (host_order) {
+            for (i = 0; i < n; i++)
+                hi[i] = a[n + i];
+        } else {
+            for (i = 0; i < n; i++)
+                asm("prmt.b32 %0, %1, 0, 0x0123;" : "=r"(hi[i]) : "r"(a[n - 1 - i]));
+        }
+        if (N%32 != 0)
+            hi.final_sub(0, tmp);
+
+        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(hi[0]));
+        for (i = 1; i < n; i++)
+            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(hi[i]));
+        if (N%32 == 0) {
+            uint32_t carry;
+            asm("addc.u32 %0, 0, 0;" : "=r"(carry));
+            final_sub(carry, tmp);
+        }
+        to();
+    }
 
     static inline const mont_t& one()
     {   return *reinterpret_cast<const mont_t*>(ONE);   }
