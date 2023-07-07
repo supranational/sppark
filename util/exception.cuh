@@ -5,34 +5,14 @@
 #ifndef __SPPARK_UTIL_EXCEPTION_CUH__
 #define __SPPARK_UTIL_EXCEPTION_CUH__
 
-#include <cstdio>
-#include <cstring>
-#include <string>
-#include <stdexcept>
+#include "exception.hpp"
 
-class cuda_error : public std::runtime_error {
-    cudaError_t _code;
-public:
-    cuda_error(cudaError_t err, const std::string& reason) : std::runtime_error{reason}
-    {   _code = err;   }
-    inline cudaError_t code() const
-    {   return _code;   }
-};
-
-template<typename... Types>
-inline std::string fmt(const char* fmt, Types... args)
-{
-    size_t len = std::snprintf(nullptr, 0, fmt, args...);
-    std::string ret(++len, '\0');
-    std::snprintf(&ret.front(), len, fmt, args...);
-    ret.resize(--len);
-    return ret;
-}
+using cuda_error = sppark_error;
 
 #define CUDA_OK(expr) do {                                  \
     cudaError_t code = expr;                                \
     if (code != cudaSuccess) {                              \
-        const char *file = std::strstr(__FILE__, "sppark"); \
+        auto file = std::strstr(__FILE__, "sppark");        \
         auto str = fmt("%s@%s:%d failed: \"%s\"", #expr,    \
                        file ? file : __FILE__, __LINE__,    \
                        cudaGetErrorString(code));           \
