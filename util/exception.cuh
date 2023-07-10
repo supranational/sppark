@@ -16,7 +16,7 @@ using cuda_error = sppark_error;
         auto str = fmt("%s@%s:%d failed: \"%s\"", #expr,    \
                        file ? file : __FILE__, __LINE__,    \
                        cudaGetErrorString(code));           \
-        throw cuda_error(code, str);                        \
+        throw cuda_error{-code, str};                       \
     }                                                       \
 } while(0)
 
