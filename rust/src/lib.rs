@@ -23,7 +23,7 @@ impl Drop for Error {
 impl From<&Error> for String {
     fn from(status: &Error) -> Self {
         if let Some(str) = status.str {
-            let c_str = unsafe { std::ffi::CStr::from_ptr(str.as_ptr()) };
+            let c_str = unsafe { std::ffi::CStr::from_ptr(str.as_ptr() as *const _) };
             String::from(c_str.to_str().unwrap_or("unintelligible"))
         } else {
             format!("sppark::Error #{}", status.code)
