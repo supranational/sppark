@@ -36,6 +36,7 @@ public:
     public:
         inline operator fp2_t() const           { return x[threadIdx.x&1]; }
         inline mem_t& operator=(const fp2_t& a) { x[threadIdx.x&1] = a;    }
+        inline void zero()                      { x[threadIdx.x&1].zero(); }
     };
 
     inline fp2_t()                              {}
@@ -96,6 +97,9 @@ public:
     {   fp_mont::cneg(flag); return *this;  }
     friend inline fp2_t cneg(fp2_t a, bool flag)
     {   return a.cneg(flag);   }
+
+    friend inline fp2_t czero(const fp2_t& a, int set_z)
+    {   return czero((fp_mont)a, set_z);   }
 
     inline bool is_zero() const
     {
