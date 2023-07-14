@@ -22,8 +22,8 @@ public:
     vec2d_t(T* data, uint32_t x)  : dim_x(x), owned(false), ptr(data) {}
     vec2d_t(void* data, uint32_t x)  : dim_x(x), owned(false), ptr((T*)data) {}
     vec2d_t(uint32_t x, size_t y) : dim_x(x), owned(true),  ptr(new T[x*y]) {}
-#ifndef __CUDA_ARCH__
     vec2d_t() : dim_x(0), owned(false), ptr(nullptr) {}
+#ifndef __CUDA_ARCH__
     vec2d_t(const vec2d_t& other) { *this = other; }
     ~vec2d_t() { if (owned) delete[] ptr; }
 
@@ -38,14 +38,14 @@ public:
 
         return *this;
     }
-
-    inline operator void*() { return ptr; }
 #endif
-    __host__ __device__
-    inline uint32_t x() { return dim_x; }
-
+    inline operator void*() { return ptr; }
     __host__ __device__
     inline T* operator[](size_t y) const { return ptr + dim_x*y; }
+
+#ifndef NDEBUG
+    inline uint32_t x() { return dim_x; }
+#endif
 };
 
 #ifndef __CUDACC__
