@@ -11,7 +11,7 @@ use ark_std::UniformRand;
 pub fn generate_points_scalars<G: AffineCurve>(
     len: usize,
 ) -> (Vec<G>, Vec<G::ScalarField>) {
-    let rand_gen: usize = 1 << 11;
+    let rand_gen: usize = std::cmp::min(1usize << 11, len);
     let mut rng = ChaCha20Rng::from_entropy();
 
     let mut points =
@@ -21,7 +21,9 @@ pub fn generate_points_scalars<G: AffineCurve>(
                 .collect::<Vec<_>>(),
         );
     // Sprinkle in some infinity points
-    points[3] = G::zero();
+    if len > 2 {
+        points[3] = G::zero();
+    }
     let scalars = (0..len)
         .map(|_| G::ScalarField::rand(&mut rng))
         .collect::<Vec<_>>();

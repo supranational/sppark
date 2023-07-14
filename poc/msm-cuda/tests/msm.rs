@@ -37,3 +37,29 @@ fn msm_correctness() {
 
     assert_eq!(msm_result, arkworks_result);
 }
+
+#[cfg(feature = "bls12_381")]
+#[test]
+fn msm_fp2_correctness() {
+    use ark_bls12_381::G2Affine;
+
+    let test_npow = std::env::var("TEST_NPOW").unwrap_or("14".to_string());
+    let npoints_npow = i32::from_str(&test_npow).unwrap();
+
+    let (points, scalars) =
+        util::generate_points_scalars::<G2Affine>(1usize << npoints_npow);
+
+    let msm_result =
+        multi_scalar_mult_fp2_arkworks(points.as_slice(), unsafe {
+            std::mem::transmute::<&[_], &[BigInteger256]>(scalars.as_slice())
+        })
+        .into_affine();
+
+    let arkworks_result =
+        VariableBaseMSM::multi_scalar_mul(points.as_slice(), unsafe {
+            std::mem::transmute::<&[_], &[BigInteger256]>(scalars.as_slice())
+        })
+        .into_affine();
+
+    assert_eq!(msm_result, arkworks_result);
+}
