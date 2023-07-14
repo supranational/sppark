@@ -28,11 +28,14 @@
 
 #ifdef __CUDA_ARCH__
 // Transposed scalar_t
+template<class scalar_t>
 class scalar_T {
     uint32_t val[sizeof(scalar_t)/sizeof(uint32_t)][WARP_SZ];
 
 public:
     __device__ const uint32_t& operator[](size_t i) const  { return val[i][0]; }
+    __device__ scalar_T& operator()(uint32_t laneid)
+    {   return *reinterpret_cast<scalar_T*>(&val[0][laneid]);   }
     __device__ scalar_T& operator=(const scalar_t& rhs)
     {
         for (size_t i = 0; i < sizeof(scalar_t)/sizeof(uint32_t); i++)
@@ -41,8 +44,9 @@ public:
     }
 };
 
+template<class scalar_t>
 __device__ __forceinline__
-static uint32_t get_wval(const scalar_T& scalar, uint32_t off,
+static uint32_t get_wval(const scalar_T<scalar_t>& scalar, uint32_t off,
                          uint32_t top_i = (scalar_t::nbits + 31) / 32 - 1)
 {
     uint32_t i = off / 32;
@@ -63,6 +67,7 @@ static uint32_t booth_encode(uint32_t wval, uint32_t wmask, uint32_t wbits)
 }
 #endif
 
+template<class scalar_t>
 __launch_bounds__(1024) __global__
 void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
                uint32_t nwins, uint32_t wbits, bool mont = true)
@@ -70,14 +75,14 @@ void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
     assert(len <= (1U<<31) && wbits < 32);
 
 #ifdef __CUDA_ARCH__
-    extern __shared__ scalar_T xchange[];
+    extern __shared__ scalar_T<scalar_t> xchange[];
     const uint32_t tid = threadIdx.x;
     const uint32_t tix = threadIdx.x + blockIdx.x*blockDim.x;
 
     const uint32_t top_i = (scalar_t::nbits + 31) / 32 - 1;
     const uint32_t wmask = 0xffffffffU >> (31-wbits); // (1U << (wbits+1)) - 1;
 
-    auto& scalar = *(scalar_T*)&(&xchange[tid/WARP_SZ][0])[tid%WARP_SZ];
+    auto& scalar = xchange[tid/WARP_SZ](tid%WARP_SZ);
 
     #pragma unroll 1
     for (uint32_t i = tix; i < (uint32_t)len; i += gridDim.x*blockDim.x) {
@@ -117,8 +122,10 @@ void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
 #ifndef LARGE_L1_CODE_CACHE
 # if __CUDA_ARCH__-0 >= 800
 #  define LARGE_L1_CODE_CACHE 1
+#  define ACCUMULATE_NTHREADS 384
 # else
 #  define LARGE_L1_CODE_CACHE 0
+#  define ACCUMULATE_NTHREADS (bucket_t::degree == 1 ? 384 : 256)
 # endif
 #endif
 
@@ -134,26 +141,38 @@ void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
 # error "invalid MSM_NSTREAMS"
 #endif
 
-__launch_bounds__(384) __global__
-void accumulate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits,
-                /*const*/ affine_t points_[], const vec2d_t<uint32_t> digits,
+template<class bucket_t,
+         class affine_h,
+         class bucket_h = class bucket_t::mem_t,
+         class affine_t = class bucket_t::affine_t>
+__launch_bounds__(ACCUMULATE_NTHREADS) __global__
+void accumulate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits,
+                /*const*/ affine_h points_[], const vec2d_t<uint32_t> digits,
                 const vec2d_t<uint32_t> histogram, uint32_t sid = 0)
 {
-    vec2d_t<bucket_t> buckets{buckets_, 1U<<--wbits};
-    const affine_t* points = points_;
+    vec2d_t<bucket_h> buckets{buckets_, 1U<<--wbits};
+    const affine_h* points = points_;
 
     static __device__ uint32_t streams[MSM_NSTREAMS];
     uint32_t& current = streams[sid % MSM_NSTREAMS];
-    __shared__ uint32_t xchg;
     uint32_t laneid;
     asm("mov.u32 %0, %laneid;" : "=r"(laneid));
+    const uint32_t degree = bucket_t::degree;
+    const uint32_t warp_sz = WARP_SZ / degree;
+    const uint32_t lane_id = laneid / degree;
 
     uint32_t x, y;
+#if 1
+    __shared__ uint32_t xchg;
 
     if (threadIdx.x == 0)
-        xchg = atomicAdd(&current, blockDim.x);
+        xchg = atomicAdd(&current, blockDim.x/degree);
     __syncthreads();
-    x = xchg + threadIdx.x;
+    x = xchg + threadIdx.x/degree;
+#else
+    x = laneid == 0 ? atomicAdd(&current, warp_sz) : 0;
+    x = __shfl_sync(0xffffffff, x, 0) + lane_id;
+#endif
 
     while (x < (nwins << wbits)) {
         y = x >> wbits;
@@ -163,24 +182,24 @@ void accumulate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits,
         uint32_t idx, len = h[0];
 
         asm("{ .reg.pred %did;"
-            "  shfl.sync.up.b32 %0|%did, %1, 1, 0, 0xffffffff;"
+            "  shfl.sync.up.b32 %0|%did, %1, %2, 0, 0xffffffff;"
             "  @!%did mov.b32 %0, 0;"
-            "}" : "=r"(idx) : "r"(len));
+            "}" : "=r"(idx) : "r"(len), "r"(degree));
 
-        if (laneid == 0 && x != 0)
+        if (lane_id == 0 && x != 0)
             idx = h[-1];
 
         if (len -= idx) {
             const uint32_t* digs_ptr = &digits[y][idx];
             uint32_t digit = *digs_ptr++;
 
-            bucket_t bucket;
-            bucket = points[digit & 0x7fffffff];
+            affine_t p = points[digit & 0x7fffffff];
+            bucket_t bucket = p;
             bucket.cneg(digit >> 31);
 
             while (--len) {
                 digit = *digs_ptr++;
-                auto p = points[digit & 0x7fffffff];
+                p = points[digit & 0x7fffffff];
                 if (sizeof(bucket) <= 128 || LARGE_L1_CODE_CACHE)
                     bucket.add(p, digit >> 31);
                 else
@@ -192,8 +211,8 @@ void accumulate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits,
             buckets[y][x].inf();
         }
 
-        x = laneid == 0 ? atomicAdd(&current, warpSize) : 0;
-        x = __shfl_sync(0xffffffff, x, 0) + laneid;
+        x = laneid == 0 ? atomicAdd(&current, warp_sz) : 0;
+        x = __shfl_sync(0xffffffff, x, 0) + lane_id;
     }
 
     cooperative_groups::this_grid().sync();
@@ -202,16 +221,19 @@ void accumulate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits,
         current = 0;
 }
 
+template<class bucket_t, class bucket_h = class bucket_t::mem_t>
 __launch_bounds__(256) __global__
-void integrate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits)
+void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbits)
 {
-    uint32_t Nthrbits = 31 - __clz(blockDim.x);
+    const uint32_t degree = bucket_t::degree;
+    uint32_t Nthrbits = 31 - __clz(blockDim.x / degree);
 
     assert((blockDim.x & (blockDim.x-1)) == 0 && wbits-1 > Nthrbits);
 
-    vec2d_t<bucket_t> buckets{buckets_, 1U<<(wbits-1)};
-    extern __shared__ bucket_t scratch[];
-    const uint32_t tid = threadIdx.x;
+    vec2d_t<bucket_h> buckets{buckets_, 1U<<(wbits-1)};
+    extern __shared__ uint4 scratch_[];
+    auto* scratch = reinterpret_cast<bucket_h*>(scratch_);
+    const uint32_t tid = threadIdx.x / degree;
     const uint32_t bid = blockIdx.x;
 
     auto* row = &buckets[bid][0];
@@ -219,8 +241,8 @@ void integrate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits)
     row += tid * i;
 
     uint32_t mask = 0;
-    if ((bid+1)*wbits > scalar_t::bit_length()) {
-        uint32_t lsbits = scalar_t::bit_length() - bid*wbits;
+    if ((bid+1)*wbits > nbits) {
+        uint32_t lsbits = nbits - bid*wbits;
         mask = (1U << (wbits-lsbits)) - 1;
     }
 
@@ -273,7 +295,20 @@ void integrate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits)
 }
 #undef asm
 
-#ifndef __CUDA_ARCH__
+#ifndef SPPARK_DONT_INSTANTIATE_TEMAPLATES
+template __global__
+void accumulate<bucket_t, affine_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
+                                    uint32_t wbits, /*const*/ affine_t points_[],
+                                    const vec2d_t<uint32_t> digits,
+                                    const vec2d_t<uint32_t> histogram,
+                                    uint32_t sid);
+template __global__
+void integrate<bucket_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
+                         uint32_t wbits, uint32_t nbits);
+template __global__
+void breakdown<scalar_t>(vec2d_t<uint32_t> digits, const scalar_t scalars[],
+                         size_t len, uint32_t nwins, uint32_t wbits, bool mont);
+#endif
 
 #include <vector>
 
@@ -284,25 +319,24 @@ void integrate(bucket_t buckets_[], uint32_t nwins, uint32_t wbits)
 constexpr static int lg2(int n)
 {   int ret=0; while (n>>=1) ret++; return ret;   }
 
-static const int NTHRBITS = lg2(MSM_NTHREADS);
-
-template<typename bucket_t> class result_t {
-    bucket_t ret[MSM_NTHREADS][2];
-public:
-    result_t() {}
-    inline operator decltype(ret)&() { return ret; }
-    inline const bucket_t* operator[](size_t i) const { return ret[i]; }
-};
-
-template<class bucket_t, class point_t, class affine_t, class scalar_t>
+template<class bucket_t, class point_t, class affine_t, class scalar_t,
+         class bucket_h = class bucket_t::mem_t>
 class msm_t {
     const gpu_t& gpu;
     size_t npoints;
     uint32_t wbits, nwins;
-    bucket_t *d_buckets;
+    bucket_h *d_buckets;
     affine_t *d_points;
     scalar_t *d_scalars;
     vec2d_t<uint32_t> d_hist;
+
+    class result_t {
+        bucket_t ret[MSM_NTHREADS/bucket_t::degree][2];
+    public:
+        result_t() {}
+        inline operator decltype(ret)&()                    { return ret;    }
+        inline const bucket_t* operator[](size_t i) const   { return ret[i]; }
+    };
 
 public:
     msm_t(const affine_t points[], size_t np,
@@ -311,7 +345,7 @@ public:
     {
         npoints = (np+WARP_SZ-1) & ((size_t)0-WARP_SZ);
 
-        wbits = 17;
+        wbits = 10;
         if (npoints > 192) {
             wbits = std::min(lg2(npoints + npoints/2) - 8, 18);
             if (wbits < 10)
@@ -410,7 +444,7 @@ public:
         uint32_t stride = (npoints + batch - 1) / batch;
         stride = (stride+WARP_SZ-1) & ((size_t)0-WARP_SZ);
 
-        std::vector<result_t<bucket_t>> res(nwins);
+        std::vector<result_t> res(nwins);
 
         out.inf();
         point_t p;
@@ -451,17 +485,20 @@ public:
 
             if (points)
                 gpu[0].HtoD(&d_points[d_off], &points[h_off],
-                            num,          ffi_affine_sz);
+                            num,              ffi_affine_sz);
 
             for (uint32_t i = 0; i < batch; i++) {
                 gpu[i&1].wait(ev);
-                gpu[i&1].launch_coop(accumulate, {gpu.sm_count(), 384},
+                gpu[i&1].launch_coop(accumulate<bucket_t, affine_t>,
+                    {gpu.sm_count(), 0},
                     d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i&1
                 );
                 gpu[i&1].record(ev);
 
-                integrate<<<nwins, MSM_NTHREADS, sizeof(bucket_t)*MSM_NTHREADS, gpu[i&1]>>>(
-                    d_buckets, nwins, wbits
+                integrate<bucket_t><<<nwins, MSM_NTHREADS,
+                                      sizeof(bucket_t)*MSM_NTHREADS/bucket_t::degree,
+                                      gpu[i&1]>>>(
+                    d_buckets, nwins, wbits, scalar_t::bit_length()
                 );
                 CUDA_OK(cudaGetLastError());
 
@@ -491,7 +528,7 @@ public:
                     out.add(p);
                 }
 
-                gpu[i&1].DtoH(&res[0], d_buckets, nwins, sizeof(bucket_t)<<(wbits-1));
+                gpu[i&1].DtoH(&res[0], d_buckets, nwins, sizeof(bucket_h)<<(wbits-1));
                 gpu[i&1].sync();
             }
         } catch (const cuda_error& e) {
@@ -540,11 +577,13 @@ public:
     }
 
 private:
-    point_t integrate_row(const result_t<bucket_t>& row, uint32_t lsbits)
+    point_t integrate_row(const result_t& row, uint32_t lsbits)
     {
+        const int NTHRBITS = lg2(MSM_NTHREADS/bucket_t::degree);
+
         assert(wbits-1 > NTHRBITS);
 
-        size_t i = MSM_NTHREADS-1;
+        size_t i = MSM_NTHREADS/bucket_t::degree - 1;
 
         if (lsbits-1 <= NTHRBITS) {
             size_t mask = (1U << (NTHRBITS-(lsbits-1))) - 1;
@@ -578,7 +617,7 @@ private:
         return res;
     }
 
-    void collect(point_t& out, const std::vector<result_t<bucket_t>>& res)
+    void collect(point_t& out, const std::vector<result_t>& res)
     {
         struct tile_t {
             uint32_t x, y, dy;
@@ -655,6 +694,4 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
 #endif
     }
 }
-
-#endif
 #endif
