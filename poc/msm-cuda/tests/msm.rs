@@ -14,7 +14,7 @@ use ark_ff::BigInteger256;
 
 use std::str::FromStr;
 
-use blst_msm::*;
+use msm_cuda::*;
 
 #[test]
 fn msm_correctness() {

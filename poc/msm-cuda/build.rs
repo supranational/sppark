@@ -85,7 +85,7 @@ fn main() {
     if let Some(include) = env::var_os("DEP_BLST_C_SRC") {
         cc.include(include);
     }
-    cc.files(&files).compile("blst_msm");
+    cc.files(&files).compile("msm_cuda");
 
     if cfg!(target_os = "windows") && !cfg!(target_env = "msvc") {
         return;
@@ -101,6 +101,7 @@ fn main() {
         nvcc.cuda(true);
         nvcc.flag("-arch=sm_80");
         nvcc.flag("-gencode").flag("arch=compute_70,code=sm_70");
+        nvcc.flag("-t0");
         #[cfg(not(target_env = "msvc"))]
         nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);

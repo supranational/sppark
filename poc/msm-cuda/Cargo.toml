@@ -1,7 +1,7 @@
 [package]
-name = "blst-msm"
+name = "msm-cuda"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [features]
 # By default, compile with ADX extension if the host supports it.

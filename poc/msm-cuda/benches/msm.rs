@@ -14,7 +14,7 @@ use ark_ff::BigInteger256;
 
 use std::str::FromStr;
 
-use blst_msm::*;
+use msm_cuda::*;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let bench_npow = std::env::var("BENCH_NPOW").unwrap_or("23".to_string());
