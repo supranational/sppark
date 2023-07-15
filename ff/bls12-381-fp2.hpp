@@ -115,6 +115,36 @@ public:
 
     static inline fp2_t one(int or_zero = 0)
     {   return fp_mont::one((laneid()&1) | or_zero);   }
+
+    inline bool is_one() const
+    {
+        auto id = laneid();
+        auto even = ~(0 - (id&1));
+        uint32_t is_zero = ((fp_mont)*this)[0] ^ (fp_mont::one()[0] & even);
+
+        for (size_t i = 1; i < n; i++)
+            is_zero |= ((fp_mont)*this)[i] ^ (fp_mont::one()[i] & even);
+
+        is_zero = __ballot_sync(__activemask(), is_zero == 0);
+        return ((is_zero >> (id&~1)) & 3) == 3;
+    }
+
+    inline fp2_t reciprocal() const
+    {
+        auto a = (fp_mont)*this^2;
+        auto b = shfl_xor(a);
+        a += b;
+        a = ct_inverse_mod_x(a);
+        a *= (fp_mont)*this;
+        a.cneg(threadIdx.x&1);
+        return a;
+    }
+    friend inline fp2_t operator/(int one, const fp2_t& a)
+    {   if (one == 1) return a.reciprocal(); asm("trap;");   }
+    friend inline fp2_t operator/(const fp2_t& a, const fp2_t& b)
+    {   return a * b.reciprocal();   }
+    inline fp2_t& operator/=(const fp2_t& a)
+    {   return *this *= a.reciprocal();   }
 };
 
 # undef inline
@@ -295,6 +325,11 @@ public:
 
     inline bool is_zero() const
     {   return vec_is_zero(val, sizeof(val));   }
+
+    inline bool is_one() const
+    {   return vec_is_equal(val[0], BLS12_381_ONE, sizeof(val[0]))
+            && vec_is_zero(val[1], sizeof(val[1]));
+    }
 
     inline void zero()
     {   vec_zero(val, sizeof(val));   }
