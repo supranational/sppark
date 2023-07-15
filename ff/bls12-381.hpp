@@ -25,6 +25,11 @@ namespace device {
         TO_CUDA_T(0x5f48985753c758ba), TO_CUDA_T(0x77ce585370525745),
         TO_CUDA_T(0x5c071a97a256ec6d), TO_CUDA_T(0x15f65ec3fa80e493)
     };
+    static __device__ __constant__ __align__(16) const uint32_t BLS12_381_Px8[12] = { /* left-aligned value of the modulus */
+        TO_CUDA_T(0xcff7fffffffd5558), TO_CUDA_T(0xf55ffff58a9ffffd),
+        TO_CUDA_T(0x39869507b587b120), TO_CUDA_T(0x23ba5c279c2895fb),
+        TO_CUDA_T(0x58dd3db21a5d66bb), TO_CUDA_T(0xd0088f51cbff34d2)
+    };
     static __device__ __constant__ const uint32_t BLS12_381_M0 = 0xfffcfffd;
 
     static __device__ __constant__ __align__(16) const uint32_t BLS12_381_r[8] = {
@@ -39,19 +44,25 @@ namespace device {
         TO_CUDA_T(0x00000001fffffffe), TO_CUDA_T(0x5884b7fa00034802),
         TO_CUDA_T(0x998c4fefecbc4ff5), TO_CUDA_T(0x1824b159acc5056f)
     };
+    static __device__ __constant__ __align__(16) const uint32_t BLS12_381_rx2[8] = { /* left-aligned value of the modulus */
+        TO_CUDA_T(0xfffffffe00000002), TO_CUDA_T(0xa77b4805fffcb7fd),
+        TO_CUDA_T(0x6673b0101343b00a), TO_CUDA_T(0xe7db4ea6533afa90),
+    };
     static __device__ __constant__ /*const*/ uint32_t BLS12_381_m0 = 0xffffffff;
 }
 # ifdef __CUDA_ARCH__   // device-side field types
 # include "mont_t.cuh"
 typedef mont_t<381, device::BLS12_381_P, device::BLS12_381_M0,
-                    device::BLS12_381_RR, device::BLS12_381_one> fp_mont;
+                    device::BLS12_381_RR, device::BLS12_381_one,
+                    device::BLS12_381_Px8> fp_mont;
 struct fp_t : public fp_mont {
     using mem_t = fp_t;
     __device__ __forceinline__ fp_t() {}
     __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
 };
 typedef mont_t<255, device::BLS12_381_r, device::BLS12_381_m0,
-                    device::BLS12_381_rRR, device::BLS12_381_rone> fr_mont;
+                    device::BLS12_381_rRR, device::BLS12_381_rone,
+                    device::BLS12_381_rx2> fr_mont;
 struct fr_t : public fr_mont {
     using mem_t = fr_t;
     __device__ __forceinline__ fr_t() {}
