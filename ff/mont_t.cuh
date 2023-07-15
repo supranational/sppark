@@ -30,7 +30,8 @@
 //    __device__ __constant__ /*const*/ my_M0 = <literal>;
 //
 template<const size_t N, const uint32_t MOD[(N+31)/32], const uint32_t& M0,
-         const uint32_t RR[(N+31)/32], const uint32_t ONE[(N+31)/32]>
+         const uint32_t RR[(N+31)/32], const uint32_t ONE[(N+31)/32],
+         const uint32_t MODx[(N+31)/32] = MOD>
 class __align__(((N+63)/64)&1 ? 8 : 16) mont_t {
 public:
     static const size_t nbits = N;
@@ -793,6 +794,379 @@ public:
 
         return ret;
     }
+
+protected:
+    template<typename vec_t>
+    static inline vec_t shfl_xor(const vec_t& a, uint32_t idx = 1)
+    {
+        vec_t ret;
+        for (size_t i = 0; i < sizeof(vec_t)/sizeof(uint32_t); i++)
+            ret[i] = __shfl_xor_sync(0xffffffff, a[i], idx);
+        return ret;
+    }
+
+private:
+    // Euclidean inversion based on https://eprint.iacr.org/2020/972
+    // and <blst>/src/no_asm.h.
+
+    struct approx_t  { uint32_t lo, hi; };
+    struct factorx_t { uint32_t f0, g0; };
+
+    static inline uint32_t lshift_2(uint32_t hi, uint32_t lo, uint32_t i)
+    {
+        uint32_t ret;
+        asm("shf.l.clamp.b32 %0, %1, %2, %3;" : "=r"(ret) : "r"(lo), "r"(hi), "r"(i));
+        return ret;
+    }
+
+    static inline void ab_approximation_n(approx_t& a_, const mont_t& a,
+                                          approx_t& b_, const mont_t& b)
+    {
+        size_t i = n-1;
+
+        uint32_t a_hi = a[i], a_lo = a[i-1];
+        uint32_t b_hi = b[i], b_lo = b[i-1];
+
+        #pragma unroll
+        for (i--; --i;) {
+            asm("{ .reg.pred %flag;");
+            asm("setp.eq.u32 %flag, %0, 0;" : : "r"(a_hi | b_hi));
+            asm("@%flag mov.b32 %0, %1;" : "+r"(a_hi) : "r"(a_lo));
+            asm("@%flag mov.b32 %0, %1;" : "+r"(b_hi) : "r"(b_lo));
+            asm("@%flag mov.b32 %0, %1;" : "+r"(a_lo) : "r"(a[i]));
+            asm("@%flag mov.b32 %0, %1;" : "+r"(b_lo) : "r"(b[i]));
+            asm("}");
+        }
+        uint32_t off = __clz(a_hi | b_hi);
+        /* |off| can be LIMB_T_BITS if all a[2..]|b[2..] were zeros */
+
+        a_ = approx_t{a[0], lshift_2(a_hi, a_lo, off)};
+        b_ = approx_t{b[0], lshift_2(b_hi, b_lo, off)};
+    }
+
+    static inline factorx_t inner_loop_x(approx_t a, approx_t b)
+    {
+        const uint32_t tid = threadIdx.x&1;
+        const uint32_t odd = 0 - tid;
+
+        // even thread calculates |f0|,|f1|, odd - |g0|,|g1|
+        uint32_t fg0 = tid^1, fg1 = tid;
+        uint32_t xorm;
+
+        // in the odd thread |a| and |b| are in reverse order, compensate...
+        xorm = (a.lo ^ b.lo) & odd;
+        a.lo ^= xorm;
+        b.lo ^= xorm;
+        xorm = (a.hi ^ b.hi) & odd;
+        a.hi ^= xorm;
+        b.hi ^= xorm;
+
+        #pragma unroll 2
+        for (uint32_t n = 32-2; n--;) {
+            asm("{ .reg.pred %odd, %brw;");
+            uint32_t borrow = 0;
+            approx_t a_b;
+
+            asm("setp.ne.u32 %odd, %0, 0;" :: "r"(a.lo&1));
+
+            /* a_ -= b_ if a_ is odd */
+            asm("selp.b32          %0, %1, 0, !%odd;"
+                "@%odd sub.cc.u32  %0, %1, %2;" : "=r"(a_b.lo) : "r"(a.lo), "r"(b.lo));
+            asm("selp.b32          %0, %1, 0, !%odd;"
+                "@%odd subc.cc.u32 %0, %1, %2;" : "=r"(a_b.hi) : "r"(a.hi), "r"(b.hi));
+            asm("@%odd subc.u32    %0, 0, 0;"   : "+r"(borrow));
+            asm("setp.ne.u32 %brw, %0, 0;"      :: "r"(borrow));
+
+            /* negate a_-b_ if it borrowed */
+            asm("@%brw sub.cc.u32  %0, %1, %2;" : "+r"(a_b.lo) : "r"(b.lo), "r"(a.lo));
+            asm("@%brw subc.cc.u32 %0, %1, %2;" : "+r"(a_b.hi) : "r"(b.hi), "r"(a.hi));
+
+            /* b_=a_ if a_-b_ borrowed */
+            asm("@%brw mov.b32 %0, %1;" : "+r"(b.lo) : "r"(a.lo));
+            asm("@%brw mov.b32 %0, %1;" : "+r"(b.hi) : "r"(a.hi));
+
+            /* exchange f0 and f1 if a_-b_ borrowed */
+            xorm = (fg0 ^ fg1) & borrow;
+            fg0 ^= xorm;
+            fg1 ^= xorm;
+
+            /* subtract if a_ was odd */
+            asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fg1));
+
+            fg1 <<= 1;
+            asm("shf.r.wrap.b32 %0, %1, %2, 1;" : "=r"(a.lo) : "r"(a_b.lo), "r"(a_b.hi));
+            a.hi = a_b.hi >> 1;
+
+            asm("}");
+        }
+
+        // even thread needs |f0|,|g0|, odd - |g1|,|f1|, in this order
+        xorm = (fg0 ^ fg1) & odd;
+        fg0 ^= xorm;
+        fg1 ^= xorm;
+
+        fg1 = __shfl_xor_sync(0xffffffff, fg1, 1);
+
+        return factorx_t{fg0, fg1};
+    }
+
+    static inline factorx_t inner_loop_x(uint32_t a, uint32_t b, uint32_t n)
+    {
+        const uint32_t tid = threadIdx.x&1;
+        const uint32_t odd = 0 - tid;
+
+        // even thread calculates |f0|,|f1|, odd - |g0|,|g1|
+        uint32_t fg0 = tid^1, fg1 = tid;
+
+        // in the odd thread |a| and |b| are in reverse order, compensate...
+        uint32_t xorm = (a ^ b) & odd;
+        a ^= xorm;
+        b ^= xorm;
+
+        #pragma unroll 1
+        while (n--) {
+            asm("{ .reg.pred %odd, %brw;");
+            uint32_t borrow = 0;
+            uint32_t a_b = a;
+
+            asm("setp.ne.u32 %odd, %0, 0;" :: "r"(a&1));
+
+            /* a_ -= b_ if a_ is odd */
+            asm("@%odd sub.cc.u32  %0, %1, %2;" : "+r"(a_b) : "r"(a), "r"(b));
+            asm("@%odd subc.u32    %0, 0, 0;"   : "+r"(borrow));
+            asm("setp.ne.u32 %brw, %0, 0;"      :: "r"(borrow));
+
+            /* negate a_-b_ if it borrowed */
+            asm("@%brw sub.u32 %0, %1, %2;"     : "+r"(a_b) : "r"(b), "r"(a));
+
+            /* b_=a_ if a_-b_ borrowed */
+            asm("@%brw mov.b32 %0, %1;" : "+r"(b) : "r"(a));
+
+            /* exchange f0 and f1 if a_-b_ borrowed */
+            xorm = (fg0 ^ fg1) & borrow;
+            fg0 ^= xorm;
+            fg1 ^= xorm;
+
+            /* subtract if a_ was odd */
+            asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fg1));
+
+            fg1 <<= 1;
+            a = a_b >> 1;
+
+            asm("}");
+        }
+
+        // we care only about |f1| and |g1| in this subroutine
+        fg0 = __shfl_xor_sync(0xffffffff, fg1, 1);
+
+        return factorx_t{fg1, fg0};
+    }
+
+    template<typename vec_t>
+    static inline uint32_t cneg_v(vec_t& ret, const vec_t& a, uint32_t neg)
+    {
+        const size_t n = sizeof(vec_t)/sizeof(uint32_t);
+
+        asm("xor.b32 %0, %1, %2;"    : "=r"(ret[0]) : "r"(a[0]), "r"(neg));
+        asm("add.cc.u32 %0, %0, %1;" : "+r"(ret[0]) : "r"(neg&1));
+        for (size_t i=1; i<n; i++)
+            asm("xor.b32 %0, %1, %2; addc.cc.u32 %0, %0, 0;"
+                : "=r"(ret[i]) : "r"(a[i]), "r"(neg));
+
+        uint32_t sign;
+        asm("shr.s32 %0, %1, 31;" : "=r"(sign) : "r"(ret[n-1]));
+        return sign;
+    }
+
+    static inline void smul_n_shift_x(mont_t& a, uint32_t& f_,
+                                      mont_t& b, uint32_t& g_)
+    {
+        mont_t even, odd;
+        uint32_t neg;
+        size_t i;
+
+        /* |a|*|f_| */
+        asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(f_));
+        auto f = (f_ ^ neg) - neg;  /* ensure |f| is positive */
+        (void)cneg_v(a, a, neg);
+        for (i=0; i<n; i+=2)
+            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+                : "=r"(even[i]), "=r"(even[i+1])
+                : "r"(a[i]), "r"(f));
+        for (i=0; i<n; i+=2)
+             asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+                : "=r"(odd[i]), "=r"(odd[i+1])
+                : "r"(a[i+1]), "r"(f));
+        odd[n-1] -= f & neg;
+
+        /* |b|*|g_| */
+        asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(g_));
+        auto g = (g_ ^ neg) - neg;  /* ensure |g| is positive */
+        (void)cneg_v(b, b, neg);
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+            : "+r"(even[0]), "+r"(even[1])
+            : "r"(b[0]), "r"(g));
+        for (i=2; i<n; i+=2)
+            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+                : "+r"(even[i]), "+r"(even[i+1])
+                : "r"(b[i]), "r"(g));
+        asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+            : "+r"(odd[0]), "+r"(odd[1])
+            : "r"(b[1]), "r"(g));
+        for (i=2; i<n; i+=2)
+            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+                : "+r"(odd[i]), "+r"(odd[i+1])
+                : "r"(b[i+1]), "r"(g));
+        odd[n-1] -= g & neg;
+
+        /* (|a|*|f_| + |b|*|g_|) >> k */
+        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[1]) : "r"(odd[0]));
+        for (i=2; i<n; i++)
+            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i-1]));
+        asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
+
+        for (i=0; i<n-1; i++)
+            asm("shf.r.wrap.b32 %0, %0, %1, 32-2;" : "+r"(even[i]) : "r"(even[i+1]));
+        asm("shf.r.wrap.b32 %0, %0, %1, 32-2;" : "+r"(even[i]) : "r"(odd[i]));
+
+        /* ensure result is non-negative, fix up |f_| and |g_| accordingly */
+        asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(odd[i]));
+        f_ = (f_ ^ neg) - neg;
+        g_ = (g_ ^ neg) - neg;
+        (void)cneg_v(a, even, neg);
+    }
+
+    static inline uint32_t smul_2x(wide_t& u, uint32_t f,
+                                   wide_t& v, uint32_t g)
+    {
+        wide_t even, odd;
+        uint32_t neg;
+        size_t i;
+
+        /* |u|*|f_| */
+        asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(f));
+        f = (f ^ neg) - neg;        /* ensure |f| is positive */
+        neg = cneg_v(u, u, neg);
+        for (i=0; i<2*n; i+=2)
+            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+                : "=r"(even[i]), "=r"(even[i+1])
+                : "r"(u[i]), "r"(f));
+        for (i=0; i<2*n; i+=2)
+            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+                : "=r"(odd[i]), "=r"(odd[i+1])
+                : "r"(u[i+1]), "r"(f));
+        odd[2*n-1] -= f & neg;
+
+        /* |v|*|g_| */
+        asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(g));
+        g = (g ^ neg) - neg;        /* ensure |g| is positive */
+        neg = cneg_v(v, v, neg);
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+            : "+r"(even[0]), "+r"(even[1])
+            : "r"(v[0]), "r"(g));
+        for (i=2; i<2*n; i+=2)
+            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+                : "+r"(even[i]), "+r"(even[i+1])
+                : "r"(v[i]), "r"(g));
+        asm("addc.u32 %0, %0, 0;" : "+r"(odd[2*n-1]));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+            : "+r"(odd[0]), "+r"(odd[1])
+            : "r"(v[1]), "r"(g));
+        for (i=2; i<2*n; i+=2)
+            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+                : "+r"(odd[i]), "+r"(odd[i+1])
+                : "r"(v[i+1]), "r"(g));
+        odd[2*n-1] -= g & neg;
+
+        /* |u|*|f_| + |v|*|g_| */
+        u[0] = even[0];
+        asm("add.cc.u32 %0, %1, %2;" : "=r"(u[1]) : "r"(even[1]), "r"(odd[0]));
+        for (i=2; i<2*n; i++)
+            asm("addc.cc.u32 %0, %1, %2;" : "=r"(u[i]) : "r"(even[i]), "r"(odd[i-1]));
+        asm("addc.u32 %0, %0, 0;" : "+r"(odd[2*n-1]));
+
+        return odd[2*n-1];
+    }
+
+protected:
+    /*
+     * Even thread holds |a| and |u|, while odd one - |b| and |v|. They need
+     * to exchange the values, but then perform the multiplications in
+     * parallel. The improvement is ~18% and ~5.5KB code size reduction
+     * in comparison to ct_inverse_mod_n.
+     */
+    static inline mont_t ct_inverse_mod_x(const mont_t& inp)
+    {
+        if (MOD == MODx) asm("trap;");
+
+        const uint32_t tid = threadIdx.x&1;
+        const uint32_t nbits = 2*n*32;
+
+        mont_t a_b = csel(MOD, inp, tid);
+        wide_t u_v, v_u;
+
+        u_v[0] = tid^1;
+        v_u[0] = tid;
+        for (size_t i=1; i<2*n; i++)
+            u_v[i] = v_u[i] = 0;
+
+        #pragma unroll 1
+        for (uint32_t i=0; i<nbits/(32-2); i++) {
+            mont_t b_a = shfl_xor(a_b);
+            approx_t a_, b_;
+            ab_approximation_n(a_, a_b, b_, b_a);
+            auto fg = inner_loop_x(a_, b_);
+            smul_n_shift_x(a_b, fg.f0, b_a, fg.g0);
+            (void)smul_2x(u_v, fg.f0, v_u, fg.g0);
+            v_u = shfl_xor(u_v);
+        }
+
+        // now both even and odd threads compute the same |ret| value
+        uint32_t b_a = __shfl_xor_sync(0xffffffff, a_b[0], 1);
+        auto fg = inner_loop_x(a_b[0], b_a, nbits%(32-2));
+        auto top = smul_2x(u_v, fg.f0, v_u, fg.g0);
+
+        asm("{ .reg.pred %flag;");  /* top is 1, 0 or -1 */
+        asm("setp.lt.s32 %flag, %0, 0;" :: "r"(top));
+        asm("@%flag add.cc.u32 %0, %0, %1;" : "+r"(u_v[n]) : "r"(MODx[0]));
+        for (size_t i=1; i<n; i++)
+            asm("@%flag addc.cc.u32 %0, %0, %1;" : "+r"(u_v[n+i]) : "r"(MODx[i]));
+        asm("@%flag addc.u32 %0, %0, 0;" : "+r"(top));
+        asm("}");
+
+        auto sign = 0 - top;        /* top is 1, 0 or -1 */
+        top |= sign;
+        for (size_t i=0; i<n; i++)
+            a_b[i] = MODx[i] & top;
+        asm("shr.s32 %0, %0, 31;" : "+r"(sign));
+        (void)cneg_v(a_b, a_b, sign);
+        asm("add.cc.u32 %0, %0, %1;" : "+r"(u_v[n]) : "r"(a_b[0]));
+        for (size_t i=1; i<n; i++)
+            asm("addc.cc.u32 %0, %0, %1;" : "+r"(u_v[n+i]) : "r"(a_b[i]));
+
+        mont_t ret = u_v;
+        ret.to();
+        return ret;
+    }
+
+public:
+    inline mont_t reciprocal() const
+    {
+        bool a_zero = is_zero();
+        mont_t a = csel(ONE, even, a_zero);
+        mont_t b = shfl_xor(a);
+        a *= b;
+        a = ct_inverse_mod_x(a);
+        a *= b;
+        return czero(a, a_zero);
+    }
+    friend inline mont_t operator/(int one, const mont_t& a)
+    {   if (one == 1) return a.reciprocal(); asm("trap;");   }
+    friend inline mont_t operator/(const mont_t& a, const mont_t& b)
+    {   return a * b.reciprocal();   }
+    inline mont_t& operator/=(const mont_t& a)
+    {   return *this *= a.reciprocal();   }
 };
 
 # undef inline
