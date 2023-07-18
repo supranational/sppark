@@ -274,7 +274,7 @@ void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbi
                     if (pc == 0) p = res;
                 }
             } else {
-                if (LARGE_L1_CODE_CACHE)
+                if (LARGE_L1_CODE_CACHE && degree == 1)
                     p.add(acc);
                 else
                     p.uadd(acc);
