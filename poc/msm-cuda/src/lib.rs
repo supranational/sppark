@@ -13,41 +13,22 @@ use ark_ff::PrimeField;
 use ark_std::Zero;
 use blst::*;
 
-sppark::cuda_error!();
-
 pub mod util;
-
-#[cfg_attr(feature = "quiet", allow(improper_ctypes))]
-extern "C" {
-    fn mult_pippenger(
-        out: *mut blst_p1,
-        points: *const blst_p1_affine,
-        npoints: usize,
-        scalars: *const blst_scalar,
-    ) -> cuda::Error;
-
-    fn mult_pippenger_inf(
-        out: *mut G1Projective,
-        points_with_infinity: *const G1Affine,
-        npoints: usize,
-        scalars: *const Fr,
-        ffi_affine_sz: usize,
-    ) -> cuda::Error;
-
-    #[cfg(feature = "bls12_381")]
-    fn mult_pippenger_fp2_inf(
-        out: *mut G2Projective,
-        points_with_infinity: *const G2Affine,
-        npoints: usize,
-        scalars: *const Fr,
-        ffi_affine_sz: usize,
-    ) -> cuda::Error;
-}
 
 pub fn multi_scalar_mult(
     points: &[blst_p1_affine],
     scalars: &[blst_scalar],
 ) -> blst_p1 {
+    #[cfg_attr(feature = "quiet", allow(improper_ctypes))]
+    extern "C" {
+        fn mult_pippenger(
+            out: *mut blst_p1,
+            points: *const blst_p1_affine,
+            npoints: usize,
+            scalars: *const blst_scalar,
+        ) -> sppark::Error;
+    }
+
     let npoints = points.len();
     if npoints != scalars.len() {
         panic!("length mismatch")
@@ -66,6 +47,17 @@ pub fn multi_scalar_mult_arkworks<G: AffineCurve>(
     points: &[G],
     scalars: &[<G::ScalarField as PrimeField>::BigInt],
 ) -> G::Projective {
+    #[cfg_attr(feature = "quiet", allow(improper_ctypes))]
+    extern "C" {
+        fn mult_pippenger_inf(
+            out: *mut G1Projective,
+            points_with_infinity: *const G1Affine,
+            npoints: usize,
+            scalars: *const Fr,
+            ffi_affine_sz: usize,
+        ) -> sppark::Error;
+    }
+
     let npoints = points.len();
     if npoints != scalars.len() {
         panic!("length mismatch")
@@ -93,6 +85,17 @@ pub fn multi_scalar_mult_fp2_arkworks<G: AffineCurve>(
     points: &[G],
     scalars: &[<G::ScalarField as PrimeField>::BigInt],
 ) -> G::Projective {
+    #[cfg_attr(feature = "quiet", allow(improper_ctypes))]
+    extern "C" {
+        fn mult_pippenger_fp2_inf(
+            out: *mut G2Projective,
+            points_with_infinity: *const G2Affine,
+            npoints: usize,
+            scalars: *const Fr,
+            ffi_affine_sz: usize,
+        ) -> sppark::Error;
+    }
+
     let npoints = points.len();
     if npoints != scalars.len() {
         panic!("length mismatch")
