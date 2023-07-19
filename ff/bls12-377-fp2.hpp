@@ -58,8 +58,6 @@ public:
     class mem_t { friend fp2_t;
         fp_mont x[2];
 
-        inline fp_mont& operator[](size_t i)                { return x[i]; }
-        inline const fp_mont& operator[](size_t i) const    { return x[i]; }
     public:
         inline operator fp2_t() const           { return x[threadIdx.x&1]; }
         inline mem_t& operator=(const fp2_t& a) { x[threadIdx.x&1] = a;    }
@@ -67,9 +65,9 @@ public:
     };
 
     inline fp2_t()                              {}
-    inline fp2_t(const fp_mont &a) : fp_mont(a) {}
-    inline fp2_t(const mem_t* p)                { *this = (*p)[threadIdx.x&1]; }
-    inline void store(mem_t *p) const           { (*p)[threadIdx.x&1] = *this; }
+    inline fp2_t(const fp_mont& a) : fp_mont(a) {}
+    inline fp2_t(const mem_t* p)                { *this = p->x[threadIdx.x&1]; }
+    inline void store(mem_t* p) const           { p->x[threadIdx.x&1] = *this; }
 
     friend inline fp2_t operator*(const fp2_t& a, const fp2_t& b)
     {
