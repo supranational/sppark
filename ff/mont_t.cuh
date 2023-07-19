@@ -65,6 +65,14 @@ private:
         // return carry flag
     }
 
+    static inline void cadd_n(uint32_t* acc, const uint32_t* a, size_t n=n)
+    {
+        asm("add.cc.u32 %0, %0, %1;" : "+r"(acc[0]) : "r"(a[0]));
+        for (size_t i = 1; i < n; i++)
+            asm("addc.cc.u32 %0, %0, %1;" : "+r"(acc[i]) : "r"(a[i]));
+        // return carry flag
+    }
+
     class wide_t {
     private:
         union {
@@ -115,10 +123,8 @@ private:
             }
 
             // merge |even| and |odd|
-            asm("add.cc.u32 %0, %0, %1;" : "+r"(even[1]) : "r"(odd[0]));
-            for (i = 1; i < 2*n-2; i++)
-                asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i+1]) : "r"(odd[i]));
-            asm("addc.u32 %0, %0, 0;" : "+r"(even[i+1]));
+            cadd_n(&even[1], &odd[0], 2*n-2);
+            asm("addc.u32 %0, %0, 0;" : "+r"(even[2*n-1]));
         }
 
     private:
@@ -163,10 +169,8 @@ private:
                 : "r"(a[n-1]), "r"(a[n-2]));
 
             // merge |even[2:]| and |odd[1:]|
-            asm("add.cc.u32 %0, %0, %1;" : "+r"(even[2]) : "r"(odd[1]));
-            for (j = 2; j < 2*n-3; j++)
-                asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[j+1]) : "r"(odd[j]));
-            asm("addc.u32 %0, %1, 0;" : "+r"(even[j+1]) : "r"(odd[j]));
+            cadd_n(&even[2], &odd[1], 2*n-4);
+            asm("addc.u32 %0, %1, 0;" : "=r"(even[2*n-2]) : "r"(odd[2*n-3]));
 
             // double |even|
             even[0] = 0;
@@ -211,12 +215,9 @@ public:
 
     inline mont_t& operator+=(const mont_t& b)
     {
-        size_t i;
         uint32_t tmp[n+1];
 
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(b[0]));
-        for (i = 1; i < n; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(b[i]));
+        cadd_n(&even[0], &b[0]);
         if (N%32 == 0)
             asm("addc.u32 %0, 0, 0;" : "=r"(tmp[n]));
 
@@ -257,9 +258,7 @@ public:
             for (i = 0; i < n; i++)
                 tmp[i] = MOD[i] & tmp[n];
 
-            asm("add.cc.u32 %0, %0, %1;" : "+r"(tmp[0]) : "r"(even[0]));
-            for (i = 1; i < n; i++)
-                asm("addc.cc.u32 %0, %0, %1;" : "+r"(tmp[i]) : "r"(even[i]));
+            cadd_n(&tmp[0], &even[0]);
             if (N%32 == 0)
                 asm("addc.u32 %0, 0, 0;" : "=r"(tmp[n]));
 
@@ -392,19 +391,16 @@ public:
         } else {
             mont_t even;
             uint32_t odd[n+1];
-            size_t i;
 
             #pragma unroll
-            for (i = 0; i < n; i += 2) {
+            for (size_t i = 0; i < n; i += 2) {
                 mad_n_redc(&even[0], &odd[0], &a[0], b[i], i==0);
                 mad_n_redc(&odd[0], &even[0], &a[0], b[i+1]);
             }
 
             // merge |even| and |odd|
-            asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(odd[1]));
-            for (i = 1; i < n-1; i++)
-                asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i+1]));
-            asm("addc.u32 %0, %0, 0;" : "+r"(even[i]));
+            cadd_n(&even[0], &odd[1], n-1);
+            asm("addc.u32 %0, %0, 0;" : "+r"(even[n-1]));
 
             even.final_sub(odd[n], &odd[0]);
 
@@ -474,9 +470,7 @@ public:
         if (N%32 != 0)
             lo.final_sub(0, tmp);
 
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(lo[0]));
-        for (i = 1; i < n; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(lo[i]));
+        cadd_n(&even[0], &lo[0]);
         if (N%32 == 0) {
             uint32_t carry;
             asm("addc.u32 %0, 0, 0;" : "=r"(carry));
@@ -513,9 +507,7 @@ public:
         if (N%32 != 0)
             hi.final_sub(0, tmp);
 
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(hi[0]));
-        for (i = 1; i < n; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(hi[i]));
+        cadd_n(&even[0], &hi[0]);
         if (N%32 == 0) {
             uint32_t carry;
             asm("addc.u32 %0, 0, 0;" : "=r"(carry));
@@ -634,18 +626,15 @@ private:
     inline void mul_by_1()
     {
         uint32_t odd[n];
-        size_t i;
 
         #pragma unroll
-        for (i = 0; i < n; i += 2) {
+        for (size_t i = 0; i < n; i += 2) {
             mul_by_1_row(&even[0], &odd[0], i==0);
             mul_by_1_row(&odd[0], &even[0]);
         }
 
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(odd[1]));
-        for (i = 1; i < n-1; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i+1]));
-        asm("addc.u32 %0, %0, 0;" : "+r"(even[i]));
+        cadd_n(&even[0], &odd[1], n-1);
+        asm("addc.u32 %0, %0, 0;" : "+r"(even[n-1]));
     }
 
     inline void final_sub(uint32_t carry, uint32_t* tmp)
@@ -701,21 +690,18 @@ public:
         if (N%32 == 0 || N%32 > 30) {
             return a*b + c*d;   // can be improved too...
         } else {
-            size_t i;
             mont_t even;
             uint32_t odd[n+1];
 
             #pragma unroll
-            for (i = 0; i < n; i += 2) {
+            for (size_t i = 0; i < n; i += 2) {
                 dot_n_redc(&even[0], &odd[0], &a[0], b[i], &c[0], d[i], i==0);
                 dot_n_redc(&odd[0], &even[0], &a[0], b[i+1], &c[0], d[i+1]);
             }
 
             // merge |even| and |odd|
-            asm("add.cc.u32 %0, %0, %1;" : "+r"(even[0]) : "r"(odd[1]));
-            for (i = 1; i < n-1; i++)
-                asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i+1]));
-            asm("addc.u32 %0, %0, 0;" : "+r"(even[i]));
+            cadd_n(&even[0], &odd[1], n-1);
+            asm("addc.u32 %0, %0, 0;" : "+r"(even[n-1]));
 
             even.final_sub(odd[n], &odd[0]);
 
@@ -726,12 +712,11 @@ public:
     static inline mont_t dot_product(const mont_t a[], const mont_t* b,
                                      size_t len, size_t stride_b = 1)
     {
-        size_t i;
         mont_t tmp;
         wide_t even;
         uint32_t odd[2*n-2], carry;
 
-        for (i = 0; i < 2*n-2; i++)
+        for (size_t i = 0; i < 2*n-2; i++)
             even[i] = odd[i] = 0;
         even[i] = even[i+1] = 0;
 
@@ -764,11 +749,9 @@ public:
         }
 
         // merge |even| and |odd|
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[1]) : "r"(odd[0]));
-        for (i = 1; i < 2*n-2; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i+1]) : "r"(odd[i]));
+        cadd_n(&even[1], &odd[0], 2*n-2);
         asm("addc.cc.u32 %0, %0, 0; addc.u32 %1, 0, 0;"
-            : "+r"(even[i+1]), "=r"(carry));
+            : "+r"(even[2*n-1]), "=r"(carry));
 
         // reduce |even| modulo |MOD<<(n*32)|
         even.final_sub(carry, &tmp[0]);
@@ -989,41 +972,21 @@ private:
         asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(f_));
         auto f = (f_ ^ neg) - neg;  /* ensure |f| is positive */
         (void)cneg_v(a, a, neg);
-        for (i=0; i<n; i+=2)
-            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
-                : "=r"(even[i]), "=r"(even[i+1])
-                : "r"(a[i]), "r"(f));
-        for (i=0; i<n; i+=2)
-             asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
-                : "=r"(odd[i]), "=r"(odd[i+1])
-                : "r"(a[i+1]), "r"(f));
+        mul_n(&even[0], &a[0], f);
+        mul_n(&odd[0],  &a[1], f);
         odd[n-1] -= f & neg;
 
         /* |b|*|g_| */
         asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(g_));
         auto g = (g_ ^ neg) - neg;  /* ensure |g| is positive */
         (void)cneg_v(b, b, neg);
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-            : "+r"(even[0]), "+r"(even[1])
-            : "r"(b[0]), "r"(g));
-        for (i=2; i<n; i+=2)
-            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-                : "+r"(even[i]), "+r"(even[i+1])
-                : "r"(b[i]), "r"(g));
+        cmad_n(&even[0], &b[0], g);
         asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-            : "+r"(odd[0]), "+r"(odd[1])
-            : "r"(b[1]), "r"(g));
-        for (i=2; i<n; i+=2)
-            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-                : "+r"(odd[i]), "+r"(odd[i+1])
-                : "r"(b[i+1]), "r"(g));
+        cmad_n(&odd[0],  &b[1], g);
         odd[n-1] -= g & neg;
 
         /* (|a|*|f_| + |b|*|g_|) >> k */
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(even[1]) : "r"(odd[0]));
-        for (i=2; i<n; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(even[i]) : "r"(odd[i-1]));
+        cadd_n(&even[1], &odd[0], n-1);
         asm("addc.u32 %0, %0, 0;" : "+r"(odd[n-1]));
 
         for (i=0; i<n-1; i++)
@@ -1048,35 +1011,17 @@ private:
         asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(f));
         f = (f ^ neg) - neg;        /* ensure |f| is positive */
         neg = cneg_v(u, u, neg);
-        for (i=0; i<2*n; i+=2)
-            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
-                : "=r"(even[i]), "=r"(even[i+1])
-                : "r"(u[i]), "r"(f));
-        for (i=0; i<2*n; i+=2)
-            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
-                : "=r"(odd[i]), "=r"(odd[i+1])
-                : "r"(u[i+1]), "r"(f));
+        mul_n(&even[0], &u[0], f, 2*n);
+        mul_n(&odd[0],  &u[1], f, 2*n);
         odd[2*n-1] -= f & neg;
 
         /* |v|*|g_| */
         asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(g));
         g = (g ^ neg) - neg;        /* ensure |g| is positive */
         neg = cneg_v(v, v, neg);
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-            : "+r"(even[0]), "+r"(even[1])
-            : "r"(v[0]), "r"(g));
-        for (i=2; i<2*n; i+=2)
-            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-                : "+r"(even[i]), "+r"(even[i+1])
-                : "r"(v[i]), "r"(g));
+        cmad_n(&even[0], &v[0], g, 2*n);
         asm("addc.u32 %0, %0, 0;" : "+r"(odd[2*n-1]));
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-            : "+r"(odd[0]), "+r"(odd[1])
-            : "r"(v[1]), "r"(g));
-        for (i=2; i<2*n; i+=2)
-            asm("madc.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
-                : "+r"(odd[i]), "+r"(odd[i+1])
-                : "r"(v[i+1]), "r"(g));
+        cmad_n(&odd[0],  &v[1], g, 2*n);
         odd[2*n-1] -= g & neg;
 
         /* |u|*|f_| + |v|*|g_| */
@@ -1141,9 +1086,7 @@ protected:
             a_b[i] = MODx[i] & top;
         asm("shr.s32 %0, %0, 31;" : "+r"(sign));
         (void)cneg_v(a_b, a_b, sign);
-        asm("add.cc.u32 %0, %0, %1;" : "+r"(u_v[n]) : "r"(a_b[0]));
-        for (size_t i=1; i<n; i++)
-            asm("addc.cc.u32 %0, %0, %1;" : "+r"(u_v[n+i]) : "r"(a_b[i]));
+        cadd_n(&u_v[n], &a_b[0]);
 
         mont_t ret = u_v;
         ret.to();
