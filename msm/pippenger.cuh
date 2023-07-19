@@ -345,11 +345,13 @@ public:
     {
         npoints = (np+WARP_SZ-1) & ((size_t)0-WARP_SZ);
 
-        wbits = 10;
+        wbits = 17;
         if (npoints > 192) {
             wbits = std::min(lg2(npoints + npoints/2) - 8, 18);
             if (wbits < 10)
                 wbits = 10;
+        } else if (npoints > 0) {
+            wbits = 10;
         }
         nwins = (scalar_t::bit_length() - 1) / wbits + 1;
 
