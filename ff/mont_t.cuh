@@ -712,11 +712,12 @@ public:
     static inline mont_t dot_product(const mont_t a[], const mont_t* b,
                                      size_t len, size_t stride_b = 1)
     {
+        size_t i;
         mont_t tmp;
         wide_t even;
         uint32_t odd[2*n-2], carry;
 
-        for (size_t i = 0; i < 2*n-2; i++)
+        for (i = 0; i < 2*n-2; i++)
             even[i] = odd[i] = 0;
         even[i] = even[i+1] = 0;
 
