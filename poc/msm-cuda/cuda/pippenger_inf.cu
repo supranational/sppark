@@ -22,7 +22,7 @@ typedef xyzz_t<fp_t> bucket_t;
 typedef bucket_t::affine_inf_t affine_t;
 typedef fr_t scalar_t;
 
-#define SPPARK_DONT_INSTANTIATE_TEMAPLATES
+#define SPPARK_DONT_INSTANTIATE_TEMPLATES
 #include <msm/pippenger.cuh>
 
 extern "C"

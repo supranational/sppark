@@ -295,7 +295,7 @@ void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbi
 }
 #undef asm
 
-#ifndef SPPARK_DONT_INSTANTIATE_TEMAPLATES
+#ifndef SPPARK_DONT_INSTANTIATE_TEMPLATES
 template __global__
 void accumulate<bucket_t, affine_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
                                     uint32_t wbits, /*const*/ affine_t points_[],
