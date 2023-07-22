@@ -844,7 +844,7 @@ private:
         #pragma unroll 2
         for (uint32_t n = 32-2; n--;) {
             asm("{ .reg.pred %odd, %brw;");
-            uint32_t borrow = 0;
+            uint32_t borrow;
             approx_t a_b;
 
             asm("setp.ne.u32 %odd, %0, 0;" :: "r"(a.lo&1));
@@ -854,8 +854,9 @@ private:
                 "@%odd sub.cc.u32  %0, %1, %2;" : "=r"(a_b.lo) : "r"(a.lo), "r"(b.lo));
             asm("selp.b32          %0, %1, 0, !%odd;"
                 "@%odd subc.cc.u32 %0, %1, %2;" : "=r"(a_b.hi) : "r"(a.hi), "r"(b.hi));
-            asm("@%odd subc.u32    %0, 0, 0;"   : "+r"(borrow));
-            asm("setp.ne.u32 %brw, %0, 0;"      :: "r"(borrow));
+            asm("selp.b32          %0, 0, %0, !%odd;"
+                "@%odd subc.cc.u32 %0, 0, 0;"   : "=r"(borrow));
+            asm("setp.gt.and.u32   %brw, %0, %1, %odd;" :: "r"(a_b.hi), "r"(a.hi));
 
             /* negate a_-b_ if it borrowed */
             asm("@%brw sub.cc.u32  %0, %1, %2;" : "+r"(a_b.lo) : "r"(b.lo), "r"(a.lo));
@@ -908,7 +909,7 @@ private:
             /* a_ -= b_ if a_ is odd */
             asm("@%odd sub.cc.u32  %0, %1, %2;" : "+r"(a_b) : "r"(a), "r"(b));
             asm("@%odd subc.u32    %0, 0, 0;"   : "+r"(borrow));
-            asm("setp.ne.u32 %brw, %0, 0;"      :: "r"(borrow));
+            asm("setp.gt.and.u32   %brw, %0, %1, %odd;" :: "r"(a_b), "r"(a));
 
             /* negate a_-b_ if it borrowed */
             asm("@%brw sub.u32 %0, %1, %2;"     : "+r"(a_b) : "r"(b), "r"(a));
