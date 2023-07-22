@@ -537,21 +537,17 @@ public:
         for (size_t i = 1; i < n; i++)
             is_zero |= even[i] ^ ONE[i];
 
-        asm("set.eq.u32.u32 %0, %0, 0;" : "+r"(is_zero));
-
-        return is_zero;
+        return is_zero == 0;
     }
 
     inline bool is_zero() const
     {
-        uint32_t is_zero = even[0];
+        uint32_t is_zero = even[0] | even[1];
 
-        for (size_t i = 1; i < n; i++)
-            asm("or.b32 %0, %0, %1;" : "+r"(is_zero) : "r"(even[i]));
+        for (size_t i = 2; i < n; i += 2)
+            is_zero |= even[i] | even[i+1];
 
-        asm("set.eq.u32.u32 %0, %0, 0;" : "+r"(is_zero));
-
-        return is_zero;
+        return is_zero == 0;
     }
 
     inline bool is_zero(const mont_t& a) const
@@ -561,9 +557,7 @@ public:
         for (size_t i = 1; i < n; i++)
             is_zero |= even[i] | a[i];
 
-        asm("set.eq.u32.u32 %0, %0, 0;" : "+r"(is_zero));
-
-        return is_zero;
+        return is_zero == 0;
     }
 
     inline void zero()
@@ -828,6 +822,13 @@ private:
         b_ = approx_t{b[0], lshift_2(b_hi, b_lo, off)};
     }
 
+    static inline void cswap(uint32_t& a, uint32_t& b, uint32_t mask)
+    {
+        uint32_t xorm = (a ^ b) & mask;
+        a ^= xorm;
+        b ^= xorm;
+    }
+
     static inline factorx_t inner_loop_x(approx_t a, approx_t b)
     {
         const uint32_t tid = threadIdx.x&1;
@@ -835,15 +836,10 @@ private:
 
         // even thread calculates |f0|,|f1|, odd - |g0|,|g1|
         uint32_t fg0 = tid^1, fg1 = tid;
-        uint32_t xorm;
 
         // in the odd thread |a| and |b| are in reverse order, compensate...
-        xorm = (a.lo ^ b.lo) & odd;
-        a.lo ^= xorm;
-        b.lo ^= xorm;
-        xorm = (a.hi ^ b.hi) & odd;
-        a.hi ^= xorm;
-        b.hi ^= xorm;
+        cswap(a.lo, b.lo, odd);
+        cswap(a.hi, b.hi, odd);
 
         #pragma unroll 2
         for (uint32_t n = 32-2; n--;) {
@@ -870,9 +866,7 @@ private:
             asm("@%brw mov.b32 %0, %1;" : "+r"(b.hi) : "r"(a.hi));
 
             /* exchange f0 and f1 if a_-b_ borrowed */
-            xorm = (fg0 ^ fg1) & borrow;
-            fg0 ^= xorm;
-            fg1 ^= xorm;
+            cswap(fg0, fg1, borrow);
 
             /* subtract if a_ was odd */
             asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fg1));
@@ -885,9 +879,7 @@ private:
         }
 
         // even thread needs |f0|,|g0|, odd - |g1|,|f1|, in this order
-        xorm = (fg0 ^ fg1) & odd;
-        fg0 ^= xorm;
-        fg1 ^= xorm;
+        cswap(fg0, fg1, odd);
 
         fg1 = __shfl_xor_sync(0xffffffff, fg1, 1);
 
@@ -903,9 +895,7 @@ private:
         uint32_t fg0 = tid^1, fg1 = tid;
 
         // in the odd thread |a| and |b| are in reverse order, compensate...
-        uint32_t xorm = (a ^ b) & odd;
-        a ^= xorm;
-        b ^= xorm;
+        cswap(a, b, odd);
 
         #pragma unroll 1
         while (n--) {
@@ -927,9 +917,7 @@ private:
             asm("@%brw mov.b32 %0, %1;" : "+r"(b) : "r"(a));
 
             /* exchange f0 and f1 if a_-b_ borrowed */
-            xorm = (fg0 ^ fg1) & borrow;
-            fg0 ^= xorm;
-            fg1 ^= xorm;
+            cswap(fg0, fg1, borrow);
 
             /* subtract if a_ was odd */
             asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fg1));
@@ -1006,7 +994,6 @@ private:
     {
         wide_t even, odd;
         uint32_t neg;
-        size_t i;
 
         /* |u|*|f_| */
         asm("shr.s32 %0, %1, 31;" : "=r"(neg) : "r"(f));
@@ -1028,7 +1015,7 @@ private:
         /* |u|*|f_| + |v|*|g_| */
         u[0] = even[0];
         asm("add.cc.u32 %0, %1, %2;" : "=r"(u[1]) : "r"(even[1]), "r"(odd[0]));
-        for (i=2; i<2*n; i++)
+        for (size_t i=2; i<2*n; i++)
             asm("addc.cc.u32 %0, %1, %2;" : "=r"(u[i]) : "r"(even[i]), "r"(odd[i-1]));
         asm("addc.u32 %0, %0, 0;" : "+r"(odd[2*n-1]));
 
