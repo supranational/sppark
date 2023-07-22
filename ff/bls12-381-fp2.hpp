@@ -132,7 +132,7 @@ public:
         auto a = (fp_mont)*this^2;
         auto b = shfl_xor(a);
         a += b;
-        a = ct_inverse_mod_x(a);
+        a = ct_inverse_mod_x(a);    // 1/(x[0]^2 + x[1]^2)
         a *= (fp_mont)*this;
         a.cneg(threadIdx.x&1);
         return a;

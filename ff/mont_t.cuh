@@ -1100,9 +1100,9 @@ public:
         bool a_zero = is_zero();
         mont_t a = csel(ONE, even, a_zero);
         mont_t b = shfl_xor(a);
-        a *= b;
-        a = ct_inverse_mod_x(a);
-        a *= b;
+        a *= b;                     // a*b
+        a = ct_inverse_mod_x(a);    // 1/(a*b)
+        a *= b;                     // b/(a*b) == 1/a
         return czero(a, a_zero);
     }
     friend inline mont_t operator/(int one, const mont_t& a)
