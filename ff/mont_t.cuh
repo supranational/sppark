@@ -908,7 +908,7 @@ private:
 
             /* a_ -= b_ if a_ is odd */
             asm("@%odd sub.cc.u32  %0, %1, %2;" : "+r"(a_b) : "r"(a), "r"(b));
-            asm("@%odd subc.u32    %0, 0, 0;"   : "+r"(borrow));
+            asm("@%odd subc.cc.u32 %0, 0, 0;"   : "+r"(borrow));
             asm("setp.gt.and.u32   %brw, %0, %1, %odd;" :: "r"(a_b), "r"(a));
 
             /* negate a_-b_ if it borrowed */
@@ -1027,8 +1027,8 @@ protected:
     /*
      * Even thread holds |a| and |u|, while odd one - |b| and |v|. They need
      * to exchange the values, but then perform the multiplications in
-     * parallel. The improvement is ~18% and ~5.5KB code size reduction
-     * in comparison to ct_inverse_mod_n.
+     * parallel. The improvement [for 38x-bit moduli] is >20% and ~5.5KB
+     * code size reduction in comparison to a single-threaded version.
      */
     static inline mont_t ct_inverse_mod_x(const mont_t& inp)
     {
@@ -1066,7 +1066,7 @@ protected:
         asm("@%flag add.cc.u32 %0, %0, %1;" : "+r"(u_v[n]) : "r"(MODx[0]));
         for (size_t i=1; i<n; i++)
             asm("@%flag addc.cc.u32 %0, %0, %1;" : "+r"(u_v[n+i]) : "r"(MODx[i]));
-        asm("@%flag addc.u32 %0, %0, 0;" : "+r"(top));
+        asm("@%flag addc.cc.u32 %0, %0, 0;" : "+r"(top));
         asm("}");
 
         auto sign = 0 - top;        /* top is 1, 0 or -1 */
