@@ -1032,7 +1032,7 @@ protected:
      */
     static inline mont_t ct_inverse_mod_x(const mont_t& inp)
     {
-        if (MOD == MODx) asm("trap;");
+        if ((N%32 != 0 && MOD == MODx) asm("trap;");
 
         const uint32_t tid = threadIdx.x&1;
         const uint32_t nbits = 2*n*32;
@@ -1076,6 +1076,9 @@ protected:
         asm("shr.s32 %0, %0, 31;" : "+r"(sign));
         (void)cneg_v(a_b, a_b, sign);
         cadd_n(&u_v[n], &a_b[0]);
+
+        if (N%32 != 0 && (MODx[n-1]+MOD[n-1]) < MODx[n-1])
+            u_v.final_sub(0, a_b);
 
         mont_t ret = u_v;
         ret.to();
