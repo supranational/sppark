@@ -1032,7 +1032,7 @@ protected:
      */
     static inline mont_t ct_inverse_mod_x(const mont_t& inp)
     {
-        if ((N%32 != 0 && MOD == MODx) asm("trap;");
+        if (N%32 != 0 && MOD == MODx) asm("trap;");
 
         const uint32_t tid = threadIdx.x&1;
         const uint32_t nbits = 2*n*32;
