@@ -60,8 +60,11 @@ public:
 
     public:
         inline operator fp2_t() const           { return x[threadIdx.x&1]; }
-        inline mem_t& operator=(const fp2_t& a) { x[threadIdx.x&1] = a;    }
         inline void zero()                      { x[threadIdx.x&1].zero(); }
+        inline void to()                        { x[threadIdx.x&1].to();   }
+        inline void from()                      { x[threadIdx.x&1].from(); }
+        inline mem_t& operator=(const fp2_t& a)
+        {   x[threadIdx.x&1] = a; return *this;   }
     };
 
     inline fp2_t()                              {}
@@ -105,9 +108,9 @@ public:
         return *this = fp_mont::csel(t1, t0, id&1);
     }
     inline fp2_t& operator^=(unsigned p)
-    {   if (p == 2) return sqr();   else asm("trap;");   }
+    {   if (p != 2) asm("trap;"); return sqr();     }
     friend inline fp2_t operator^(fp2_t a, unsigned p)
-    {   if (p == 2) return a.sqr(); else asm("trap;");   }
+    {   if (p != 2) asm("trap;"); return a.sqr();   }
 
     friend inline fp2_t operator+(const fp2_t& a, const fp2_t& b)
     {   return (fp_mont)a + (fp_mont)b;   }
@@ -176,7 +179,7 @@ public:
         return a;
     }
     friend inline fp2_t operator/(int one, const fp2_t& a)
-    {   if (one == 1) return a.reciprocal(); asm("trap;");   }
+    {   if (one != 1) asm("trap;"); return a.reciprocal();   }
     friend inline fp2_t operator/(const fp2_t& a, const fp2_t& b)
     {   return a * b.reciprocal();   }
     inline fp2_t& operator/=(const fp2_t& a)
