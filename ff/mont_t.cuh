@@ -215,14 +215,8 @@ public:
 
     inline mont_t& operator+=(const mont_t& b)
     {
-        uint32_t tmp[n+1];
-
         cadd_n(&even[0], &b[0]);
-        if (N%32 == 0)
-            asm("addc.u32 %0, 0, 0;" : "=r"(tmp[n]));
-
-        final_sub(tmp[n], &tmp[0]);
-
+        final_subc();
         return *this;
     }
     friend inline mont_t operator+(mont_t a, const mont_t& b)
@@ -230,17 +224,11 @@ public:
 
     inline mont_t& operator<<=(unsigned l)
     {
-        size_t i;
-        uint32_t tmp[n+1];
-
         while (l--) {
             asm("add.cc.u32 %0, %0, %0;" : "+r"(even[0]));
-            for (i = 1; i < n; i++)
+            for (size_t i = 1; i < n; i++)
                 asm("addc.cc.u32 %0, %0, %0;" : "+r"(even[i]));
-            if (N%32 == 0)
-                asm("addc.u32 %0, 0, 0;" : "=r"(tmp[n]));
-
-            final_sub(tmp[n], &tmp[0]);
+            final_subc();
         }
 
         return *this;
@@ -389,8 +377,7 @@ public:
         if (N%32 == 0) {
             return wide_t{a, b};
         } else {
-            mont_t even;
-            uint32_t odd[n+1];
+            mont_t even, odd;
 
             #pragma unroll
             for (size_t i = 0; i < n; i += 2) {
@@ -402,7 +389,7 @@ public:
             cadd_n(&even[0], &odd[1], n-1);
             asm("addc.u32 %0, %0, 0;" : "+r"(even[n-1]));
 
-            even.final_sub(odd[n], &odd[0]);
+            even.final_sub(0, &odd[0]);
 
             return even;
         }
@@ -456,7 +443,6 @@ public:
         }
         to();
 
-        uint32_t tmp[n];
         mont_t lo;
 
         // load the least significant half
@@ -467,15 +453,9 @@ public:
             for (i = 0; i < n; i++)
                 asm("prmt.b32 %0, %1, %1, 0x0123;" : "=r"(lo[i]) : "r"(a[2*n - 1 - i]));
         }
-        if (N%32 != 0)
-            lo.final_sub(0, tmp);
 
         cadd_n(&even[0], &lo[0]);
-        if (N%32 == 0) {
-            uint32_t carry;
-            asm("addc.u32 %0, 0, 0;" : "=r"(carry));
-            final_sub(carry, tmp);
-        }
+        final_subc();
         to();
     }
     inline void from()  { mont_t t = *this; t.mul_by_1(); *this = t; }
@@ -493,7 +473,6 @@ public:
         }
         mul_by_1();
 
-        uint32_t tmp[n];
         mont_t hi;
 
         // load the most significant half
@@ -504,15 +483,9 @@ public:
             for (i = 0; i < n; i++)
                 asm("prmt.b32 %0, %1, 0, 0x0123;" : "=r"(hi[i]) : "r"(a[n - 1 - i]));
         }
-        if (N%32 != 0)
-            hi.final_sub(0, tmp);
 
         cadd_n(&even[0], &hi[0]);
-        if (N%32 == 0) {
-            uint32_t carry;
-            asm("addc.u32 %0, 0, 0;" : "=r"(carry));
-            final_sub(carry, tmp);
-        }
+        final_subc();
         to();
     }
 
@@ -619,7 +592,7 @@ private:
     }
     inline void mul_by_1()
     {
-        uint32_t odd[n];
+        mont_t odd;
 
         #pragma unroll
         for (size_t i = 0; i < n; i += 2) {
@@ -647,6 +620,24 @@ private:
         for (i = 0; i < n; i++)
             asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
 
+        asm("}");
+    }
+
+    inline void final_subc()
+    {
+        uint32_t carry, tmp[n];
+
+        asm("addc.u32 %0, 0, 0;" : "=r"(carry));
+
+        asm("sub.cc.u32 %0, %1, %2;" : "=r"(tmp[0]) : "r"(even[0]), "r"(MOD[0]));
+        for (size_t i = 1; i < n; i++)
+            asm("subc.cc.u32 %0, %1, %2;" : "=r"(tmp[i]) : "r"(even[i]), "r"(MOD[i]));
+        asm("subc.u32 %0, %0, 0;" : "+r"(carry));
+
+        asm("{ .reg.pred %top;");
+        asm("setp.eq.u32 %top, %0, 0;" :: "r"(carry));
+        for (size_t i = 0; i < n; i++)
+            asm("@%top mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
         asm("}");
     }
 
@@ -684,8 +675,7 @@ public:
         if (N%32 == 0 || N%32 > 30) {
             return a*b + c*d;   // can be improved too...
         } else {
-            mont_t even;
-            uint32_t odd[n+1];
+            mont_t even, odd;
 
             #pragma unroll
             for (size_t i = 0; i < n; i += 2) {
@@ -697,7 +687,7 @@ public:
             cadd_n(&even[0], &odd[1], n-1);
             asm("addc.u32 %0, %0, 0;" : "+r"(even[n-1]));
 
-            even.final_sub(odd[n], &odd[0]);
+            even.final_sub(0, &odd[0]);
 
             return even;
         }
@@ -1076,9 +1066,6 @@ protected:
         asm("shr.s32 %0, %0, 31;" : "+r"(sign));
         (void)cneg_v(a_b, a_b, sign);
         cadd_n(&u_v[n], &a_b[0]);
-
-        if (N%32 != 0 && (MODx[n-1]+MOD[n-1]) < MODx[n-1])
-            u_v.final_sub(0, a_b);
 
         mont_t ret = u_v;
         ret.to();
