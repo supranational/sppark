@@ -117,17 +117,11 @@ public:
 
     class affine_inf_t { friend class xyzz_t;
         field_t X, Y;
-#ifdef __CUDACC__
-        int inf[sizeof(field_t)%16 ? 2 : 4];
-
-        inline __host__ __device__ bool is_inf() const
-        {   return inf[0]&1 != 0;   }
-#else
         bool inf;
 
         inline __host__ __device__ bool is_inf() const
         {   return inf;   }
-#endif
+
     public:
         inline __device__ operator affine_t() const
         {
@@ -159,6 +153,16 @@ public:
                 affine_t p;
                 p.X = czero(X, inf);
                 p.Y = czero(Y, inf);
+                return p;
+            }
+
+            inline __device__ operator affine_inf_t() const
+            {
+                bool inf = is_inf();
+                affine_inf_t p;
+                p.X = czero(X, inf);
+                p.Y = czero(Y, inf);
+                p.inf = inf;
                 return p;
             }
         };

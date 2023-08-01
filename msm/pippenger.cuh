@@ -362,10 +362,10 @@ public:
         d_hist = vec2d_t<uint32_t>((uint32_t*)gpu.Dmalloc(nwins * row_sz * sizeof(uint32_t)),
                                    row_sz);
 
-        size_t bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
-        size_t points_sz = points ? npoints * sizeof(d_points[0]) : 0;
+        size_t d_bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
+        size_t d_point_sz = points ? npoints * sizeof(d_points[0]) : 0;
 
-        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(bucket_sz + points_sz));
+        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(d_bucket_sz + d_point_sz));
         if (points) {
             d_points = reinterpret_cast<decltype(d_points)>(&d_buckets[nwins*row_sz]);
             gpu.HtoD(d_points, points, np, ffi_affine_sz);
@@ -462,12 +462,12 @@ public:
             // |points| being nullptr means the points are pre-loaded to
             // |d_points|, otherwise allocate double-stride.
             const char* points = reinterpret_cast<const char*>(points_);
-            size_t points_sz = points ? (batch > 1 ? 2*stride : stride) : 0;
-            points_sz *= sizeof(affine_t);
+            size_t d_point_sz = points ? (batch > 1 ? 2*stride : stride) : 0;
+            d_point_sz *= sizeof(affine_h);
 
             size_t digits_sz = nwins * stride * sizeof(uint32_t);
 
-            dev_ptr_t<uint8_t> d_temp{temp_sz + digits_sz + points_sz, gpu[2]};
+            dev_ptr_t<uint8_t> d_temp{temp_sz + digits_sz + d_point_sz, gpu[2]};
 
             vec2d_t<uint2> d_temps{&d_temp[0], stride};
             vec2d_t<uint32_t> d_digits{&d_temp[temp_sz], stride};
