@@ -5,7 +5,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 #[cfg(feature = "bls12_377")]
-use ark_bls12_377::G1Affine;
+use ark_bls12_377::{G1Affine, G2Affine};
 #[cfg(feature = "bls12_381")]
 use ark_bls12_381::{G1Affine, G2Affine};
 #[cfg(feature = "bn254")]
@@ -40,10 +40,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-#[cfg(not(feature = "bls12_381"))]
+#[cfg(not(any(feature = "bls12_381", feature = "bls12_377")))]
 criterion_group!(benches, criterion_benchmark);
 
-#[cfg(feature = "bls12_381")]
+#[cfg(any(feature = "bls12_381", feature = "bls12_377"))]
 fn criterion_benchmark_fp2(c: &mut Criterion) {
     let bench_npow = std::env::var("BENCH_NPOW").unwrap_or("23".to_string());
     let npoints_npow = i32::from_str(&bench_npow).unwrap();
@@ -68,7 +68,7 @@ fn criterion_benchmark_fp2(c: &mut Criterion) {
     group.finish();
 }
 
-#[cfg(feature = "bls12_381")]
+#[cfg(any(feature = "bls12_381", feature = "bls12_377"))]
 criterion_group!(benches, criterion_benchmark, criterion_benchmark_fp2);
 
 criterion_main!(benches);
