@@ -297,11 +297,12 @@ void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbi
 
 #ifndef SPPARK_DONT_INSTANTIATE_TEMPLATES
 template __global__
-void accumulate<bucket_t, affine_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
-                                    uint32_t wbits, /*const*/ affine_t points_[],
-                                    const vec2d_t<uint32_t> digits,
-                                    const vec2d_t<uint32_t> histogram,
-                                    uint32_t sid);
+void accumulate<bucket_t, affine_t::mem_t>(bucket_t::mem_t buckets_[],
+                                           uint32_t nwins, uint32_t wbits,
+                                           /*const*/ affine_t::mem_t points_[],
+                                           const vec2d_t<uint32_t> digits,
+                                           const vec2d_t<uint32_t> histogram,
+                                           uint32_t sid);
 template __global__
 void integrate<bucket_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
                          uint32_t wbits, uint32_t nbits);
@@ -320,13 +321,14 @@ constexpr static int lg2(int n)
 {   int ret=0; while (n>>=1) ret++; return ret;   }
 
 template<class bucket_t, class point_t, class affine_t, class scalar_t,
+         class affine_h = class affine_t::mem_t,
          class bucket_h = class bucket_t::mem_t>
 class msm_t {
     const gpu_t& gpu;
     size_t npoints;
     uint32_t wbits, nwins;
     bucket_h *d_buckets;
-    affine_t *d_points;
+    affine_h *d_points;
     scalar_t *d_scalars;
     vec2d_t<uint32_t> d_hist;
 
@@ -360,10 +362,10 @@ public:
         d_hist = vec2d_t<uint32_t>((uint32_t*)gpu.Dmalloc(nwins * row_sz * sizeof(uint32_t)),
                                    row_sz);
 
-        size_t bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
-        size_t points_sz = points ? npoints * sizeof(d_points[0]) : 0;
+        size_t d_bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
+        size_t d_point_sz = points ? npoints * sizeof(d_points[0]) : 0;
 
-        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(bucket_sz + points_sz));
+        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(d_bucket_sz + d_point_sz));
         if (points) {
             d_points = reinterpret_cast<decltype(d_points)>(&d_buckets[nwins*row_sz]);
             gpu.HtoD(d_points, points, np, ffi_affine_sz);
@@ -460,19 +462,19 @@ public:
             // |points| being nullptr means the points are pre-loaded to
             // |d_points|, otherwise allocate double-stride.
             const char* points = reinterpret_cast<const char*>(points_);
-            size_t points_sz = points ? (batch > 1 ? 2*stride : stride) : 0;
-            points_sz *= sizeof(affine_t);
+            size_t d_point_sz = points ? (batch > 1 ? 2*stride : stride) : 0;
+            d_point_sz *= sizeof(affine_h);
 
             size_t digits_sz = nwins * stride * sizeof(uint32_t);
 
-            dev_ptr_t<uint8_t> d_temp{temp_sz + digits_sz + points_sz, gpu[2]};
+            dev_ptr_t<uint8_t> d_temp{temp_sz + digits_sz + d_point_sz, gpu[2]};
 
             vec2d_t<uint2> d_temps{&d_temp[0], stride};
             vec2d_t<uint32_t> d_digits{&d_temp[temp_sz], stride};
 
             scalar_t* d_scalars = scalars ? (scalar_t*)&d_temp[0]
                                           : this->d_scalars;
-            affine_t* d_points = points ? (affine_t*)&d_temp[temp_sz + digits_sz]
+            affine_h* d_points = points ? (affine_h*)&d_temp[temp_sz + digits_sz]
                                         : this->d_points;
 
             size_t d_off = 0;   // device offset
@@ -491,7 +493,7 @@ public:
 
             for (uint32_t i = 0; i < batch; i++) {
                 gpu[i&1].wait(ev);
-                gpu[i&1].launch_coop(accumulate<bucket_t, affine_t>,
+                gpu[i&1].launch_coop(accumulate<bucket_t, affine_h>,
                     {gpu.sm_count(), 0},
                     d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i&1
                 );

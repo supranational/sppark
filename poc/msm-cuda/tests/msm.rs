@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(feature = "bls12_377")]
-use ark_bls12_377::G1Affine;
+use ark_bls12_377::{G1Affine, G2Affine};
 #[cfg(feature = "bls12_381")]
-use ark_bls12_381::G1Affine;
+use ark_bls12_381::{G1Affine, G2Affine};
 #[cfg(feature = "bn254")]
 use ark_bn254::G1Affine;
 use ark_ec::msm::VariableBaseMSM;
@@ -38,11 +38,9 @@ fn msm_correctness() {
     assert_eq!(msm_result, arkworks_result);
 }
 
-#[cfg(feature = "bls12_381")]
+#[cfg(any(feature = "bls12_381", feature = "bls12_377"))]
 #[test]
 fn msm_fp2_correctness() {
-    use ark_bls12_381::G2Affine;
-
     let test_npow = std::env::var("TEST_NPOW").unwrap_or("14".to_string());
     let npoints_npow = i32::from_str(&test_npow).unwrap();
 

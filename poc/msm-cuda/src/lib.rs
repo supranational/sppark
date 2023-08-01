@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(feature = "bls12_377")]
-use ark_bls12_377::{Fr, G1Affine, G1Projective};
+use ark_bls12_377::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 #[cfg(feature = "bls12_381")]
 use ark_bls12_381::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 #[cfg(feature = "bn254")]
@@ -80,7 +80,7 @@ pub fn multi_scalar_mult_arkworks<G: AffineCurve>(
     ret
 }
 
-#[cfg(feature = "bls12_381")]
+#[cfg(any(feature = "bls12_381", feature = "bls12_377"))]
 pub fn multi_scalar_mult_fp2_arkworks<G: AffineCurve>(
     points: &[G],
     scalars: &[<G::ScalarField as PrimeField>::BigInt],
