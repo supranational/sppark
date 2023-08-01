@@ -116,7 +116,7 @@ public:
     };
 
     class affine_inf_t { friend class xyzz_t;
-        field_h X, Y;
+        field_t X, Y;
 #ifdef __CUDACC__
         int inf[sizeof(field_t)%16 ? 2 : 4];
 
@@ -137,6 +137,34 @@ public:
             p.Y = czero(Y, inf);
             return p;
         }
+
+#ifdef __NVCC__
+        class mem_t { friend class affine_t;
+            field_h X, Y;
+#ifdef __CUDACC__
+            int inf[sizeof(field_t)%16 ? 2 : 4];
+
+            inline __host__ __device__ bool is_inf() const
+            {   return inf[0]&1 != 0;   }
+#else
+            bool inf;
+
+            inline __host__ __device__ bool is_inf() const
+            {   return inf;   }
+#endif
+        public:
+            inline __device__ operator affine_t() const
+            {
+                bool inf = is_inf();
+                affine_t p;
+                p.X = czero(X, inf);
+                p.Y = czero(Y, inf);
+                return p;
+            }
+        };
+#else
+        using mem_t = affine_inf_t;
+#endif
     };
 
     template<class affine_t>

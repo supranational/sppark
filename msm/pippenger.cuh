@@ -297,11 +297,12 @@ void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbi
 
 #ifndef SPPARK_DONT_INSTANTIATE_TEMPLATES
 template __global__
-void accumulate<bucket_t, affine_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
-                                    uint32_t wbits, /*const*/ affine_t points_[],
-                                    const vec2d_t<uint32_t> digits,
-                                    const vec2d_t<uint32_t> histogram,
-                                    uint32_t sid);
+void accumulate<bucket_t, affine_t::mem_t>(bucket_t::mem_t buckets_[],
+                                           uint32_t nwins, uint32_t wbits,
+                                           /*const*/ affine_t::mem_t points_[],
+                                           const vec2d_t<uint32_t> digits,
+                                           const vec2d_t<uint32_t> histogram,
+                                           uint32_t sid);
 template __global__
 void integrate<bucket_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
                          uint32_t wbits, uint32_t nbits);
@@ -320,13 +321,14 @@ constexpr static int lg2(int n)
 {   int ret=0; while (n>>=1) ret++; return ret;   }
 
 template<class bucket_t, class point_t, class affine_t, class scalar_t,
+         class affine_h = class affine_t::mem_t,
          class bucket_h = class bucket_t::mem_t>
 class msm_t {
     const gpu_t& gpu;
     size_t npoints;
     uint32_t wbits, nwins;
     bucket_h *d_buckets;
-    affine_t *d_points;
+    affine_h *d_points;
     scalar_t *d_scalars;
     vec2d_t<uint32_t> d_hist;
 
@@ -472,7 +474,7 @@ public:
 
             scalar_t* d_scalars = scalars ? (scalar_t*)&d_temp[0]
                                           : this->d_scalars;
-            affine_t* d_points = points ? (affine_t*)&d_temp[temp_sz + digits_sz]
+            affine_h* d_points = points ? (affine_h*)&d_temp[temp_sz + digits_sz]
                                         : this->d_points;
 
             size_t d_off = 0;   // device offset
@@ -491,7 +493,7 @@ public:
 
             for (uint32_t i = 0; i < batch; i++) {
                 gpu[i&1].wait(ev);
-                gpu[i&1].launch_coop(accumulate<bucket_t, affine_t>,
+                gpu[i&1].launch_coop(accumulate<bucket_t, affine_h>,
                     {gpu.sm_count(), 0},
                     d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i&1
                 );
