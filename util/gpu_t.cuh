@@ -88,7 +88,7 @@ public:
                      size_t sz = sizeof(T)) const
     {   HtoD(&dst, src, nelems, sz);   }
     template<typename T, typename U>
-    inline void HtoD(T& dst, const std::vector<U> src,
+    inline void HtoD(T& dst, const std::vector<U>& src,
                      size_t sz = sizeof(T)) const
     {   HtoD(&dst, &src[0], src.size(), sz);   }
 
@@ -131,7 +131,7 @@ public:
                      size_t sz = sizeof(T)) const
     {   DtoH(&dst, src, nelems, sz);   }
     template<typename T>
-    inline void DtoH(std::vector<T> dst, const void* src,
+    inline void DtoH(std::vector<T>& dst, const void* src,
                      size_t sz = sizeof(T)) const
     {   DtoH(&dst[0], src, dst.size(), sz);   }
 
@@ -206,7 +206,7 @@ public:
                      size_t sz = sizeof(T)) const
     {   HtoD(&dst, src, nelems, sz);   }
     template<typename T, typename U>
-    inline void HtoD(T& dst, const std::vector<U> src,
+    inline void HtoD(T& dst, const std::vector<U>& src,
                      size_t sz = sizeof(T)) const
     {   HtoD(&dst, &src[0], src.size(), sz);   }
 
@@ -231,7 +231,7 @@ public:
                      size_t sz = sizeof(T)) const
     {   DtoH(&dst, src, nelems, sz);   }
     template<typename T>
-    inline void DtoH(std::vector<T> dst, const void* src,
+    inline void DtoH(std::vector<T>& dst, const void* src,
                      size_t sz = sizeof(T)) const
     {   DtoH(&dst[0], src, dst.size(), sz);   }
 
