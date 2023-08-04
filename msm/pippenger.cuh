@@ -12,6 +12,7 @@
 #include <util/vec2d_t.hpp>
 
 #include "sort.cuh"
+#include "batch_addition.cuh"
 
 #ifndef WARP_SZ
 # define WARP_SZ 32
@@ -189,7 +190,7 @@ void accumulate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits,
         if (lane_id == 0 && x != 0)
             idx = h[-1];
 
-        if (len -= idx) {
+        if ((len -= idx) && !(x == 0 && y == 0)) {
             const uint32_t* digs_ptr = &digits[y][idx];
             uint32_t digit = *digs_ptr++;
 
@@ -304,6 +305,10 @@ void accumulate<bucket_t, affine_t::mem_t>(bucket_t::mem_t buckets_[],
                                            const vec2d_t<uint32_t> histogram,
                                            uint32_t sid);
 template __global__
+void batch_addition<bucket_t>(bucket_t::mem_t buckets[],
+                              const affine_t::mem_t points[], size_t npoints,
+                              const uint32_t digits[], const uint32_t& ndigits);
+template __global__
 void integrate<bucket_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
                          uint32_t wbits, uint32_t nbits);
 template __global__
@@ -363,11 +368,12 @@ public:
                                    row_sz);
 
         size_t d_bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
+        d_bucket_sz += gpu.sm_count() * BATCH_ADD_BLOCK_SIZE / WARP_SZ * sizeof(d_buckets[0]);
         size_t d_point_sz = points ? npoints * sizeof(d_points[0]) : 0;
 
         d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(d_bucket_sz + d_point_sz));
         if (points) {
-            d_points = reinterpret_cast<decltype(d_points)>(&d_buckets[nwins*row_sz]);
+            d_points = reinterpret_cast<decltype(d_points)>(&d_buckets[d_bucket_sz/sizeof(d_buckets[0])]);
             gpu.HtoD(d_points, points, np, ffi_affine_sz);
         }
 
@@ -449,6 +455,7 @@ public:
         stride = (stride+WARP_SZ-1) & ((size_t)0-WARP_SZ);
 
         std::vector<result_t> res(nwins);
+        std::vector<bucket_t> ones(gpu.sm_count() * BATCH_ADD_BLOCK_SIZE / WARP_SZ);
 
         out.inf();
         point_t p;
@@ -493,6 +500,14 @@ public:
 
             for (uint32_t i = 0; i < batch; i++) {
                 gpu[i&1].wait(ev);
+
+                batch_addition<bucket_t><<<gpu.sm_count(), BATCH_ADD_BLOCK_SIZE,
+                                           0, gpu[i&1]>>>(
+                    &d_buckets[nwins << (wbits-1)], &d_points[d_off], num,
+                    &d_digits[0][0], d_hist[0][0]
+                );
+                CUDA_OK(cudaGetLastError());
+
                 gpu[i&1].launch_coop(accumulate<bucket_t, affine_h>,
                     {gpu.sm_count(), 0},
                     d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i&1
@@ -528,11 +543,12 @@ public:
                 }
 
                 if (i > 0) {
-                    collect(p, res);
+                    collect(p, res, ones);
                     out.add(p);
                 }
 
-                gpu[i&1].DtoH(&res[0], d_buckets, nwins, sizeof(bucket_h)<<(wbits-1));
+                gpu[i&1].DtoH(ones, d_buckets + (nwins << (wbits-1)));
+                gpu[i&1].DtoH(res, d_buckets, sizeof(bucket_h)<<(wbits-1));
                 gpu[i&1].sync();
             }
         } catch (const cuda_error& e) {
@@ -544,7 +560,7 @@ public:
 #endif
         }
 
-        collect(p, res);
+        collect(p, res, ones);
         out.add(p);
 
         return RustError{cudaSuccess};
@@ -621,7 +637,8 @@ private:
         return res;
     }
 
-    void collect(point_t& out, const std::vector<result_t>& res)
+    void collect(point_t& out, const std::vector<result_t>& res,
+                               const std::vector<bucket_t>& ones)
     {
         struct tile_t {
             uint32_t x, y, dy;
@@ -661,6 +678,8 @@ private:
             });
         }
 
+        point_t one = sum_up(ones);
+
         out.inf();
         size_t row = 0, ny = nwins;
         while (ny--) {
@@ -677,6 +696,7 @@ private:
                     break;
             }
         }
+        out.add(one);
     }
 };
 
