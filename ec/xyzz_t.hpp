@@ -57,7 +57,7 @@ public:
     using mem_t = xyzz_t;
 #endif
 
-    class affine_t { friend class xyzz_t; friend class affine_inf_t;
+    class affine_t { friend class xyzz_t;
         field_t X, Y;
 
     public:
@@ -98,7 +98,7 @@ public:
         }
 
 #ifdef __NVCC__
-        class mem_t { friend class affine_t;
+        class mem_t {
             field_h X, Y;
 
         public:
@@ -115,7 +115,7 @@ public:
 #endif
     };
 
-    class affine_inf_t { friend class xyzz_t;
+    class affine_inf_t {
         field_t X, Y;
         bool inf;
 
@@ -133,7 +133,7 @@ public:
         }
 
 #ifdef __NVCC__
-        class mem_t { friend class affine_t;
+        class mem_t {
             field_h X, Y;
 #ifdef __CUDACC__
             int inf[sizeof(field_t)%16 ? 2 : 4];
@@ -151,8 +151,8 @@ public:
             {
                 bool inf = is_inf();
                 affine_t p;
-                p.X = czero(X, inf);
-                p.Y = czero(Y, inf);
+                p.X = czero((field_t)X, inf);
+                p.Y = czero((field_t)Y, inf);
                 return p;
             }
 
@@ -160,8 +160,8 @@ public:
             {
                 bool inf = is_inf();
                 affine_inf_t p;
-                p.X = czero(X, inf);
-                p.Y = czero(Y, inf);
+                p.X = czero((field_t)X, inf);
+                p.Y = czero((field_t)Y, inf);
                 p.inf = inf;
                 return p;
             }
