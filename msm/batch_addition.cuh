@@ -7,6 +7,7 @@
 
 #include <cuda.h>
 #include <cooperative_groups.h>
+#include <vector>
 
 #ifndef WARP_SZ
 # define WARP_SZ 32
@@ -19,10 +20,9 @@
 # error "invalid BATCH_ADD_NSTREAMS"
 #endif
 
-template<class bucket_t,
+template<class bucket_t, class affine_h,
          class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t,
-         class affine_h = class bucket_t::affine_t::mem_t>
+         class affine_t = class bucket_t::affine_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
                     const uint32_t bitmap[], bool accumulate = false,
@@ -99,6 +99,44 @@ void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
         current = 0;
 }
 
+template<class bucket_t, class affine_h,
+         class bucket_h = class bucket_t::mem_t,
+         class affine_t = class bucket_t::affine_t>
+__launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
+void batch_addition(bucket_h ret[], const affine_h points[], size_t npoints,
+                    const uint32_t digits[], const uint32_t& ndigits)
+{
+    const uint32_t degree = bucket_t::degree;
+    const uint32_t warp_sz = WARP_SZ / degree;
+    const uint32_t tid = (threadIdx.x + blockDim.x*blockIdx.x) / degree;
+    const uint32_t xid = tid % warp_sz;
+
+    bucket_t acc;
+    acc.inf();
+
+    for (size_t i = tid; i < ndigits; i += gridDim.x*blockDim.x/degree) {
+        uint32_t digit = digits[i];
+        affine_t p = points[digit & 0x7fffffff];
+        if (degree == 2)
+            acc.uadd(p, digit >> 31);
+        else
+            acc.add(p, digit >> 31);
+    }
+
+#ifdef __CUDA_ARCH__
+    for (uint32_t off = 1; off < warp_sz;) {
+        bucket_t down = acc.shfl_down(off*degree);
+
+        off <<= 1;
+        if ((xid & (off-1)) == 0)
+            acc.uadd(down); // .add() triggers spills ... in .shfl_down()
+    }
+#endif
+
+    if (xid == 0)
+        ret[tid/warp_sz] = acc;
+}
+
 template<class bucket_t>
 bucket_t sum_up(const bucket_t inp[], size_t n)
 {
@@ -107,4 +145,8 @@ bucket_t sum_up(const bucket_t inp[], size_t n)
         sum.add(inp[i]);
     return sum;
 }
+
+template<class bucket_t>
+bucket_t sum_up(const std::vector<bucket_t>& inp)
+{   return sum_up(&inp[0], inp.size());   }
 #endif
