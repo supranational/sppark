@@ -1083,7 +1083,7 @@ public:
         return czero(a, a_zero);
     }
     friend inline mont_t operator/(int one, const mont_t& a)
-    {   if (one == 1) return a.reciprocal(); asm("trap;");   }
+    {   if (one != 1) asm("trap;"); return a.reciprocal();   }
     friend inline mont_t operator/(const mont_t& a, const mont_t& b)
     {   return a * b.reciprocal();   }
     inline mont_t& operator/=(const mont_t& a)
