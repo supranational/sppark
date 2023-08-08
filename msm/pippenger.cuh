@@ -364,17 +364,20 @@ public:
 
         uint32_t row_sz = 1U << (wbits-1);
 
-        d_hist = vec2d_t<uint32_t>((uint32_t*)gpu.Dmalloc(nwins * row_sz * sizeof(uint32_t)),
-                                   row_sz);
+        size_t d_buckets_sz = (nwins * row_sz)
+                            + (gpu.sm_count() * BATCH_ADD_BLOCK_SIZE / WARP_SZ);
+        size_t d_blob_sz = (d_buckets_sz * sizeof(d_buckets[0]))
+                         + (nwins * row_sz * sizeof(uint32_t))
+                         + (points ? npoints * sizeof(d_points[0]) : 0);
 
-        size_t d_bucket_sz = nwins * row_sz * sizeof(d_buckets[0]);
-        d_bucket_sz += gpu.sm_count() * BATCH_ADD_BLOCK_SIZE / WARP_SZ * sizeof(d_buckets[0]);
-        size_t d_point_sz = points ? npoints * sizeof(d_points[0]) : 0;
-
-        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(d_bucket_sz + d_point_sz));
+        d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(d_blob_sz));
+        d_hist = vec2d_t<uint32_t>(&d_buckets[d_buckets_sz], row_sz);
         if (points) {
-            d_points = reinterpret_cast<decltype(d_points)>(&d_buckets[d_bucket_sz/sizeof(d_buckets[0])]);
+            d_points = reinterpret_cast<decltype(d_points)>(d_hist[nwins]);
             gpu.HtoD(d_points, points, np, ffi_affine_sz);
+            npoints = np;
+        } else {
+            npoints = 0;
         }
 
     }
@@ -387,7 +390,6 @@ public:
     {
         gpu.sync();
         if (d_buckets) gpu.Dfree(d_buckets);
-        gpu.Dfree(d_hist);
     }
 
 private:
