@@ -5,7 +5,7 @@
 use std::env;
 
 fn feature_check() {
-    let fr_s = ["bls12_377", "bls12_381"];
+    let fr_s = ["bls12_377", "bls12_381", "pallas", "vesta"];
     let fr_s_as_features: Vec<String> = (0..fr_s.len())
         .map(|i| format!("CARGO_FEATURE_{}", fr_s[i].to_uppercase()))
         .collect();
@@ -34,6 +34,10 @@ fn main() {
         fr = "FEATURE_BLS12_377";
     } else if cfg!(feature = "bls12_381") {
         fr = "FEATURE_BLS12_381";
+    } else if cfg!(feature = "pallas") {
+        fr = "FEATURE_PALLAS";
+    } else if cfg!(feature = "vesta") {
+        fr = "FEATURE_VESTA";
     }
 
     let mut nvcc = cc::Build::new();
@@ -44,6 +48,9 @@ fn main() {
     nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
     nvcc.define(fr, None);
     if let Some(include) = env::var_os("DEP_BLST_C_SRC") {
+        nvcc.include(include);
+    }
+    if let Some(include) = env::var_os("DEP_SEMOLINA_C_INCLUDE") {
         nvcc.include(include);
     }
     if let Some(include) = env::var_os("DEP_SPPARK_ROOT") {

@@ -6,13 +6,17 @@ use ntt_cuda::NTTInputOutputOrder;
 
 const DEFAULT_GPU: usize = 0;
 
-#[cfg(any(feature = "bls12_377", feature = "bls12_381"))]
+#[cfg(any(feature = "bls12_377", feature = "bls12_381", feature = "pallas", feature = "vesta"))]
 #[test]
 fn test_against_arkworks() {
     #[cfg(feature = "bls12_377")]
     use ark_bls12_377::Fr;
     #[cfg(feature = "bls12_381")]
     use ark_bls12_381::Fr;
+    #[cfg(feature = "pallas")]
+    use ark_pallas::Fr;
+    #[cfg(feature = "vesta")]
+    use ark_vesta::Fr;
     use ark_ff::{PrimeField, UniformRand};
     use ark_poly::{
         domain::DomainCoeff, EvaluationDomain, GeneralEvaluationDomain,

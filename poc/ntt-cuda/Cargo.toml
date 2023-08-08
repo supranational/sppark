@@ -15,12 +15,15 @@ portable = [ "blst/portable" ]
 force-adx = [ "blst/force-adx" ]
 bls12_377 = []
 bls12_381 = []
+pallas = [ "semolina" ]
+vesta = [ "semolina" ]
 
 quiet = []
 
 [dependencies]
 #blst = "=0.3.10"
 blst = { git = "https://github.com/supranational/blst" }
+semolina = { version = "~0.1.2", optional = true }
 sppark = { path = "../../rust" }
 
 [build-dependencies]
@@ -35,3 +38,5 @@ ark-ff = "0.3.0"
 ark-poly = { version = "0.3.0", features = [ "parallel"] }
 ark-bls12-381 = { version = "0.3.0" }
 ark-bls12-377 = { version = "0.3.0" }
+ark-pallas = { version = "0.3.0" }
+ark-vesta = { version = "0.3.0" }

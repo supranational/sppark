@@ -8,6 +8,10 @@
 # include <ff/bls12-381.hpp>
 #elif defined(FEATURE_BLS12_377)
 # include <ff/bls12-377.hpp>
+#elif defined(FEATURE_PALLAS)
+# include <ff/pasta.hpp>
+#elif defined(FEATURE_VESTA)
+# include <ff/pasta.hpp>
 #else
 # error "no FEATURE"
 #endif
