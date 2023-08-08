@@ -38,6 +38,10 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 #  include "parameters/bls12_377.h"
 # elif defined(FEATURE_BLS12_381)
 #  include "parameters/bls12_381.h"
+# elif defined(FEATURE_PALLAS)
+#  include "parameters/vesta.h"     // Fr for Pallas curve is Vesta
+# elif defined(FEATURE_VESTA)
+#  include "parameters/pallas.h"    // Fr for Vesta curve is Pallas
 # endif
 
 class NTTParameters {
