@@ -21,6 +21,10 @@ namespace device {
         0xfffffffd, 0x5b2b3e9c, 0xe3420567, 0x992c350b,
         0xffffffff, 0xffffffff, 0xffffffff, 0x3fffffff
     };
+    static __device__ __constant__ __align__(16) const uint32_t Vesta_Px2[8] = { /* left-aligned modulus */
+        0x00000002, 0x188dd642, 0x132951bb, 0x448d31f8,
+        0x00000000, 0x00000000, 0x00000000, 0x80000000
+    };
 
     static __device__ __constant__ __align__(16) const uint32_t Pallas_P[8] = {
         0x00000001, 0x992d30ed, 0x094cf91b, 0x224698fc,
@@ -34,20 +38,26 @@ namespace device {
         0xfffffffd, 0x34786d38, 0xe41914ad, 0x992c350b,
         0xffffffff, 0xffffffff, 0xffffffff, 0x3fffffff
     };
+    static __device__ __constant__ __align__(16) const uint32_t Pallas_Px2[8] = { /* left-aligned modulus */
+        0x00000002, 0x325a61da, 0x1299f237, 0x448d31f8,
+        0x00000000, 0x00000000, 0x00000000, 0x80000000
+    };
     static __device__ __constant__ /*const*/ uint32_t Pasta_M0 = 0xffffffff;
 }
 
 # ifdef __CUDA_ARCH__   // device-side field types
 # include "mont_t.cuh"
 typedef mont_t<255, device::Vesta_P, device::Pasta_M0,
-                    device::Vesta_RR, device::Vesta_one> vesta_mont;
+                    device::Vesta_RR, device::Vesta_one,
+                    device::Vesta_Px2> vesta_mont;
 struct vesta_t : public vesta_mont {
     using mem_t = vesta_t;
     __device__ __forceinline__ vesta_t() {}
     __device__ __forceinline__ vesta_t(const vesta_mont& a) : vesta_mont(a) {}
 };
 typedef mont_t<255, device::Pallas_P, device::Pasta_M0,
-                    device::Pallas_RR, device::Pallas_one> pallas_mont;
+                    device::Pallas_RR, device::Pallas_one,
+                    device::Pallas_Px2> pallas_mont;
 struct pallas_t : public pallas_mont {
     using mem_t = pallas_t;
     __device__ __forceinline__ pallas_t() {}
@@ -59,6 +69,11 @@ struct pallas_t : public pallas_mont {
 #ifndef __CUDA_ARCH__   // host-side field types
 # include <pasta_t.hpp>
 #endif
+
+# if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wsubobject-linkage"
+# endif
 
 #if defined(FEATURE_PALLAS)
 typedef pallas_t fp_t;

@@ -22,6 +22,10 @@ namespace device {
         TO_CUDA_T(0xd35d438dc58f0d9d), TO_CUDA_T(0x0a78eb28f5c70b3d),
         TO_CUDA_T(0x666ea36f7879462c), TO_CUDA_T(0x0e0a77c19a07df2f)
     };
+    static __device__ __constant__ __align__(16) const uint32_t ALT_BN128_Px4[8] = { /* left-aligned value of the modulus */
+        TO_CUDA_T(0xf082305b61f3f51c), TO_CUDA_T(0x5e05aa45a1c72a34),
+        TO_CUDA_T(0xe14116da06056176), TO_CUDA_T(0xc19139cb84c680a6)
+    };
     static __device__ __constant__ const uint32_t ALT_BN128_M0 = 0xe4866389;
 
     static __device__ __constant__ __align__(16) const uint32_t ALT_BN128_r[8] = {
@@ -36,19 +40,25 @@ namespace device {
         TO_CUDA_T(0xac96341c4ffffffb), TO_CUDA_T(0x36fc76959f60cd29),
         TO_CUDA_T(0x666ea36f7879462e), TO_CUDA_T(0x0e0a77c19a07df2f)
     };
+    static __device__ __constant__ __align__(16) const uint32_t ALT_BN128_rx4[8] = { /* left-aligned value of the modulus */
+        TO_CUDA_T(0x0f87d64fc0000004), TO_CUDA_T(0xa0cfa121e6e5c245),
+        TO_CUDA_T(0xe14116da06056174), TO_CUDA_T(0xc19139cb84c680a6)
+    };
     static __device__ __constant__ const uint32_t ALT_BN128_m0 = 0xefffffff;
 }
 # ifdef __CUDA_ARCH__   // device-side field types
 # include "mont_t.cuh"
 typedef mont_t<254, device::ALT_BN128_P, device::ALT_BN128_M0,
-                    device::ALT_BN128_RR, device::ALT_BN128_one> fp_mont;
+                    device::ALT_BN128_RR, device::ALT_BN128_one,
+                    device::ALT_BN128_Px4> fp_mont;
 struct fp_t : public fp_mont {
     using mem_t = fp_t;
     __device__ __forceinline__ fp_t() {}
     __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
 };
 typedef mont_t<254, device::ALT_BN128_r, device::ALT_BN128_m0,
-                    device::ALT_BN128_rRR, device::ALT_BN128_rone> fr_mont;
+                    device::ALT_BN128_rRR, device::ALT_BN128_rone,
+                    device::ALT_BN128_rx4> fr_mont;
 struct fr_t : public fr_mont {
     using mem_t = fr_t;
     __device__ __forceinline__ fr_t() {}
