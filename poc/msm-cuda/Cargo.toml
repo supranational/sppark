@@ -20,8 +20,7 @@ quiet = []
 cuda-mobile = []
 
 [dependencies]
-#blst = "=0.3.10"
-blst = { git = "https://github.com/supranational/blst" }
+blst = "~0.3.11"
 sppark = { path = "../../rust" }
 rand = "^0"
 rand_chacha = "^0"
