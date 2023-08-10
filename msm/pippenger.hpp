@@ -359,4 +359,17 @@ static void mult_pippenger(point_t& ret, const std::vector<affine_t>& points,
                                   std::min(points.size(), scalars.size()),
                                   scalars.data(), mont, da_pool);
 }
+
+#include <util/slice_t.hpp>
+
+template <class bucket_t, class point_t, class scalar_t,
+          class affine_t = class bucket_t::affine_t>
+static void mult_pippenger(point_t& ret, slice_t<affine_t> points,
+                           slice_t<scalar_t> scalars, bool mont,
+                           thread_pool_t* da_pool = nullptr)
+{
+    mult_pippenger<bucket_t>(ret, points.data(),
+                                  std::min(points.size(), scalars.size()),
+                                  scalars.data(), mont, da_pool);
+}
 #endif

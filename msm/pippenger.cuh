@@ -10,6 +10,7 @@
 #include <cassert>
 
 #include <util/vec2d_t.hpp>
+#include <util/slice_t.hpp>
 
 #include "sort.cuh"
 #include "batch_addition.cuh"
@@ -336,6 +337,8 @@ class msm_t {
     affine_h *d_points;
     scalar_t *d_scalars;
     vec2d_t<uint32_t> d_hist;
+
+    template<typename T> using vec_t = slice_t<T>;
 
     class result_t {
         bucket_t ret[MSM_NTHREADS/bucket_t::degree][2];
@@ -709,7 +712,7 @@ RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
 {
     try {
         msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints};
-        return msm.invoke(*out, vec_t<affine_t>{points, npoints},
+        return msm.invoke(*out, slice_t<affine_t>{points, npoints},
                                 scalars, mont, ffi_affine_sz);
     } catch (const cuda_error& e) {
         out->inf();

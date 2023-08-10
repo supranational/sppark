@@ -11,6 +11,7 @@
 
 #include "thread_pool_t.hpp"
 #include "exception.cuh"
+#include "slice_t.hpp"
 
 #ifndef WARP_SZ
 # define WARP_SZ 32
@@ -91,6 +92,16 @@ public:
     inline void HtoD(T& dst, const std::vector<U>& src,
                      size_t sz = sizeof(T)) const
     {   HtoD(&dst, &src[0], src.size(), sz);   }
+    template<typename T, typename U>
+    inline void HtoD(T* dst, const std::vector<U>& src,
+                     size_t sz = sizeof(T)) const
+    {   HtoD(dst, &src[0], src.size(), sz);   }
+    template<typename T, typename U>
+    inline void HtoD(T& dst, slice_t<U> src, size_t sz = sizeof(T)) const
+    {   HtoD(&dst, &src[0], src.size(), sz);   }
+    template<typename T, typename U>
+    inline void HtoD(T* dst, slice_t<U> src, size_t sz = sizeof(T)) const
+    {   HtoD(dst, &src[0], src.size(), sz);   }
 
     template<typename... Types>
     inline void launch_coop(void(*f)(Types...), dim3 gridDim, dim3 blockDim,
@@ -292,33 +303,6 @@ public:
     operator by_value() const
     {   ptr->ref_cnt.fetch_add(1, std::memory_order_relaxed); return {ptr};   }
     gpu_ptr_t(by_value v)   { ptr = v.ptr; }
-};
-
-// A simple way to pack a pointer and array's size length, but more
-// importantly...
-template<typename T> class vec_t {
-    const T* ptr;
-    size_t nelems;
-public:
-    vec_t(const T* p, size_t n) : ptr(p), nelems(n) {}
-
-    inline operator decltype(ptr)() const       { return ptr; }
-    inline operator void*() const               { return (void*)ptr; }
-    inline size_t size() const                  { return nelems; }
-    inline const T& operator[](size_t i) const  { return ptr[i]; }
-};
-
-// ... pin the buffer to physical memory. For example, if a function accepts
-// vec_t<T> one can pass pin_t<T>{ptr, nelems} to pin the memory for the
-// duration of the call.
-template<typename T> class pin_t : public vec_t<T> {
-public:
-    pin_t(const T* p, size_t n) : vec_t<T>(p, n)
-    {   CUDA_OK(cudaHostRegister(*this, n*sizeof(T),
-                                 cudaHostRegisterPortable|cudaHostRegisterReadOnly));
-    }
-    ~pin_t()
-    {   cudaHostUnregister(*this);   }
 };
 
 // A simple way to allocate a temporary device pointer without having to
