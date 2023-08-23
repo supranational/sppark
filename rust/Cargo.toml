@@ -1,7 +1,7 @@
 [package]
 name = "sppark"
-version = "0.1.3"
-edition = "2018"
+version = "0.1.4"
+edition = "2021"
 description = "Zero-knowledge template library"
 repository = "https://github.com/supranational/sppark"
 categories = ["cryptography"]
