@@ -12,6 +12,8 @@
 # include <ff/pasta.hpp>
 #elif defined(FEATURE_VESTA)
 # include <ff/pasta.hpp>
+#elif defined(FEATURE_BN254)
+# include <ff/alt_bn128.hpp>
 #else
 # error "no FEATURE"
 #endif

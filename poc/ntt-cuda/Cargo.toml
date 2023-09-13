@@ -17,6 +17,7 @@ bls12_377 = []
 bls12_381 = []
 pallas = [ "semolina" ]
 vesta = [ "semolina" ]
+bn254 = []
 
 quiet = []
 
@@ -39,3 +40,4 @@ ark-bls12-381 = { version = "0.3.0" }
 ark-bls12-377 = { version = "0.3.0" }
 ark-pallas = { version = "0.3.0" }
 ark-vesta = { version = "0.3.0" }
+ark-bn254 = { version = "0.3.0" }
