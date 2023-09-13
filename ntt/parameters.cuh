@@ -9,7 +9,11 @@
 // target field in mind. Most fields handle up to 2^32 elements, BLS12-377
 // can handle up to 2^47, alt_bn128 - 2^28...
 #ifndef MAX_LG_DOMAIN_SIZE
-# define MAX_LG_DOMAIN_SIZE 28 // tested only up to 2^31 for now
+# if defined(FEATURE_BN254)
+#  define MAX_LG_DOMAIN_SIZE 28
+# else
+#  define MAX_LG_DOMAIN_SIZE 28 // tested only up to 2^31 for now
+# endif
 #endif
 
 #if MAX_LG_DOMAIN_SIZE <= 32
@@ -42,6 +46,8 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 #  include "parameters/vesta.h"     // Fr for Pallas curve is Vesta
 # elif defined(FEATURE_VESTA)
 #  include "parameters/pallas.h"    // Fr for Vesta curve is Pallas
+# elif defined(FEATURE_BN254)
+#  include "parameters/alt_bn128.h"
 # endif
 
 class NTTParameters {
