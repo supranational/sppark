@@ -70,6 +70,7 @@ void generate_all_twiddles(fr_t* d_radixX_twiddles, const fr_t root6,
         d_radixX_twiddles[tid] = root_of_unity^pow;
 }
 
+#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
 __launch_bounds__(512) __global__
 void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
                                 const fr_t root_of_unity)
@@ -126,5 +127,6 @@ void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
         }
     }
 }
+#endif
 
 #undef ONE

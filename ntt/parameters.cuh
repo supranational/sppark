@@ -11,6 +11,8 @@
 #ifndef MAX_LG_DOMAIN_SIZE
 # if defined(FEATURE_BN254)
 #  define MAX_LG_DOMAIN_SIZE 28
+# elif defined(FEATURE_BABY_BEAR)
+#  define MAX_LG_DOMAIN_SIZE 27
 # else
 #  define MAX_LG_DOMAIN_SIZE 28 // tested only up to 2^31 for now
 # endif
@@ -22,10 +24,20 @@ typedef unsigned int index_t;
 typedef size_t index_t;
 #endif
 
-#if MAX_LG_DOMAIN_SIZE <= 28
-# define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 1) / 2)
-#else
-# define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 2) / 3)
+#if defined(FEATURE_BABY_BEAR)
+# define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 4) / 5)
+#elif defined(FEATURE_GOLDILOCKS)
+# if MAX_LG_DOMAIN_SIZE <= 28
+#  define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 3) / 4)
+# else
+#  define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 4) / 5)
+# endif
+#else // 256-bit fields
+# if MAX_LG_DOMAIN_SIZE <= 28
+#  define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 1) / 2)
+# else
+#  define LG_WINDOW_SIZE ((MAX_LG_DOMAIN_SIZE + 2) / 3)
+# endif
 #endif
 
 #define WINDOW_SIZE (1 << LG_WINDOW_SIZE)
@@ -48,6 +60,10 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 #  include "parameters/pallas.h"    // Fr for Vesta curve is Pallas
 # elif defined(FEATURE_BN254)
 #  include "parameters/alt_bn128.h"
+# elif defined(FEATURE_BABY_BEAR)
+#  include "parameters/baby_bear.h"
+# elif defined(FEATURE_GOLDILOCKS)
+#  include "parameters/goldilocks.h"
 # endif
 
 class NTTParameters {
@@ -61,11 +77,14 @@ public:
     fr_t* radix6_twiddles, * radix7_twiddles, * radix8_twiddles,
         * radix9_twiddles, * radix10_twiddles;
 
+#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
     fr_t* radix6_twiddles_6, * radix6_twiddles_12, * radix7_twiddles_7,
         * radix8_twiddles_8, * radix9_twiddles_9;
+#endif
 
     fr_t (*partial_group_gen_powers)[WINDOW_SIZE]; // for LDE
 
+#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
 private:
     fr_t* twiddles_X(int num_blocks, int block_size, const fr_t& root)
     {
@@ -74,6 +93,7 @@ private:
         CUDA_OK(cudaGetLastError());
         return ret;
     }
+#endif
 
 public:
     NTTParameters(const bool _inverse, int id)
@@ -104,11 +124,13 @@ public:
                                 32 * sizeof(fr_t), cudaMemcpyDeviceToDevice,
                                 gpu));
 
+#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
         radix6_twiddles_6 = twiddles_X(64, 64, roots[12]);
         radix6_twiddles_12 = twiddles_X(4096, 64, roots[18]);
         radix7_twiddles_7 = twiddles_X(128, 128, roots[14]);
         radix8_twiddles_8 = twiddles_X(256, 256, roots[16]);
         radix9_twiddles_9 = twiddles_X(512, 512, roots[18]);
+#endif
 
         const size_t partial_sz = WINDOW_NUM * WINDOW_SIZE;
 
@@ -131,11 +153,13 @@ public:
     {
         gpu.Dfree(partial_twiddles);
 
+#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
         gpu.Dfree(radix9_twiddles_9);
         gpu.Dfree(radix8_twiddles_8);
         gpu.Dfree(radix7_twiddles_7);
         gpu.Dfree(radix6_twiddles_12);
         gpu.Dfree(radix6_twiddles_6);
+#endif
 
         gpu.Dfree(radix7_twiddles);
     }
@@ -178,4 +202,4 @@ public:
 };
 
 #endif
-#endif /* __NTT_PARAMETERS_CUH__ */
+#endif /* __SPPARK_NTT_PARAMETERS_CUH__ */
