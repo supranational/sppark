@@ -5,7 +5,15 @@
 use std::env;
 
 fn feature_check() {
-    let fr_s = ["bls12_377", "bls12_381", "pallas", "vesta", "bn254"];
+    let fr_s = [
+        "bls12_377",
+        "bls12_381",
+        "pallas",
+        "vesta",
+        "bn254",
+        "gl64",
+        "bb31",
+    ];
     let fr_s_as_features: Vec<String> = (0..fr_s.len())
         .map(|i| format!("CARGO_FEATURE_{}", fr_s[i].to_uppercase()))
         .collect();
@@ -40,6 +48,10 @@ fn main() {
         fr = "FEATURE_VESTA";
     } else if cfg!(feature = "bn254") {
         fr = "FEATURE_BN254"
+    } else if cfg!(feature = "gl64") {
+        fr = "FEATURE_GOLDILOCKS";
+    } else if cfg!(feature = "bb31") {
+        fr = "FEATURE_BABY_BEAR";
     }
 
     let mut nvcc = cc::Build::new();
@@ -49,6 +61,9 @@ fn main() {
     nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
     nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
     nvcc.define(fr, None);
+    if cfg!(feature = "gl64") {
+        nvcc.define("GL64_NO_REDUCTION_KLUDGE", None);
+    }
     if let Some(include) = env::var_os("DEP_BLST_C_SRC") {
         nvcc.include(include);
     }

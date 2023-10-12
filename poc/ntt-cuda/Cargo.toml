@@ -2,6 +2,7 @@
 name = "ntt-cuda"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [features]
 # By default, compile with ADX extension if the host supports it.
@@ -18,7 +19,8 @@ bls12_381 = []
 pallas = [ "semolina" ]
 vesta = [ "semolina" ]
 bn254 = []
-
+gl64 = []
+bb31 = []
 quiet = []
 
 [dependencies]
