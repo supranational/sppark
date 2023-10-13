@@ -32,24 +32,24 @@ protected:
 
         size_t domain_size = (size_t)1 << lg_domain_size;
         // aim to read 4 cache lines of consecutive data per read
-        size_t z_count = 512 * 4 / (8*sizeof(fr_t));
+        const size_t Z_COUNT = 256 / sizeof(fr_t);
 
         if (domain_size <= WARP_SZ)
             bit_rev_permutation
                 <<<1, domain_size, 0, stream>>>
                 (d_out, d_inp, lg_domain_size);
-        else if (d_out == d_inp || domain_size <= z_count * z_count)
+        else if (d_out == d_inp || domain_size <= Z_COUNT * Z_COUNT)
             bit_rev_permutation
                 <<<domain_size/WARP_SZ, WARP_SZ, 0, stream>>>
                 (d_out, d_inp, lg_domain_size);
-        else if (domain_size < 128 * z_count)
+        else if (domain_size < 128 * Z_COUNT)
             bit_rev_permutation_aux
-                <<<1, domain_size / z_count, domain_size * sizeof(fr_t), stream>>>
+                <<<1, domain_size / Z_COUNT, domain_size * sizeof(fr_t), stream>>>
                 (d_out, d_inp, lg_domain_size);
         else
             bit_rev_permutation_aux
-                <<<domain_size / z_count / 128, 128, z_count * 128 * sizeof(fr_t),
-                    stream>>>
+                <<<domain_size / Z_COUNT / 128, 128, Z_COUNT * 128 * sizeof(fr_t),
+                   stream>>>
                 (d_out, d_inp, lg_domain_size);
 
         CUDA_OK(cudaGetLastError());
