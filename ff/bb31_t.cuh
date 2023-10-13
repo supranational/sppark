@@ -215,6 +215,57 @@ public:
 
     inline void to()   { mul(RR); }
     inline void from() { val = mul_by_1(); }
+
+private:
+    static inline bb31_t sqr_n_mul(bb31_t s, uint32_t n, bb31_t m)
+    {
+#if 0
+        #pragma unroll 2
+        while (n--)
+            s.sqr();
+#else   // +20% [for reciprocal()]
+        #pragma unroll 2
+        while (n--) {
+            uint32_t tmp[2], red;
+
+            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+                : "=r"(tmp[0]), "=r"(tmp[1])
+                : "r"(s.val), "r"(s.val));
+            asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(tmp[0]), "r"(M));
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %4;"
+                : "+r"(tmp[0]), "=r"(s.val)
+                : "r"(red), "r"(MOD), "r"(tmp[1]));
+
+            if (n&1)
+                final_sub(s.val);
+        }
+#endif
+        s.mul(m);
+
+        return s;
+    }
+
+public:
+    inline bb31_t reciprocal() const
+    {
+        bb31_t x11, xff, ret = *this;
+
+        x11 = sqr_n_mul(ret, 4, ret);   // 0b10001
+        ret = sqr_n_mul(x11, 1, x11);   // 0b110011
+        ret = sqr_n_mul(ret, 1, x11);   // 0b1110111
+        xff = sqr_n_mul(ret, 1, x11);   // 0b11111111
+        ret = sqr_n_mul(ret, 8, xff);   // 0b111011111111111
+        ret = sqr_n_mul(ret, 8, xff);   // 0b11101111111111111111111
+        ret = sqr_n_mul(ret, 8, xff);   // 0b1110111111111111111111111111111
+
+        return ret;
+    }
+    friend inline bb31_t operator/(int one, bb31_t a)
+    {   if (one != 1) asm("trap;"); return a.reciprocal();   }
+    friend inline bb31_t operator/(bb31_t a, bb31_t b)
+    {   return a * b.reciprocal();   }
+    inline bb31_t& operator/=(const bb31_t a)
+    {   return *this *= a.reciprocal();   }
 };
 
 #  undef inline
