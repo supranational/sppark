@@ -145,25 +145,21 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
 {
     extern __shared__ fr_t exchange[]; // block size
 
-    assert(lg_domain_size + lg_blowup <= MAX_LG_DOMAIN_SIZE);
-
     size_t domain_size = (size_t)1 << lg_domain_size;
     uint32_t blowup = 1u << lg_blowup;
     uint32_t stride = gridDim.x * blockDim.x;
 
+    assert(lg_domain_size + lg_blowup <= MAX_LG_DOMAIN_SIZE &&
+           (stride & (stride-1)) == 0);
+
     bool overlapping_data = false;
 
     if ((in < out && (in + domain_size) > out)
-     || (in >= out && (in + domain_size) <= (out + domain_size * blowup))
-     || (in < (out + domain_size * blowup)
-         && (in + domain_size) > (out + domain_size * blowup)))
+     || (in >= out && (out + domain_size * blowup) > in))
     {
         overlapping_data = true;
+        assert(&out[domain_size * (blowup - 1)] == &in[0]);
     }
-
-    if (overlapping_data)
-        assert(&out[domain_size * (blowup - 1)] == &in[0] &&
-               (stride & (stride-1)) == 0);
 
     index_t idx0 = blockDim.x * blockIdx.x;
     uint32_t thread_pos = threadIdx.x & (blowup - 1);
