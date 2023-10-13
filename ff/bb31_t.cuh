@@ -30,7 +30,9 @@ public:
     static constexpr size_t __device__ bit_length()     { return 31;  }
 
     inline uint32_t& operator[](size_t i)               { return val; }
+    inline uint32_t& operator*()                        { return val; }
     inline const uint32_t& operator[](size_t i) const   { return val; }
+    inline uint32_t operator*() const                   { return val; }
     inline size_t len() const                           { return 1;   }
 
     inline bb31_t() {}
@@ -215,6 +217,70 @@ public:
 
     inline void to()   { mul(RR); }
     inline void from() { val = mul_by_1(); }
+
+    template<size_t T>
+    static inline bb31_t dot_product(const bb31_t a[T], const bb31_t b[T])
+    {
+        uint32_t acc[2];
+        size_t i = 1;
+
+        asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+            : "=r"(acc[0]), "=r"(acc[1]) : "r"(*a[0]), "r"(*b[0]));
+        if ((T&1) == 0) {
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+                : "+r"(acc[0]), "+r"(acc[1]) : "r"(*a[i]), "r"(*b[i]));
+            i++;
+        }
+        for (; i < T; i += 2) {
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+                : "+r"(acc[0]), "+r"(acc[1]) : "r"(*a[i]), "r"(*b[i]));
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+                : "+r"(acc[0]), "+r"(acc[1]) : "r"(*a[i+1]), "r"(*b[i+1]));
+            final_sub(acc[1]);
+        }
+
+        uint32_t red;
+        asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(acc[0]), "r"(M));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+            : "+r"(acc[0]), "+r"(acc[1]) : "r"(red), "r"(MOD));
+        final_sub(acc[1]);
+
+        return acc[1];
+    }
+
+    template<size_t T>
+    static inline bb31_t dot_product(bb31_t a0, bb31_t b0,
+                                     const bb31_t a[T-1], const bb31_t *b,
+                                     size_t stride_b = 1)
+    {
+        uint32_t acc[2];
+        size_t i = 0;
+
+        asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+            : "=r"(acc[0]), "=r"(acc[1]) : "r"(*a0), "r"(*b0));
+        if ((T&1) == 0) {
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+                : "+r"(acc[0]), "+r"(acc[1]) : "r"(*a[i]), "r"(*b[0]));
+            i++, b += stride_b;
+        }
+        for (; i < T-1; i += 2) {
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+                : "+r"(acc[0]), "+r"(acc[1]) : "r"(*a[i]), "r"(*b[0]));
+            b += stride_b;
+            asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+                : "+r"(acc[0]), "+r"(acc[1]) : "r"(*a[i+1]), "r"(*b[0]));
+            b += stride_b;
+            final_sub(acc[1]);
+        }
+
+        uint32_t red;
+        asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(acc[0]), "r"(M));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+            : "+r"(acc[0]), "+r"(acc[1]) : "r"(red), "r"(MOD));
+        final_sub(acc[1]);
+
+        return acc[1];
+    }
 
 private:
     static inline bb31_t sqr_n_mul(bb31_t s, uint32_t n, bb31_t m)
