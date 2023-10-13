@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __BB31_T_CUH__
-#define __BB31_T_CUH__
+#ifndef __SPPARK_FF_BB31_T_CUH__
+#define __SPPARK_FF_BB31_T_CUH__
 
 # include <cstdint>
 
@@ -19,29 +19,31 @@ class bb31_t {
 private:
     uint32_t val;
 
+    static const uint32_t M = 0x77ffffffu;
+    static const uint32_t RR = 0x45dddde3u;
+    static const uint32_t ONE = 0x0ffffffeu;
 public:
+    using mem_t = bb31_t;
+    static const uint32_t degree = 1;
     static const uint32_t nbits = 31;
     static const uint32_t MOD = 0x78000001u;
-    static const uint32_t M = 0x77ffffffu;
-    static const uint32_t R = 0x0ffffffeu;
-    static const uint32_t RR = 0x45dddde3u;
+    static constexpr size_t __device__ bit_length()     { return 31;  }
 
     inline uint32_t& operator[](size_t i)               { return val; }
     inline const uint32_t& operator[](size_t i) const   { return val; }
     inline size_t len() const                           { return 1;   }
 
     inline bb31_t() {}
-    inline bb31_t(const uint32_t a) { val = a; }
-    inline bb31_t(const uint32_t *p) { val = *p; }
+    inline bb31_t(const uint32_t a)         { val = a;  }
+    inline bb31_t(const uint32_t *p)        { val = *p; }
+    // this is used in constant declaration, e.g. as bb31_t{11}
+    inline constexpr bb31_t(int a) : val(((uint64_t)a << 32) % MOD) {}
 
-    inline operator uint32_t() const
-    { auto ret = *this; ret.from(); return ret.val; }
-    inline void store(uint32_t *p) const
-    { *p = *this; }
-    inline void operator=(uint32_t b)
-    { val = b; to(); }
+    inline operator uint32_t() const        { return mul_by_1(); }
+    inline void store(uint32_t *p) const    { *p = mul_by_1();   }
+    inline bb31_t& operator=(uint32_t b)    { val = b; to(); return *this; }
 
-    inline bb31_t operator+=(const bb31_t b)
+    inline bb31_t& operator+=(const bb31_t b)
     {
         val += b.val;
         if (val >= MOD) val -= MOD;
@@ -51,7 +53,7 @@ public:
     friend inline bb31_t operator+(bb31_t a, const bb31_t b)
     {   return a += b;   }
 
-    inline bb31_t operator<<=(uint32_t l)
+    inline bb31_t& operator<<=(uint32_t l)
     {
         while (l--) {
             val <<= 1;
@@ -63,7 +65,7 @@ public:
     friend inline bb31_t operator<<(bb31_t a, uint32_t l)
     {   return a <<= l;   }
 
-    inline bb31_t operator>>=(uint32_t r)
+    inline bb31_t& operator>>=(uint32_t r)
     {
         while (r--) {
             val += val&1 ? MOD : 0;
@@ -75,10 +77,14 @@ public:
     friend inline bb31_t operator>>(bb31_t a, uint32_t r)
     {   return a >>= r;   }
 
-    inline bb31_t operator-=(const bb31_t b)
+    inline bb31_t& operator-=(const bb31_t b)
     {
-        val -= b.val;
-        if (val > MOD) val += MOD;
+        asm("{");
+        asm(".reg.pred %brw;");
+        asm("setp.lt.u32 %brw, %0, %1;" :: "r"(val), "r"(b.val));
+        asm("sub.u32 %0, %0, %1;"       : "+r"(val) : "r"(b.val));
+        asm("@%brw add.u32 %0, %0, %1;" : "+r"(val) : "r"(MOD));
+        asm("}");
 
         return *this;
     }
@@ -101,14 +107,10 @@ public:
     inline bb31_t operator-() const
     {   bb31_t ret = *this; return ret.cneg(true);   }
 
-    static inline const bb31_t one()
-    {   return bb31_t{R};   }
-
-    inline bool is_zero() const
-    {   return val == 0;   }
-
-    inline void zero()
-    {   val = 0;   }
+    static inline const bb31_t one()    { return bb31_t{ONE}; }
+    inline bool is_one() const          { return val == ONE;  }
+    inline bool is_zero() const         { return val == 0;    }
+    inline void zero()                  { val = 0;            }
 
     friend inline bb31_t czero(const bb31_t a, int set_z)
     {
@@ -137,7 +139,16 @@ public:
     }
 
 private:
-    inline void mul(const bb31_t b)
+    static inline void final_sub(uint32_t& val)
+    {
+        asm("{");
+        asm(".reg.pred %p;");
+        asm("setp.ge.u32 %p, %0, %1;" :: "r"(val), "r"(MOD));
+        asm("@%p sub.u32 %0, %0, %1;" : "+r"(val) : "r"(MOD));
+        asm("}");
+    }
+
+    inline bb31_t& mul(const bb31_t b)
     {
         uint32_t tmp[2], red;
 
@@ -145,19 +156,16 @@ private:
             : "=r"(tmp[0]), "=r"(tmp[1])
             : "r"(val), "r"(b.val));
         asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(tmp[0]), "r"(M));
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
-            : "+r"(tmp[0]), "+r"(tmp[1])
-            : "r"(red), "r"(MOD));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %4;"
+            : "+r"(tmp[0]), "=r"(val)
+            : "r"(red), "r"(MOD), "r"(tmp[1]));
 
-        asm("{");
-        asm(".reg.pred %p;");
-        asm("sub.u32 %0, %1, %2;" : "=r"(tmp[0]) : "r"(tmp[1]), "r"(MOD));
-        asm("setp.ge.u32 %p, %0, %1;" :: "r"(tmp[1]), "r"(MOD));
-        asm("selp.u32 %0, %1, %2, %p;" : "=r"(val) : "r"(tmp[0]), "r"(tmp[1]));
-        asm("}");
+        final_sub(val);
+
+        return *this;
     }
 
-    inline void mul_by_1()
+    inline uint32_t mul_by_1() const
     {
         uint32_t tmp[2], red;
 
@@ -165,26 +173,29 @@ private:
         asm("mad.lo.cc.u32 %0, %2, %3, %4; madc.hi.u32 %1, %2, %3, 0;"
             : "=r"(tmp[0]), "=r"(tmp[1])
             : "r"(red), "r"(MOD), "r"(val));
-        val = tmp[1];
+        return tmp[1];
     }
 
 public:
     friend inline bb31_t operator*(bb31_t a, const bb31_t b)
-    {   a.mul(b); return a;   }
-
-    inline bb31_t operator*=(const bb31_t a)
-    {   mul(a); return *this;   }
+    {   return a.mul(b);   }
+    inline bb31_t& operator*=(const bb31_t a)
+    {   return mul(a);   }
 
     // simplified exponentiation, but mind the ^ operator's precedence!
-    inline bb31_t operator^=(uint32_t p)
+    inline bb31_t& operator^=(uint32_t p)
     {
         if (p < 2)
             asm("trap;");
 
         bb31_t sqr = *this;
-        for (; (p&1) == 0; p >>= 1)
-            sqr.mul(sqr);
-        *this = sqr;
+        if ((p&1) == 0) {
+            do {
+                sqr.mul(sqr);
+                p >>= 1;
+            } while ((p&1) == 0);
+            *this = sqr;
+        }
         for (p >>= 1; p; p >>= 1) {
             sqr.mul(sqr);
             if (p&1)
@@ -197,16 +208,16 @@ public:
     {   return a ^= p;   }
     inline bb31_t operator()(uint32_t p)
     {   return *this^p;   }
-    friend inline bb31_t sqr(const bb31_t a)
-    {   return a^2u;   }
-    inline bb31_t sqr()
-    {   return *this ^= 2u;   }
+    friend inline bb31_t sqr(bb31_t a)
+    {   return a.sqr();   }
+    inline bb31_t& sqr()
+    {   return mul(*this);   }
 
-    inline void to() { bb31_t t{RR}; t *= *this; *this = t; }
-    inline void from() { mul_by_1(); }
+    inline void to()   { mul(RR); }
+    inline void from() { val = mul_by_1(); }
 };
 
 #  undef inline
 #  undef asm
 # endif
-#endif /* __BB31_T_CUH__ */
+#endif /* __SPPARK_FF_BB31_T_CUH__ */
