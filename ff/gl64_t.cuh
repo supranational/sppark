@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __GL64_T_CUH__
-#define __GL64_T_CUH__
+#ifndef __SPPARK_FF_GL64_T_CUH__
+#define __SPPARK_FF_GL64_T_CUH__
 
 # include <cstdint>
 
@@ -40,18 +40,19 @@ private:
     uint64_t val;
 
 public:
+    using mem_t = gl64_t;
+    static const uint32_t degree = 1;
     static const unsigned nbits = 64;
     static const uint64_t MOD = 0xffffffff00000001U;
+    static constexpr size_t __device__ bit_length()     { return 64; }
 
     inline uint64_t& operator[](size_t i)               { return val; }
     inline const uint64_t& operator[](size_t i) const   { return val; }
     inline size_t len() const                           { return 1;   }
 
-    inline gl64_t() {}
-    inline gl64_t(const uint64_t a)
-    {   val = a;    to();   }
-    inline gl64_t(const uint64_t *p)
-    {   val = *p;   to();   }
+    inline gl64_t()                                     {}
+    inline gl64_t(const uint64_t a)                     { val = a;  to(); }
+    inline gl64_t(const uint64_t *p)                    { val = *p; to(); }
 
     inline operator uint64_t() const
     {   auto ret = *this; ret.from(); return ret.val;   }
@@ -195,14 +196,14 @@ public:
     {   gl64_t ret = *this; return ret.cneg(true);   }
 
     static inline const gl64_t one()
-    {   return gl64_t(1);   }
+    {   gl64_t ret; ret.val = 1; return ret;   }
 
 # ifdef GL64_PARTIALLY_REDUCED
-    inline bool is_zero() const
-    {   return val == 0 | val == MOD;   }
+    inline bool is_zero() const { return val == 0 | val == MOD;   }
+    inline bool is_one()  const { return val == 1 | val == MOD+1; }
 # else
-    inline bool is_zero() const
-    {   return val == 0;   }
+    inline bool is_zero() const { return val == 0;   }
+    inline bool is_one()  const { return val == 1;   }
 # endif
 
     inline void zero()
@@ -229,8 +230,8 @@ public:
     }
 
 private:
-    inline uint32_t lo() const { return (uint32_t)(val); }
-    inline uint32_t hi() const { return (uint32_t)(val>>32); }
+    inline uint32_t lo() const  { return (uint32_t)(val); }
+    inline uint32_t hi() const  { return (uint32_t)(val>>32); }
 
     inline void mul(const gl64_t& b)
     {
@@ -326,9 +327,13 @@ public:
             asm("trap;");
 
         gl64_t sqr = *this;
-        for (; (p&1) == 0; p >>= 1)
-            sqr.mul(sqr);
-        *this = sqr;
+        if ((p&1) == 0) {
+            do {
+                sqr.mul(sqr);
+                p >>= 1;
+            } while ((p&1) == 0);
+            *this = sqr;
+        }
         for (p >>= 1; p; p >>= 1) {
             sqr.mul(sqr);
             if (p&1)
@@ -342,10 +347,10 @@ public:
     {   return a ^= p;   }
     inline gl64_t operator()(unsigned p)
     {   return *this^p;   }
-    friend inline gl64_t sqr(const gl64_t& a)
-    {   return a^2;   }
+    friend inline gl64_t sqr(gl64_t a)
+    {   return a.sqr();   }
     inline gl64_t& sqr()
-    {   return *this ^= 2;   }
+    {   mul(*this); to(); return *this;   }
 
 private:
     inline void mul(uint32_t b)
@@ -411,7 +416,6 @@ public:
     inline void from()  {}
 # endif
 
-public:
     template<size_t T>
     static inline gl64_t dot_product(const gl64_t a[T], const uint8_t b[T])
     {
@@ -504,8 +508,8 @@ public:
         }
 
         asm("add.cc.u32 %0, %0, %4; addc.cc.u32 %1, %1, %5; addc.cc.u32 %2, %2, %6; addc.u32 %3, %3, 0;"
-	    : "+r"(even[1]), "+r"(even[2]), "+r"(even[3]), "+r"(even[4])
-	    : "r"(odd[0]), "r"(odd[1]), "r"(odd[2]));
+            : "+r"(even[1]), "+r"(even[2]), "+r"(even[3]), "+r"(even[4])
+            : "r"(odd[0]), "r"(odd[1]), "r"(odd[2]));
 
         // reduce modulo |(mod << 64) + (mod <<32)|
         asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, 0; subc.cc.u32 %2, %2, 0; subc.u32 %3, %3, %3;"
