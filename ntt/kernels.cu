@@ -57,20 +57,15 @@ void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
     }
 }
 
-#if defined(FEATURE_BABY_BEAR)
-# define Z_COUNT 64
-# define LG_Z_COUNT 6
-#elif defined(FEATURE_GOLDILOCKS)
-# define Z_COUNT 32
-# define LG_Z_COUNT 5
-#else // 256-bit fields
-# define Z_COUNT 8
-# define LG_Z_COUNT 3
-#endif
+static __device__ constexpr uint32_t lg2(uint32_t n)
+{   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
 
-__launch_bounds__(1024) __global__
+__global__
 void bit_rev_permutation_aux(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
+    const size_t Z_COUNT = 256 / sizeof(fr_t);
+    const uint32_t LG_Z_COUNT = lg2(Z_COUNT);
+
     extern __shared__ fr_t exchange[];
     fr_t (*xchg)[Z_COUNT][Z_COUNT] = reinterpret_cast<decltype(xchg)>(exchange);
 
@@ -90,11 +85,10 @@ void bit_rev_permutation_aux(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
             in[group_idx * Z_COUNT + i * step + group_thread];
     }
 
-#if (Z_COUNT >= 6)
-    __syncthreads();
-#else
-    __syncwarp();
-#endif
+    if (Z_COUNT > WARP_SZ)
+        __syncthreads();
+    else
+        __syncwarp();
 
     #pragma unroll
     for (uint32_t i = 0; i < Z_COUNT; i++) {
@@ -102,9 +96,6 @@ void bit_rev_permutation_aux(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
             xchg[group_in_block_idx][group_thread_rev][i];
     }
 }
-
-#undef Z_COUNT
-#undef LG_Z_COUNT
 
 __device__ __forceinline__
 fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
