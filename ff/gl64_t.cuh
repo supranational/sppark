@@ -320,8 +320,30 @@ public:
     {   mul(a);           return *this;   }
 # endif
 
-    // simplified exponentiation, but mind the ^ operator's precedence!
-    inline gl64_t& operator^=(unsigned p)
+    // raise to a variable power, variable in respect to threadIdx,
+    // but mind the ^ operator's precedence!
+    inline gl64_t& operator^=(uint32_t p)
+    {
+        gl64_t sqr = *this;
+        *this = csel(*this, one(), p&1);
+
+        #pragma unroll 1
+        while (p >>= 1) {
+            sqr.mul(sqr);
+            if (p&1)
+                mul(sqr);
+        }
+        to();
+
+        return *this;
+    }
+    friend inline gl64_t operator^(gl64_t a, uint32_t p)
+    {   return a ^= p;   }
+    inline gl64_t operator()(uint32_t p)
+    {   return *this^p;   }
+
+    // raise to a constant power, e.g. x^7, to be unrolled at compile time
+    inline gl64_t& operator^=(int p)
     {
         if (p < 2)
             asm("trap;");
@@ -343,9 +365,9 @@ public:
 
         return *this;
     }
-    friend inline gl64_t operator^(gl64_t a, unsigned p)
+    friend inline gl64_t operator^(gl64_t a, int p)
     {   return a ^= p;   }
-    inline gl64_t operator()(unsigned p)
+    inline gl64_t operator()(int p)
     {   return *this^p;   }
     friend inline gl64_t sqr(gl64_t a)
     {   return a.sqr();   }

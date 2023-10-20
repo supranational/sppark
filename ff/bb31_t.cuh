@@ -184,8 +184,29 @@ public:
     inline bb31_t& operator*=(const bb31_t a)
     {   return mul(a);   }
 
-    // simplified exponentiation, but mind the ^ operator's precedence!
+    // raise to a variable power, variable in respect to threadIdx,
+    // but mind the ^ operator's precedence!
     inline bb31_t& operator^=(uint32_t p)
+    {
+        bb31_t sqr = *this;
+        *this = csel(val, ONE, p&1);
+
+        #pragma unroll 1
+        while (p >>= 1) {
+            sqr.mul(sqr);
+            if (p&1)
+                mul(sqr);
+        }
+
+        return *this;
+    }
+    friend inline bb31_t operator^(bb31_t a, uint32_t p)
+    {   return a ^= p;   }
+    inline bb31_t operator()(uint32_t p)
+    {   return *this^p;   }
+
+    // raise to a constant power, e.g. x^7, to be unrolled at compile time
+    inline bb31_t& operator^=(int p)
     {
         if (p < 2)
             asm("trap;");
@@ -206,9 +227,9 @@ public:
 
         return *this;
     }
-    friend inline bb31_t operator^(bb31_t a, uint32_t p)
+    friend inline bb31_t operator^(bb31_t a, int p)
     {   return a ^= p;   }
-    inline bb31_t operator()(uint32_t p)
+    inline bb31_t operator()(int p)
     {   return *this^p;   }
     friend inline bb31_t sqr(bb31_t a)
     {   return a.sqr();   }
