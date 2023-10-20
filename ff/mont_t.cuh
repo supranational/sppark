@@ -400,8 +400,29 @@ public:
     inline mont_t& sqr()
     {   return *this = wide_t{*this};   }
 
-    // simplified exponentiation, but mind the ^ operator's precedence!
-    inline mont_t& operator^=(unsigned p)
+    // raise to a variable power, variable in respect to threadIdx,
+    // but mind the ^ operator's precedence!
+    inline mont_t& operator^=(uint32_t p)
+    {
+        mont_t sqr = *this;
+        *this = csel(*this, one(), p&1);
+
+        #pragma unroll 1
+        while (p >>= 1) {
+            sqr.sqr();
+            if (p&1)
+                *this *= sqr;
+        }
+
+        return *this;
+    }
+    friend inline mont_t operator^(mont_t a, uint32_t p)
+    {   return a ^= p;   }
+    inline mont_t operator()(uint32_t p)
+    {   return *this^p;   }
+
+    // raise to a constant power, e.g. x^7, to be unrolled at compile time
+    inline mont_t& operator^=(int p)
     {
         if (p < 2)
             asm("trap;");
@@ -421,9 +442,9 @@ public:
         }
         return *this;
     }
-    friend inline mont_t operator^(mont_t a, unsigned p)
+    friend inline mont_t operator^(mont_t a, int p)
     {   return p == 2 ? (mont_t)wide_t{a} : a ^= p;   }
-    inline mont_t operator()(unsigned p)
+    inline mont_t operator()(int p)
     {   return *this^p;   }
     friend inline mont_t sqr(const mont_t& a)
     {   return a^2;   }
