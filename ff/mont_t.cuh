@@ -875,14 +875,14 @@ private:
             asm("@%brw mov.b32 %0, %1;" : "+r"(b.hi) : "r"(a.hi));
 
             /* exchange f0 and f1 if a_-b_ borrowed */
-            uint32_t tmp = fg0;
-            asm("@%brw mov.b32 %0, %1;" : "+r"(fg0) : "r"(fg1));
-            asm("@%brw mov.b32 %0, %1;" : "+r"(fg1) : "r"(tmp));
+            uint32_t fgx;
+            asm("selp.u32 %0, %1, %2, %brw;" : "=r"(fgx) : "r"(fg0), "r"(fg1));
+            asm("selp.u32 %0, %1, %0, %brw;" : "+r"(fg0) : "r"(fg1));
 
             /* subtract if a_ was odd */
-            asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fg1));
+            asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fgx));
 
-            fg1 <<= 1;
+            fg1 = fgx << 1;
             asm("shf.r.wrap.b32 %0, %1, %2, 1;" : "=r"(a.lo) : "r"(a_b.lo), "r"(a_b.hi));
             a.hi = a_b.hi >> 1;
 
@@ -916,24 +916,24 @@ private:
             asm("setp.ne.u32 %odd, %0, 0;" :: "r"(a&1));
 
             /* a_ -= b_ if a_ is odd */
-            asm("@%odd sub.cc.u32  %0, %1, %2;" : "+r"(a_b) : "r"(a), "r"(b));
-            asm("setp.gt.and.u32   %brw, %0, %1, %odd;" :: "r"(a_b), "r"(a));
+            asm("setp.lt.and.u32  %brw, %0, %1, %odd;" :: "r"(a), "r"(b));
+            asm("@%odd sub.u32 %0, %1, %2;" : "+r"(a_b) : "r"(a), "r"(b));
 
             /* negate a_-b_ if it borrowed */
-            asm("@%brw sub.u32 %0, %1, %2;"     : "+r"(a_b) : "r"(b), "r"(a));
+            asm("@%brw sub.u32 %0, %1, %2;" : "+r"(a_b) : "r"(b), "r"(a));
 
             /* b_=a_ if a_-b_ borrowed */
             asm("@%brw mov.b32 %0, %1;" : "+r"(b) : "r"(a));
 
             /* exchange f0 and f1 if a_-b_ borrowed */
-            uint32_t tmp = fg0;
-            asm("@%brw mov.b32 %0, %1;" : "+r"(fg0) : "r"(fg1));
-            asm("@%brw mov.b32 %0, %1;" : "+r"(fg1) : "r"(tmp));
+            uint32_t fgx;
+            asm("selp.u32 %0, %1, %2, %brw;" : "=r"(fgx) : "r"(fg0), "r"(fg1));
+            asm("selp.u32 %0, %1, %0, %brw;" : "+r"(fg0) : "r"(fg1));
 
             /* subtract if a_ was odd */
-            asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fg1));
+            asm("@%odd sub.u32 %0, %0, %1;" : "+r"(fg0) : "r"(fgx));
 
-            fg1 <<= 1;
+            fg1 = fgx << 1;
             a = a_b >> 1;
 
             asm("}");
