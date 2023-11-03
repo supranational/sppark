@@ -74,9 +74,9 @@ public:
 
         return *this = fp_mont::csel(t1, t0, id&1);
     }
-    inline fp2_t& operator^=(unsigned p)
+    inline fp2_t& operator^=(int p)
     {   if (p != 2) asm("trap;"); return sqr();     }
-    friend inline fp2_t operator^(fp2_t a, unsigned p)
+    friend inline fp2_t operator^(fp2_t a, int p)
     {   if (p != 2) asm("trap;"); return a.sqr();   }
 
     friend inline fp2_t operator+(const fp2_t& a, const fp2_t& b)
