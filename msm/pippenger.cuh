@@ -323,9 +323,6 @@ void breakdown<scalar_t>(vec2d_t<uint32_t> digits, const scalar_t scalars[],
 #include <util/rusterror.h>
 #include <util/gpu_t.cuh>
 
-constexpr static int lg2(int n)
-{   int ret=0; while (n>>=1) ret++; return ret;   }
-
 template<class bucket_t, class point_t, class affine_t, class scalar_t,
          class affine_h = class affine_t::mem_t,
          class bucket_h = class bucket_t::mem_t>
@@ -347,6 +344,9 @@ class msm_t {
         inline operator decltype(ret)&()                    { return ret;    }
         inline const bucket_t* operator[](size_t i) const   { return ret[i]; }
     };
+
+    constexpr static int lg2(size_t n)
+    {   int ret=0; while (n>>=1) ret++; return ret;   }
 
 public:
     msm_t(const affine_t points[], size_t np,
