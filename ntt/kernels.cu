@@ -57,7 +57,8 @@ void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
     }
 }
 
-static __device__ constexpr uint32_t lg2(uint32_t n)
+template<typename T>
+static __device__ __host__ constexpr uint32_t lg2(T n)
 {   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
 
 __global__
