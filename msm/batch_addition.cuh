@@ -23,10 +23,10 @@
 template<class bucket_t, class affine_h,
          class bucket_h = class bucket_t::mem_t,
          class affine_t = class bucket_t::affine_t>
-__launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
-void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
-                    const uint32_t bitmap[], bool accumulate = false,
-                    uint32_t sid = 0)
+__device__ __forceinline__
+static void add(bucket_h ret[], const affine_h points[], uint32_t npoints,
+                const uint32_t bitmap[], const uint32_t refmap[],
+                bool accumulate, uint32_t sid)
 {
     static __device__ uint32_t streams[BATCH_ADD_NSTREAMS];
     uint32_t& current = streams[sid % BATCH_ADD_NSTREAMS];
@@ -48,36 +48,50 @@ void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
     uint32_t base = laneid == 0 ? atomicAdd(&current, 32*WARP_SZ) : 0;
     base = __shfl_sync(0xffffffff, base, 0);
 
-    while (base < npoints) {
-        uint32_t chunk = min(32*WARP_SZ, npoints-base);
+    uint32_t chunk = min(32*WARP_SZ, npoints-base);
+    uint32_t bits, refs, word, sign = 0, off = 0xffffffff;
 
-        uint32_t bits = bitmap[base/WARP_SZ + laneid];
+    for (uint32_t i = 0, j = 0; base < npoints;) {
+        if (i == 0) {
+            bits = bitmap[base/WARP_SZ + laneid];
+            refs = refmap ? refmap[base/WARP_SZ + laneid] : 0;
 
-        for (uint32_t word, off = 0xffffffff, j = 0, i = 0; i < chunk;) {
+            bits ^= refs;
+            refs &= bits;
+        }
+
+        for (; i < chunk && j < warp_sz; i++) {
             if (i%32 == 0)
                 word = __shfl_sync(0xffffffff, bits, i/32);
+            if (refmap && (i%32 == 0))
+                sign = __shfl_sync(0xffffffff, refs, i/32);
 
             if (word & 1) {
                 if (j++ == xid)
-                    off = i;
+                    off = (base + i) | (sign << 31);
             }
             word >>= 1;
-
-            if (++i == chunk || j == warp_sz) {
-                if (off != 0xffffffff) {
-                    affine_t p = points[base + off];
-                    if (degree == 2)
-                        acc.uadd(p);
-                    else
-                        acc.add(p);
-                }
-                j = 0;
-                off = 0xffffffff;
-            }
+            sign >>= 1;
         }
 
-        base = laneid == 0 ? atomicAdd(&current, 32*WARP_SZ) : 0;
-        base = __shfl_sync(0xffffffff, base, 0);
+        if (i == chunk) {
+            base = laneid == 0 ? atomicAdd(&current, 32*WARP_SZ) : 0;
+            base = __shfl_sync(0xffffffff, base, 0);
+            chunk = min(32*WARP_SZ, npoints-base);
+            i = 0;
+        }
+
+        if (base >= npoints || j == warp_sz) {
+            if (off != 0xffffffff) {
+                affine_t p = points[off & 0x7fffffff];
+                if (degree == 2)
+                    acc.uadd(p, off >> 31);
+                else
+                    acc.add(p, off >> 31);
+                off = 0xffffffff;
+            }
+            j = 0;
+        }
     }
 
 #ifdef __CUDA_ARCH__
@@ -98,6 +112,24 @@ void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
     if (threadIdx.x + blockIdx.x == 0)
         current = 0;
 }
+
+template<class bucket_t, class affine_h,
+         class bucket_h = class bucket_t::mem_t,
+         class affine_t = class bucket_t::affine_t>
+__launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
+void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
+                    const uint32_t bitmap[], bool accumulate = false,
+                    uint32_t sid = 0)
+{   add<bucket_t>(ret, points, npoints, bitmap, nullptr, accumulate, sid);   }
+
+template<class bucket_t, class affine_h,
+         class bucket_h = class bucket_t::mem_t,
+         class affine_t = class bucket_t::affine_t>
+__launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
+void batch_diff(bucket_h ret[], const affine_h points[], uint32_t npoints,
+                const uint32_t bitmap[], const uint32_t refmap[],
+                bool accumulate = false, uint32_t sid = 0)
+{   add<bucket_t>(ret, points, npoints, bitmap, refmap, accumulate, sid);   }
 
 template<class bucket_t, class affine_h,
          class bucket_h = class bucket_t::mem_t,
