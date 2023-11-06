@@ -75,6 +75,30 @@ struct pallas_t : public pallas_mont {
 #  pragma GCC diagnostic ignored "-Wsubobject-linkage"
 # endif
 
+#ifndef __CUDA_ARCH__
+# if defined(FEATURE_PALLAS)
+static const vec256 PALLAS_G1_GEN_X = {
+    TO_LIMB_T(0x64b4c3b400000004), TO_LIMB_T(0x891a63f02533e46e),
+    TO_LIMB_T(0x0000000000000000), TO_LIMB_T(0x0000000000000000)
+};
+
+static const vec256 PALLAS_G1_GEN_Y = {
+    TO_LIMB_T(0xcfc3a984fffffff9), TO_LIMB_T(0x1011d11bbee5303e),
+    TO_LIMB_T(0xffffffffffffffff), TO_LIMB_T(0x3fffffffffffffff)
+};
+# elif defined(FEATURE_VESTA)
+static const vec256 VESTA_G1_GEN_X = {
+    TO_LIMB_T(0x311bac8400000004), TO_LIMB_T(0x891a63f02652a376),
+    TO_LIMB_T(0x0000000000000000), TO_LIMB_T(0x0000000000000000)
+};
+
+static const vec256 VESTA_G1_GEN_Y = {
+    TO_LIMB_T(0x2a0f9218fffffff9), TO_LIMB_T(0x1011d11bbcef61f1),
+    TO_LIMB_T(0xffffffffffffffff), TO_LIMB_T(0x3fffffffffffffff)
+};
+# endif
+#endif
+
 #if defined(FEATURE_PALLAS)
 typedef pallas_t fp_t;
 typedef vesta_t fr_t;

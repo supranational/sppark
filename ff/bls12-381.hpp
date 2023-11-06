@@ -122,6 +122,18 @@ struct fr_t : public fr_mont {
     inline fr_t(const fr_mont& a) : fr_mont(a) {}
 };
 
+static const vec384 BLS12_381_G1_GEN_X = {
+    TO_LIMB_T(0x5cb38790fd530c16), TO_LIMB_T(0x7817fc679976fff5),
+    TO_LIMB_T(0x154f95c7143ba1c1), TO_LIMB_T(0xf0ae6acdf3d0e747),
+    TO_LIMB_T(0xedce6ecc21dbf440), TO_LIMB_T(0x120177419e0bfb75)
+};
+
+static const vec384 BLS12_381_G1_GEN_Y = {
+    TO_LIMB_T(0xbaac93d50ce72271), TO_LIMB_T(0x8c22631a7918fd8e),
+    TO_LIMB_T(0xdd595f13570725ce), TO_LIMB_T(0x51ac582950405194),
+    TO_LIMB_T(0x0e1c8c3fad0059c0), TO_LIMB_T(0x0bbc3efc5008a26a)
+};
+
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif

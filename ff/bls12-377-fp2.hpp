@@ -7,6 +7,32 @@
 
 #include "bls12-377.hpp"
 
+#ifndef __CUDA_ARCH__
+static const vec384 BLS12_377_G2_GEN_X1 = {
+    TO_LIMB_T(0x68904082f268725b), TO_LIMB_T(0x668f2ea74f45328b),
+    TO_LIMB_T(0xebca7a65802be84f), TO_LIMB_T(0x1e1850f4c1ada3e6),
+    TO_LIMB_T(0x830dc22d588ef1e9), TO_LIMB_T(0x01862a81767c0982)
+};
+
+static const vec384 BLS12_377_G2_GEN_X2 = {
+    TO_LIMB_T(0x5f02a915c91c7f39), TO_LIMB_T(0xf8c553ba388da2a7),
+    TO_LIMB_T(0xd51a416dbd198850), TO_LIMB_T(0xe943c6f38ae3073a),
+    TO_LIMB_T(0xffe24aa8259a4981), TO_LIMB_T(0x011853391e73dfdd)
+};
+
+static const vec384 BLS12_377_G2_GEN_Y1 = {
+    TO_LIMB_T(0xd5b19b897881430f), TO_LIMB_T(0x05be9118a5b371ed),
+    TO_LIMB_T(0x6063f91f86c131ee), TO_LIMB_T(0x3244a61be8f4ec19),
+    TO_LIMB_T(0xa02e425b9f9a3a12), TO_LIMB_T(0x018af8c04f3360d2)
+};
+
+static const vec384 BLS12_377_G2_GEN_Y2 = {
+    TO_LIMB_T(0x57601ac71a5b96f5), TO_LIMB_T(0xe99acc1714f2440e),
+    TO_LIMB_T(0x2339612f10118ea9), TO_LIMB_T(0x8321e68a3b1cd722),
+    TO_LIMB_T(0x2b543b050cc74917), TO_LIMB_T(0x00590182b396c112)
+};
+#endif
+
 #ifdef __CUDA_ARCH__
 
 # define inline __device__ __forceinline__

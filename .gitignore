@@ -57,6 +57,9 @@ dkms.conf
 # Emacs backup files
 *~
 
-# Rust build 
+# Rust build
 Cargo.lock
 target
+
+# Blst for C++ poc's
+blst

@@ -5,38 +5,26 @@
 #ifndef __SPPARK_EC_JACOBIAN_T_HPP__
 #define __SPPARK_EC_JACOBIAN_T_HPP__
 
-template<class field_t> class jacobian_t {
+#ifndef __SPPARK_EC_AFFINE_T_HPP__
+# include "affine_t.hpp"
+#endif
+
+template<class field_t>
+class jacobian_t {
+    friend class Affine_t<field_t>;
+    friend class Affine_inf_t<field_t>;
+
     field_t X, Y, Z;
 
     inline operator const void*() const { return this; }
     inline operator void*()             { return this; }
 
 public:
+    using affine_t = Affine_t<field_t>;
+
     jacobian_t() {}
     jacobian_t(const field_t& x, const field_t& y, const field_t& z) :
                             X(x),             Y(y),             Z(z) {}
-
-    class affine_t { friend jacobian_t;
-        field_t X, Y;
-
-    public:
-        affine_t() {}
-        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
-
-        inline bool is_inf() const
-        {   return (bool)(X.is_zero() & Y.is_zero());   }
-
-        inline affine_t& operator=(const jacobian_t& a)
-        {
-            Y = 1/a.Z;
-            X = Y^2;    // 1/Z^2
-            Y *= X;     // 1/Z^3
-            X *= a.X;   // X/Z^2
-            Y *= a.Y;   // Y/Z^3
-            return *this;
-        }
-        inline affine_t(const jacobian_t& a) { *this = a; }
-    };
 
     inline operator affine_t() const      { return affine_t(*this); }
 
@@ -538,5 +526,22 @@ public:
         }
         *this = p3;
     }
+
+#ifndef NDEBUG
+    friend inline bool operator==(const jacobian_t& a, const jacobian_t& b)
+    {   return (a.X == b.X) && (a.Y == b.Y) && (a.Z == b.Z);   }
+
+    friend inline bool operator!=(const jacobian_t& a, const jacobian_t& b)
+    {   return (a.X != b.X) || (a.Y != b.Y) || (a.Z != b.Z);   }
+
+# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
+    friend std::ostream& operator<<(std::ostream& os, const jacobian_t& p)
+    {
+        return os << "X: " << p.X << std::endl
+                  << "Y: " << p.Y << std::endl
+                  << "Z: " << p.Z;
+    }
+# endif
+#endif
 };
 #endif

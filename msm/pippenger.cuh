@@ -144,9 +144,9 @@ void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
 #endif
 
 template<class bucket_t,
-         class affine_h,
+         class affine_t,
          class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class affine_h = class affine_t::mem_t>
 __launch_bounds__(ACCUMULATE_NTHREADS) __global__
 void accumulate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits,
                 /*const*/ affine_h points_[], const vec2d_t<uint32_t> digits,
@@ -299,16 +299,17 @@ void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbi
 
 #ifndef SPPARK_DONT_INSTANTIATE_TEMPLATES
 template __global__
-void accumulate<bucket_t, affine_t::mem_t>(bucket_t::mem_t buckets_[],
-                                           uint32_t nwins, uint32_t wbits,
-                                           /*const*/ affine_t::mem_t points_[],
-                                           const vec2d_t<uint32_t> digits,
-                                           const vec2d_t<uint32_t> histogram,
-                                           uint32_t sid);
+void accumulate<bucket_t, affine_t>(bucket_t::mem_t buckets_[],
+                                    uint32_t nwins, uint32_t wbits,
+                                    /*const*/ affine_t::mem_t points_[],
+                                    const vec2d_t<uint32_t> digits,
+                                    const vec2d_t<uint32_t> histogram,
+                                    uint32_t sid);
 template __global__
-void batch_addition<bucket_t>(bucket_t::mem_t buckets[],
-                              const affine_t::mem_t points[], size_t npoints,
-                              const uint32_t digits[], const uint32_t& ndigits);
+void batch_addition<bucket_t, affine_t>(bucket_t::mem_t buckets[],
+                                        const affine_t::mem_t points[],
+                                        size_t npoints, const uint32_t digits[],
+                                        const uint32_t& ndigits);
 template __global__
 void integrate<bucket_t>(bucket_t::mem_t buckets_[], uint32_t nwins,
                          uint32_t wbits, uint32_t nbits);
@@ -506,14 +507,14 @@ public:
             for (uint32_t i = 0; i < batch; i++) {
                 gpu[i&1].wait(ev);
 
-                batch_addition<bucket_t><<<gpu.sm_count(), BATCH_ADD_BLOCK_SIZE,
-                                           0, gpu[i&1]>>>(
+                batch_addition<bucket_t, affine_t>
+                    <<<gpu.sm_count(), BATCH_ADD_BLOCK_SIZE, 0, gpu[i&1]>>>(
                     &d_buckets[nwins << (wbits-1)], &d_points[d_off], num,
                     &d_digits[0][0], d_hist[0][0]
                 );
                 CUDA_OK(cudaGetLastError());
 
-                gpu[i&1].launch_coop(accumulate<bucket_t, affine_h>,
+                gpu[i&1].launch_coop(accumulate<bucket_t, affine_t>,
                     {gpu.sm_count(), 0},
                     d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i&1
                 );
@@ -634,7 +635,7 @@ private:
             for (size_t j = 0; j < lsbits-1-NTHRBITS; j++)
                 raise.dbl();
             res.add(raise);
-            res.add(row[i][0]);
+            res.add((point_t)row[i][0]);
             if (i)
                 acc.add(row[i][1]);
         }
