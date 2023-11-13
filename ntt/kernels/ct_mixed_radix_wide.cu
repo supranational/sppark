@@ -21,19 +21,18 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
     const index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
 
-    const index_t inp_ntt_size = (index_t)1 << stage;
-    const index_t out_ntt_size = (index_t)1 << (stage + iterations - 1);
+    const index_t out_mask = ((index_t)1 << (stage + iterations - 1)) - 1;
 #if 1
-    const index_t thread_ntt_pos = (tid & (out_ntt_size - 1)) >> (iterations - 1);
+    const index_t thread_ntt_pos = (tid & out_mask) >> (iterations - 1);
 #else
-    const index_t thread_ntt_pos = (tid >> (iterations - 1)) & (inp_ntt_size - 1);
+    const index_t inp_mask = ((index_t)1 << stage) - 1;
+    const index_t thread_ntt_pos = (tid >> (iterations - 1)) & inp_mask;
 #endif
 
     // rearrange |tid|'s bits
-    index_t idx0 = tid & ~(out_ntt_size - 1);
-    idx0 += (tid << stage) & (out_ntt_size - 1);
+    index_t idx0 = (tid & ~out_mask) | ((tid << stage) & out_mask);
     idx0 = idx0 * 2 + thread_ntt_pos;
-    index_t idx1 = idx0 + inp_ntt_size;
+    index_t idx1 = idx0 + ((index_t)1 << stage);
 
     fr_t r0 = d_inout[idx0];
     fr_t r1 = d_inout[idx1];

@@ -19,15 +19,14 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 #endif
     const index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
 
-    const index_t inp_ntt_size = (index_t)1 << (stage - 1);
-    //const index_t out_ntt_size = (index_t)1 << (stage - iterations - 1); // TODO: UNUSED
+    const index_t inp_mask = ((index_t)1 << (stage - 1)) - 1;
+    const index_t out_mask = ((index_t)1 << (stage - iterations)) - 1;
 
     // rearrange |tid|'s bits
-    index_t idx0 = (tid & ~(inp_ntt_size - 1)) * 2;
-    idx0 += (tid << (stage - iterations)) & (inp_ntt_size - 1);
-    idx0 += tid >> (iterations - 1);
-    idx0 -= ((tid >> (stage - 1)) << (stage - iterations));
-    index_t idx1 = idx0 + inp_ntt_size;
+    index_t idx0 = (tid & ~inp_mask) * 2;
+    idx0 += (tid << (stage - iterations)) & inp_mask;
+    idx0 += (tid >> (iterations - 1)) & out_mask;
+    index_t idx1 = idx0 + ((index_t)1 << (stage - 1));
 
     fr_t r0 = d_inout[idx0];
     fr_t r1 = d_inout[idx1];
@@ -84,7 +83,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     if (intermediate_mul == 1) {
-        index_t thread_ntt_pos = (tid & (inp_ntt_size - 1)) >> (iterations - 1);
+        index_t thread_ntt_pos = (tid & inp_mask) >> (iterations - 1);
         unsigned int diff_mask = (1 << (iterations - 1)) - 1;
         unsigned int thread_ntt_idx = (tid & diff_mask) * 2;
         unsigned int nbits = MAX_LG_DOMAIN_SIZE - (stage - iterations);
@@ -100,7 +99,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 *= first_root;
         r1 *= second_root;
     } else if (intermediate_mul == 2) {
-        index_t thread_ntt_pos = (tid & (inp_ntt_size - 1)) >> (iterations - 1);
+        index_t thread_ntt_pos = (tid & inp_mask) >> (iterations - 1);
         unsigned int diff_mask = (1 << (iterations - 1)) - 1;
         unsigned int thread_ntt_idx = (tid & diff_mask) * 2;
         unsigned int nbits = intermediate_twiddle_shift + iterations;
