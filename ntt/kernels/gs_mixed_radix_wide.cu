@@ -44,7 +44,6 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r1 = t;
 
         extern __shared__ fr_t shared_exchange[];
-        extern __shared__ index_t shared_exchange_idx[];
 
         bool pos = rank < laneMask;
 #ifdef __CUDA_ARCH__
@@ -56,14 +55,6 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 = fr_t::csel(t, r0, !pos);
         r1 = fr_t::csel(t, r1, pos);
 #endif
-        if (pos)
-            swap(idx0, idx1);
-        __syncthreads();
-        shared_exchange_idx[threadIdx.x] = idx0;
-        __syncthreads();
-        idx0 = shared_exchange_idx[threadIdx.x ^ laneMask];
-        if (pos)
-            swap(idx0, idx1);
     }
 
     for (int s = min(iterations, 6); --s >= 1;) {
@@ -84,11 +75,6 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 = fr_t::csel(t, r0, !pos);
         r1 = fr_t::csel(t, r1, pos);
 #endif
-        if (pos)
-            swap(idx0, idx1);
-        shfl_bfly(idx0, laneMask);
-        if (pos)
-            swap(idx0, idx1);
     }
 
     {
@@ -133,6 +119,15 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 *= d_domain_size_inverse;
         r1 *= d_domain_size_inverse;
     }
+
+    // rotate "iterations" bits in indices
+    index_t mask = ((index_t)1 << stage) - ((index_t)1 << (stage - iterations));
+    index_t rotw = idx0 & mask;
+    rotw = (rotw << 1) | (rotw >> (iterations - 1));
+    idx0 = (idx0 & ~mask) | (rotw & mask);
+    rotw = idx1 & mask;
+    rotw = (rotw << 1) | (rotw >> (iterations - 1));
+    idx1 = (idx1 & ~mask) | (rotw & mask);
 
     d_inout[idx0] = r0;
     d_inout[idx1] = r1;
