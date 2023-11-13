@@ -391,12 +391,6 @@ void _CT_NTT_3D(const unsigned int radix, const unsigned int lg_domain_size,
                                 stage, iterations);
 }
 
-#if defined(FEATURE_BABY_BEAR)
-# define Z_COUNT 8
-#elif defined(FEATURE_GOLDILOCKS)
-# define Z_COUNT 4
-#endif
-
 template __global__
 void _CT_NTT<1>(unsigned int, unsigned int, unsigned int, unsigned int,
                 fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
@@ -479,8 +473,6 @@ public:
         stage += iterations;
     }
 };
-
-#undef Z_COUNT
 
 void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
             const NTTParameters& ntt_parameters, const cudaStream_t& stream)
