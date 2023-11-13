@@ -2,8 +2,6 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#define ONE fr_t::one()
-
 __global__
 void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
                                const fr_t root_of_unity)
@@ -12,12 +10,7 @@ void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
     assert(tid < WINDOW_SIZE);
     fr_t root;
 
-    if (tid == 0)
-        root = ONE;
-    else if (tid == 1)
-        root = root_of_unity;
-    else
-        root = root_of_unity^tid;
+    root = root_of_unity^tid;
 
     roots[0][tid] = root;
 
@@ -62,12 +55,7 @@ void generate_all_twiddles(fr_t* d_radixX_twiddles, const fr_t root6,
         assert(false);
     }
 
-    if (pow == 0)
-        d_radixX_twiddles[tid] = ONE;
-    else if (pow == 1)
-        d_radixX_twiddles[tid] = root_of_unity;
-    else
-        d_radixX_twiddles[tid] = root_of_unity^pow;
+    d_radixX_twiddles[tid] = root_of_unity^pow;
 }
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
@@ -76,17 +64,10 @@ void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
                                 const fr_t root_of_unity)
 {
     if (gridDim.x == 1) {
-        fr_t root0;
-
-        d_radixX_twiddles_X[threadIdx.x] = ONE;
+        d_radixX_twiddles_X[threadIdx.x] = fr_t::one();
         d_radixX_twiddles_X += blockDim.x;
 
-        if (threadIdx.x == 0)
-            root0 = ONE;
-        else if (threadIdx.x == 1)
-            root0 = root_of_unity;
-        else
-            root0 = root_of_unity^threadIdx.x;
+        fr_t root0 = root_of_unity^threadIdx.x;
 
         d_radixX_twiddles_X[threadIdx.x] = root0;
         d_radixX_twiddles_X += blockDim.x;
@@ -99,23 +80,12 @@ void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
             d_radixX_twiddles_X += blockDim.x;
         }
     } else {
-        fr_t root0;
-
-        if (threadIdx.x == 0)
-            root0 = ONE;
-        else
-            root0 = root_of_unity ^ (threadIdx.x * gridDim.x);
+        fr_t root0 = root_of_unity^(threadIdx.x * gridDim.x);
 
         unsigned int pow = blockIdx.x * threadIdx.x;
         unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
-        fr_t root1;
 
-        if (pow == 0)
-            root1 = ONE;
-        else if (pow == 1)
-            root1 = root_of_unity;
-        else
-            root1 = root_of_unity^pow;
+        fr_t root1 = root_of_unity^pow;
 
         d_radixX_twiddles_X[tid] = root1;
         d_radixX_twiddles_X += gridDim.x * blockDim.x;
@@ -128,5 +98,3 @@ void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
     }
 }
 #endif
-
-#undef ONE
