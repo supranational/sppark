@@ -226,6 +226,7 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
 }
 
 #if defined(FEATURE_BABY_BEAR) || defined(FEATURE_GOLDILOCKS)
+const static int Z_COUNT = 256/8/sizeof(fr_t);
 # include "kernels/gs_mixed_radix_narrow.cu"
 # include "kernels/ct_mixed_radix_narrow.cu"
 #else // 256-bit fields
