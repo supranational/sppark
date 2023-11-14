@@ -26,26 +26,22 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
     const index_t tiz = (tid & ~diff_mask) * z_count + (tid & diff_mask);
 
-    index_t idx[2][z_count];
     fr_t r[2][z_count];
 
     // rearrange |tiz|'s bits
-    idx[0][0] = (tiz & ~inp_mask) * 2;
-    idx[0][0] += (tiz << (stage - iterations)) & inp_mask;
-    idx[0][0] += (tiz >> (iterations - 1)) & out_mask;
-    idx[1][0] = idx[0][0] + ((index_t)1 << (stage - 1));
+    index_t idx0 = (tiz & ~inp_mask) * 2;
+    idx0 += (tiz << (stage - iterations)) & inp_mask;
+    idx0 += (tiz >> (iterations - 1)) & out_mask;
+    index_t idx1 = idx0 + ((index_t)1 << (stage - 1));
 
-    r[0][0] = d_inout[idx[0][0]];
-    r[1][0] = d_inout[idx[1][0]];
+    r[0][0] = d_inout[idx0];
+    r[1][0] = d_inout[idx1];
 
+    unsigned int z_shift = out_mask==0 ? iterations : 0;
     #pragma unroll
     for (int z = 1; z < z_count; z++) {
-        unsigned int zinc = (z & out_mask) + ((z & ~out_mask) << iterations);
-        idx[0][z] = idx[0][0] + zinc;
-        idx[1][z] = idx[1][0] + zinc;
-
-        r[0][z] = d_inout[idx[0][z]];
-        r[1][z] = d_inout[idx[1][z]];
+        r[0][z] = d_inout[idx0 + (z << z_shift)];
+        r[1][z] = d_inout[idx1 + (z << z_shift)];
     }
 
     #pragma unroll 1
@@ -64,10 +60,11 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[1][z] = t;
         }
 
+#ifdef __CUDA_ARCH__
+        fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
+
         __syncthreads();
 
-        fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
-#ifdef __CUDA_ARCH__
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
@@ -82,28 +79,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[0][z] = fr_t::csel(t, r[0][z], !pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
         }
-
-        __syncthreads();
 #endif
-
-        index_t (*xchgi)[z_count] = reinterpret_cast<decltype(xchgi)>(shared_exchange);
-        #pragma unroll
-        for (int z = 0; z < z_count; z++) {
-            if (pos)
-                swap(idx[0][z], idx[1][z]);
-
-            xchgi[threadIdx.x][z] = idx[0][z];
-        }
-
-        __syncthreads();
-
-        #pragma unroll
-        for (int z = 0; z < z_count; z++) {
-            idx[0][z] = xchgi[threadIdx.x ^ laneMask][z];
-
-            if (pos)
-                swap(idx[0][z], idx[1][z]);
-        }
     }
 
     #pragma unroll 1
@@ -123,16 +99,11 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
 #ifdef __CUDA_ARCH__
             t = fr_t::csel(r[1][z], r[0][z], pos);
-            if (pos)
-                swap(idx[0][z], idx[1][z]);
 
             shfl_bfly(t, laneMask);
-            shfl_bfly(idx[0][z], laneMask);
 
             r[0][z] = fr_t::csel(t, r[0][z], !pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
-            if (pos)
-                swap(idx[0][z], idx[1][z]);
 #endif
         }
     }
@@ -182,10 +153,22 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         }
     }
 
+    // rotate "iterations" bits in indices
+    index_t mask = ((index_t)1 << stage) - ((index_t)1 << (stage - iterations));
+    index_t rotw = idx0 & mask;
+    rotw = (rotw << 1) | (rotw >> (iterations - 1));
+    idx0 = (idx0 & ~mask) | (rotw & mask);
+    rotw = idx1 & mask;
+    rotw = (rotw << 1) | (rotw >> (iterations - 1));
+    idx1 = (idx1 & ~mask) | (rotw & mask);
+
+    d_inout[idx0] = r[0][0];
+    d_inout[idx1] = r[1][0];
+
     #pragma unroll
-    for (int z = 0; z < z_count; z++) {
-        d_inout[idx[0][z]] = r[0][z];
-        d_inout[idx[1][z]] = r[1][z];
+    for (int z = 1; z < z_count; z++) {
+        d_inout[idx0 + (z << z_shift)] = r[0][z];
+        d_inout[idx1 + (z << z_shift)] = r[1][z];
     }
 }
 
