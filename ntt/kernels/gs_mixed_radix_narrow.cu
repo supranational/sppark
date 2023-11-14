@@ -21,23 +21,28 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
 
     const index_t diff_mask = (1 << (iterations - 1)) - 1;
-    const index_t inp_ntt_size = (index_t)1 << (stage - 1);
+    const index_t inp_mask = ((index_t)1 << (stage - 1)) - 1;
+    const index_t out_mask = ((index_t)1 << (stage - iterations)) - 1;
 
     const index_t tiz = (tid & ~diff_mask) * z_count + (tid & diff_mask);
 
     index_t idx[2][z_count];
     fr_t r[2][z_count];
 
-    #pragma unroll
-    for (int z = 0; z < z_count; z++) {
-        index_t tid = tiz + (z << (iterations - 1));
+    // rearrange |tiz|'s bits
+    idx[0][0] = (tiz & ~inp_mask) * 2;
+    idx[0][0] += (tiz << (stage - iterations)) & inp_mask;
+    idx[0][0] += (tiz >> (iterations - 1)) & out_mask;
+    idx[1][0] = idx[0][0] + ((index_t)1 << (stage - 1));
 
-        // rearrange |tid|'s bits
-        idx[0][z] = (tid & ~(inp_ntt_size - 1)) * 2;
-        idx[0][z] += (tid << (stage - iterations)) & (inp_ntt_size - 1);
-        idx[0][z] += tid >> (iterations - 1);
-        idx[0][z] -= (tid >> (stage - 1)) << (stage - iterations);
-        idx[1][z] = idx[0][z] + inp_ntt_size;
+    r[0][0] = d_inout[idx[0][0]];
+    r[1][0] = d_inout[idx[1][0]];
+
+    #pragma unroll
+    for (int z = 1; z < z_count; z++) {
+        unsigned int zinc = (z & out_mask) + ((z & ~out_mask) << iterations);
+        idx[0][z] = idx[0][0] + zinc;
+        idx[1][z] = idx[1][0] + zinc;
 
         r[0][z] = d_inout[idx[0][z]];
         r[1][z] = d_inout[idx[1][z]];
@@ -140,7 +145,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     if (stage - iterations != 0) {
-        index_t thread_ntt_pos = (tiz & (inp_ntt_size - 1)) >> (iterations - 1);
+        index_t thread_ntt_pos = (tiz & inp_mask) >> (iterations - 1);
         unsigned int thread_ntt_idx = (tiz & diff_mask) * 2;
         unsigned int nbits = MAX_LG_DOMAIN_SIZE - (stage - iterations);
         index_t idx0 = bit_rev(thread_ntt_idx, nbits);
@@ -186,10 +191,12 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
 template<unsigned int z_count>
 __device__ __forceinline__
-void gs_coalesced_load(const fr_t* inout, fr_t* shared_mem, fr_t* r,
+void gs_coalesced_load(const fr_t* inout, fr_t* r,
                        const index_t offset,
                        unsigned int stage, unsigned int iterations)
 {
+    extern __shared__ fr_t shared_exchange[];
+
     index_t mask = ((index_t)1 << (stage - iterations)) / z_count - 1;
     index_t idx = (threadIdx.x / z_count) << (stage - iterations);
     idx += (((blockIdx.x & ~mask) << iterations) + (blockIdx.x & mask)) * z_count;
@@ -203,7 +210,7 @@ void gs_coalesced_load(const fr_t* inout, fr_t* shared_mem, fr_t* r,
 
     __syncthreads();
 
-    fr_t *xchg = &shared_mem[threadIdx.x];
+    fr_t *xchg = &shared_exchange[threadIdx.x];
     #pragma unroll
     for (int z = 0; z < z_count; z++) {
         xchg[blockDim.x * z] = r[z];
@@ -211,7 +218,7 @@ void gs_coalesced_load(const fr_t* inout, fr_t* shared_mem, fr_t* r,
 
     __syncthreads();
 
-    xchg = &shared_mem[threadIdx.x * z_count];
+    xchg = &shared_exchange[threadIdx.x * z_count];
     #pragma unroll
     for (int z = 0; z < z_count; z++) {
         r[z] = xchg[z];
@@ -220,22 +227,23 @@ void gs_coalesced_load(const fr_t* inout, fr_t* shared_mem, fr_t* r,
 
 template<unsigned int z_count>
 __device__ __forceinline__
-void gs_coalesced_store(fr_t* inout, fr_t* shared_mem, const fr_t* r,
+void gs_coalesced_store(fr_t* inout, const fr_t* r,
                         index_t idx, index_t offset,
                         unsigned int stage, unsigned int iterations)
 {
-    const unsigned int diff_ntt_size = 1 << (iterations - 1);
-    const index_t out_ntt_size = (index_t)1 << (stage - 1);
+    extern __shared__ fr_t shared_mem[][z_count];
 
-    const index_t stride = (idx & (out_ntt_size - 1)) >> (iterations - 1);
-    const index_t current_ntt_idx = (idx & ~(out_ntt_size - 1)) * 2 + stride;
-    const index_t thread_ntt_idx = (idx & (diff_ntt_size - 1)) << (stage - iterations + 1);
+    const unsigned int diff_mask = (1 << (iterations - 1)) - 1;
+    const index_t out_mask = ((index_t)1 << (stage - 1)) - 1;
+
+    const index_t stride = (idx & out_mask) >> (iterations - 1);
+    const index_t current_ntt_idx = (idx & ~out_mask) * 2 + stride;
+    const index_t thread_ntt_idx = (idx & diff_mask) << (stage - iterations + 1);
 
     offset += thread_ntt_idx + current_ntt_idx;
 
     const unsigned int x = threadIdx.x & (z_count - 1);
-    shared_mem += (threadIdx.x & (0 - z_count)) * z_count;
-    fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_mem);
+    auto xchg = &shared_mem[threadIdx.x & (0 - z_count)];
 
     #pragma unroll
     for (int z = 0; z < z_count; z++) {
@@ -269,17 +277,15 @@ void _GS_NTT_3D(const unsigned int radix, const unsigned int lg_domain_size,
     index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
 
     const index_t diff_mask = (1 << (iterations - 1)) - 1;
-    const index_t inp_ntt_size = (index_t)1 << (stage - 1);
-    const index_t out_ntt_size = (index_t)1 << (stage - iterations);
+    const index_t inp_mask = ((index_t)1 << (stage - 1)) - 1;
+    const index_t out_mask = ((index_t)1 << (stage - iterations)) - 1;
 
     const index_t tiz = (tid & ~diff_mask) * z_count + (tid & diff_mask);
 
     fr_t r[2][z_count];
 
-    gs_coalesced_load<z_count>
-        (d_inout, shared_exchange, r[0], 0, stage, iterations);
-    gs_coalesced_load<z_count>
-        (d_inout, shared_exchange, r[1], inp_ntt_size, stage, iterations);
+    gs_coalesced_load<z_count>(d_inout, r[0], 0, stage, iterations);
+    gs_coalesced_load<z_count>(d_inout, r[1], inp_mask+1, stage, iterations);
 
     #pragma unroll 1
     for (int s = iterations; --s >= 6;) {
@@ -352,7 +358,7 @@ void _GS_NTT_3D(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     if (stage - iterations != 0) {
-        index_t thread_ntt_pos = (tiz & (inp_ntt_size - 1)) >> (iterations - 1);
+        index_t thread_ntt_pos = (tiz & inp_mask) >> (iterations - 1);
         unsigned int thread_ntt_idx = (tiz & diff_mask) * 2;
         unsigned int nbits = MAX_LG_DOMAIN_SIZE - (stage - iterations);
         index_t idx0 = bit_rev(thread_ntt_idx, nbits);
@@ -391,9 +397,9 @@ void _GS_NTT_3D(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     gs_coalesced_store<z_count>
-        (d_inout, shared_exchange, r[0], tiz & ((index_t)0 - z_count), 0, stage, iterations);
+        (d_inout, r[0], tiz & ((index_t)0 - z_count), 0, stage, iterations);
     gs_coalesced_store<z_count>
-        (d_inout, shared_exchange, r[1], tiz & ((index_t)0 - z_count), out_ntt_size, stage, iterations);
+        (d_inout, r[1], tiz & ((index_t)0 - z_count), out_mask+1, stage, iterations);
 }
 
 template __global__
