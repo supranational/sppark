@@ -226,6 +226,53 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
     }
 }
 
+template<unsigned int z_count>
+__device__ __forceinline__
+void coalesced_load(fr_t r[z_count], const fr_t* inout, index_t idx,
+                    const unsigned int stage)
+{
+    const unsigned int x = threadIdx.x & (z_count - 1);
+    idx &= ~((index_t)(z_count - 1) << stage);
+
+    #pragma unroll
+    for (int z = 0; z < z_count; z++)
+        r[z] = inout[idx + x + (z << stage)];
+}
+
+template<unsigned int z_count>
+__device__ __forceinline__
+void transpose(fr_t r[z_count])
+{
+    extern __shared__ fr_t shared_exchange[];
+    fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
+
+    const unsigned int x = threadIdx.x & (z_count - 1);
+    const unsigned int y = threadIdx.x & ~(z_count - 1);
+
+    #pragma unroll
+    for (int z = 0; z < z_count; z++)
+        xchg[y + z][x] = r[z];
+
+    __syncwarp();
+
+    #pragma unroll
+    for (int z = 0; z < z_count; z++)
+        r[z] = xchg[y + x][z];
+}
+
+template<unsigned int z_count>
+__device__ __forceinline__
+void coalesced_store(fr_t* inout, index_t idx, const fr_t r[z_count],
+                     const unsigned int stage)
+{
+    const unsigned int x = threadIdx.x & (z_count - 1);
+    idx &= ~((index_t)(z_count - 1) << stage);
+
+    #pragma unroll
+    for (int z = 0; z < z_count; z++)
+        inout[idx + x + (z << stage)] = r[z];
+}
+
 #if defined(FEATURE_BABY_BEAR) || defined(FEATURE_GOLDILOCKS)
 const static int Z_COUNT = 256/8/sizeof(fr_t);
 # include "kernels/gs_mixed_radix_narrow.cu"
