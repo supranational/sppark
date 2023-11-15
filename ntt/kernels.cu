@@ -104,10 +104,10 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
 {
     unsigned int off = 0;
 
-    fr_t root = roots[off][pow % WINDOW_SIZE];
+    fr_t t, root = roots[off][pow % WINDOW_SIZE];
     #pragma unroll 1
     while (pow >>= LG_WINDOW_SIZE)
-        root *= roots[++off][pow % WINDOW_SIZE];
+        root *= (t = roots[++off][pow % WINDOW_SIZE]);
 
     return root;
 }
@@ -219,9 +219,10 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
     root1 = roots[off][idx1 >> win];
     #pragma unroll 1
     while (off--) {
+        fr_t t;
         win -= LG_WINDOW_SIZE;
-        root0 *= roots[off][(idx0 >> win) % WINDOW_SIZE];
-        root1 *= roots[off][(idx1 >> win) % WINDOW_SIZE];
+        root0 *= (t = roots[off][(idx0 >> win) % WINDOW_SIZE]);
+        root1 *= (t = roots[off][(idx1 >> win) % WINDOW_SIZE]);
     }
 }
 
