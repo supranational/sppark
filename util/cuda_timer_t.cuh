@@ -7,68 +7,64 @@
 
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 class cuda_timer_t {
     cudaEvent_t begin, end;
+    cudaStream_t current_stream;
+    bool started = false;
 public:
-    cuda_timer_t() : begin(nullptr), end(nullptr) {
+    cuda_timer_t() : begin(nullptr), end(nullptr)
+    {
         CUDA_OK(cudaEventCreate(&begin));
         CUDA_OK(cudaEventCreate(&end));
     }
 
-    ~cuda_timer_t() {
+    ~cuda_timer_t()
+    {
         if (begin) cudaEventDestroy(begin);
         if (end) cudaEventDestroy(end);
     }
 
-    inline void start() {
-        CUDA_OK(cudaEventRecord(begin, 0));
-    }
-
-    inline void start(cudaStream_t stream) {
+    inline void start(cudaStream_t stream = 0)
+    {
+        current_stream = stream;
+        started = true;
         CUDA_OK(cudaEventRecord(begin, stream));
     }
 
-    inline void stop(const std::string str) {
-        float elapsed;
+    inline float get_elapsed()
+    {
+        float elapsed = -1;
 
-        CUDA_OK(cudaEventRecord(end, 0));
-        CUDA_OK(cudaEventSynchronize(end));
-        CUDA_OK(cudaEventElapsedTime(&elapsed, begin, end));
+        if (started) {
+            started = false;
 
-        std::cout << str << ": " << std::fixed << std::setprecision(3)
-                  << elapsed << " ms" << std::endl;
-    }
-
-    inline void stop(cudaStream_t stream, const std::string str) {
-        float elapsed;
-
-        CUDA_OK(cudaEventRecord(end, stream));
-        CUDA_OK(cudaEventSynchronize(end));
-        CUDA_OK(cudaEventElapsedTime(&elapsed, begin, end));
-
-        std::cout << str << ": " << std::fixed << std::setprecision(3)
-                  << elapsed << " ms" << std::endl;
-    }
-
-    inline float get_elapsed() {
-        float elapsed;
-
-        CUDA_OK(cudaEventRecord(end, 0));
-        CUDA_OK(cudaEventSynchronize(end));
-        CUDA_OK(cudaEventElapsedTime(&elapsed, begin, end));
+            CUDA_OK(cudaEventRecord(end, current_stream));
+            CUDA_OK(cudaEventSynchronize(end));
+            CUDA_OK(cudaEventElapsedTime(&elapsed, begin, end));
+        }
 
         return elapsed;
     }
 
-    inline float get_elapsed(cudaStream_t stream) {
-        float elapsed;
+    friend std::ostream& operator<<(std::ostream& os, cuda_timer_t& timer)
+    {
+        float elapsed = timer.get_elapsed();
 
-        CUDA_OK(cudaEventRecord(end, stream));
-        CUDA_OK(cudaEventSynchronize(end));
-        CUDA_OK(cudaEventElapsedTime(&elapsed, begin, end));
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(2);
 
-        return elapsed;
+        if (elapsed == -1)
+            ss << "timer not started";
+        else if (elapsed < 1)
+            ss << elapsed * 1000 << " μs";
+        else if (elapsed >= 1000)
+            ss << elapsed / 1000 << " s";
+        else
+            ss << elapsed << " ms";
+
+        return os << ss.str();
     }
 };
 
