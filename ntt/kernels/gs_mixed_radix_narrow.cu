@@ -2,76 +2,6 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template<unsigned int z_count>
-__device__ __forceinline__
-void gs_coalesced_load(const fr_t* inout, fr_t* r,
-                       const index_t offset,
-                       unsigned int stage, unsigned int iterations)
-{
-    extern __shared__ fr_t shared_exchange[];
-
-    index_t mask = ((index_t)1 << (stage - iterations)) / z_count - 1;
-    index_t idx = (threadIdx.x / z_count) << (stage - iterations);
-    idx += (((blockIdx.x & ~mask) << iterations) + (blockIdx.x & mask)) * z_count;
-    idx += (threadIdx.x & (z_count - 1)) + offset;
-
-    index_t stride = (blockDim.x / z_count) << (stage - iterations);
-    #pragma unroll
-    for (int z = 0; z < z_count; z++, idx += stride) {
-        r[z] = inout[idx];
-    }
-
-    __syncthreads();
-
-    fr_t *xchg = &shared_exchange[threadIdx.x];
-    #pragma unroll
-    for (int z = 0; z < z_count; z++) {
-        xchg[blockDim.x * z] = r[z];
-    }
-
-    __syncthreads();
-
-    xchg = &shared_exchange[threadIdx.x * z_count];
-    #pragma unroll
-    for (int z = 0; z < z_count; z++) {
-        r[z] = xchg[z];
-    }
-}
-
-template<unsigned int z_count>
-__device__ __forceinline__
-void gs_coalesced_store(fr_t* inout, const fr_t* r,
-                        index_t idx, index_t offset,
-                        unsigned int stage, unsigned int iterations)
-{
-    extern __shared__ fr_t shared_exchange[];
-
-    const unsigned int diff_mask = (1 << (iterations - 1)) - 1;
-    const index_t out_mask = ((index_t)1 << (stage - 1)) - 1;
-
-    const index_t stride = (idx & out_mask) >> (iterations - 1);
-    const index_t current_ntt_idx = (idx & ~out_mask) * 2 + stride;
-    const index_t thread_ntt_idx = (idx & diff_mask) << (stage - iterations + 1);
-
-    offset += thread_ntt_idx + current_ntt_idx;
-
-    const unsigned int x = threadIdx.x & (z_count - 1);
-    fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
-    xchg += threadIdx.x & (0 - z_count);
-
-    #pragma unroll
-    for (int z = 0; z < z_count; z++) {
-        xchg[x][z] = r[z];
-    }
-
-    __syncwarp();
-
-    #pragma unroll
-    for (int z = 0; z < z_count; z++) {
-        inout[offset + x + (z << (stage - iterations + 1))] = xchg[z][x];
-    }
-}
-
 template<unsigned int z_count, bool coalesced = false>
 __launch_bounds__(768, 1) __global__
 void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
@@ -96,19 +26,21 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
     const index_t tiz = (tid & ~diff_mask) * z_count + (tid & diff_mask);
 
-    index_t idx0, idx1;
+    // rearrange |tiz|'s bits
+    index_t idx0 = (tiz & ~inp_mask) * 2;
+    idx0 += (tiz << (stage - iterations)) & inp_mask;
+    idx0 += (tiz >> (iterations - 1)) & out_mask;
+    index_t idx1 = idx0 + ((index_t)1 << (stage - 1));
+
     fr_t r[2][z_count];
 
     if (coalesced) {
-        gs_coalesced_load<z_count>(d_inout, r[0], 0, stage, iterations);
-        gs_coalesced_load<z_count>(d_inout, r[1], inp_mask+1, stage, iterations);
+        coalesced_load<z_count>(r[0], d_inout, idx0, stage - iterations);
+        coalesced_load<z_count>(r[1], d_inout, idx1, stage - iterations);
+        transpose<z_count>(r[0]);
+        __syncwarp();
+        transpose<z_count>(r[1]);
     } else {
-        // rearrange |tiz|'s bits
-        idx0 = (tiz & ~inp_mask) * 2;
-        idx0 += (tiz << (stage - iterations)) & inp_mask;
-        idx0 += (tiz >> (iterations - 1)) & out_mask;
-        idx1 = idx0 + ((index_t)1 << (stage - 1));
-
         unsigned int z_shift = out_mask==0 ? iterations : 0;
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
@@ -226,21 +158,22 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         }
     }
 
-    if (coalesced) {
-        gs_coalesced_store<z_count>
-            (d_inout, r[0], tiz & ((index_t)0 - z_count), 0, stage, iterations);
-        gs_coalesced_store<z_count>
-            (d_inout, r[1], tiz & ((index_t)0 - z_count), out_mask+1, stage, iterations);
-    } else {
-        // rotate "iterations" bits in indices
-        index_t mask = ((index_t)1 << stage) - ((index_t)1 << (stage - iterations));
-        index_t rotw = idx0 & mask;
-        rotw = (rotw << 1) | (rotw >> (iterations - 1));
-        idx0 = (idx0 & ~mask) | (rotw & mask);
-        rotw = idx1 & mask;
-        rotw = (rotw << 1) | (rotw >> (iterations - 1));
-        idx1 = (idx1 & ~mask) | (rotw & mask);
+    // rotate "iterations" bits in indices
+    index_t mask = ((index_t)1 << stage) - ((index_t)1 << (stage - iterations));
+    index_t rotw = idx0 & mask;
+    rotw = (rotw << 1) | (rotw >> (iterations - 1));
+    idx0 = (idx0 & ~mask) | (rotw & mask);
+    rotw = idx1 & mask;
+    rotw = (rotw << 1) | (rotw >> (iterations - 1));
+    idx1 = (idx1 & ~mask) | (rotw & mask);
 
+    if (coalesced) {
+        transpose<z_count>(r[0]);
+        __syncwarp();
+        transpose<z_count>(r[1]);
+        coalesced_store<z_count>(d_inout, idx0, r[0], stage - iterations + 1);
+        coalesced_store<z_count>(d_inout, idx1, r[1], stage - iterations + 1);
+    } else {
         unsigned int z_shift = out_mask==0 ? iterations : 0;
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
