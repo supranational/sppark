@@ -233,10 +233,11 @@ void coalesced_load(fr_t r[z_count], const fr_t* inout, index_t idx,
 {
     const unsigned int x = threadIdx.x & (z_count - 1);
     idx &= ~((index_t)(z_count - 1) << stage);
+    idx += x;
 
     #pragma unroll
-    for (int z = 0; z < z_count; z++)
-        r[z] = inout[idx + x + (z << stage)];
+    for (int z = 0; z < z_count; z++, idx += (index_t)1 << stage)
+        r[z] = inout[idx];
 }
 
 template<unsigned int z_count>
@@ -267,10 +268,11 @@ void coalesced_store(fr_t* inout, index_t idx, const fr_t r[z_count],
 {
     const unsigned int x = threadIdx.x & (z_count - 1);
     idx &= ~((index_t)(z_count - 1) << stage);
+    idx += x;
 
     #pragma unroll
-    for (int z = 0; z < z_count; z++)
-        inout[idx + x + (z << stage)] = r[z];
+    for (int z = 0; z < z_count; z++, idx += (index_t)1 << stage)
+        inout[idx] = r[z];
 }
 
 #if defined(FEATURE_BABY_BEAR) || defined(FEATURE_GOLDILOCKS)
