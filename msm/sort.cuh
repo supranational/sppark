@@ -275,11 +275,11 @@ static void lower_sort(uint32_t dst[], const uint2 src[],
 
     // carry over most significant prefix sums from each warp
     if (laneid == WARP_SZ-1)
-        counters[warpid] = prefix_sums[N_SUMS-1];
+        counters[warpid*(WARP_SZ*N_SUMS+1)] = prefix_sums[N_SUMS-1];
 
     __syncthreads();
 
-    uint32_t carry_sum = laneid ? counters[laneid-1] : 0;
+    uint32_t carry_sum = laneid ? counters[(laneid-1)*(WARP_SZ*N_SUMS+1)] : 0;
 
     __syncthreads();
 
