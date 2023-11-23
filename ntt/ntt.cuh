@@ -32,25 +32,19 @@ protected:
 
         size_t domain_size = (size_t)1 << lg_domain_size;
         // aim to read 4 cache lines of consecutive data per read
-        const size_t Z_COUNT = 256 / sizeof(fr_t);
+        const uint32_t Z_COUNT = 256 / sizeof(fr_t);
+        const uint32_t bsize = Z_COUNT>WARP_SZ ? Z_COUNT : WARP_SZ;
 
-        if (domain_size <= WARP_SZ)
-            bit_rev_permutation
-                <<<1, domain_size, 0, stream>>>
-                (d_out, d_inp, lg_domain_size);
-        else if (d_out == d_inp || domain_size <= Z_COUNT * Z_COUNT)
-            bit_rev_permutation
-                <<<domain_size/WARP_SZ, WARP_SZ, 0, stream>>>
-                (d_out, d_inp, lg_domain_size);
-        else if (domain_size < 128 * Z_COUNT)
-            bit_rev_permutation_aux
-                <<<1, domain_size / Z_COUNT, domain_size * sizeof(fr_t), stream>>>
-                (d_out, d_inp, lg_domain_size);
+        if (domain_size <= 1024)
+            bit_rev_permutation<<<1, domain_size, 0, stream>>>
+                               (d_out, d_inp, lg_domain_size);
+        else if (domain_size < bsize * Z_COUNT)
+            bit_rev_permutation<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
+                               (d_out, d_inp, lg_domain_size);
         else
-            bit_rev_permutation_aux
-                <<<domain_size / Z_COUNT / 128, 128, Z_COUNT * 128 * sizeof(fr_t),
-                   stream>>>
-                (d_out, d_inp, lg_domain_size);
+            bit_rev_permutation_z<<<domain_size / Z_COUNT / bsize, bsize,
+                                    bsize * Z_COUNT * sizeof(fr_t), stream>>>
+                                 (d_out, d_inp, lg_domain_size);
 
         CUDA_OK(cudaGetLastError());
     }
