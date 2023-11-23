@@ -7,15 +7,6 @@
 
 #include <cooperative_groups.h>
 
-__device__ __forceinline__
-index_t bit_rev(index_t i, unsigned int nbits)
-{
-    if (sizeof(i) == 4 || nbits <= 32)
-        return __brev(i) >> (8*sizeof(unsigned int) - nbits);
-    else
-        return __brevll(i) >> (8*sizeof(unsigned long long) - nbits);
-}
-
 #ifdef __CUDA_ARCH__
 __device__ __forceinline__
 void shfl_bfly(fr_t& r, int laneMask)
@@ -41,19 +32,42 @@ void swap(T& u1, T& u2)
     u2 = temp;
 }
 
+template<typename T>
+__device__ __forceinline__
+T bit_rev(T i, unsigned int nbits)
+{
+    if (sizeof(i) == 4 || nbits <= 32)
+        return __brev(i) >> (8*sizeof(unsigned int) - nbits);
+    else
+        return __brevll(i) >> (8*sizeof(unsigned long long) - nbits);
+}
+
 // Permutes the data in an array such that data[i] = data[bit_reverse(i)]
 // and data[bit_reverse(i)] = data[i]
 __launch_bounds__(1024) __global__
 void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
 {
-    index_t i = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
-    index_t r = bit_rev(i, lg_domain_size);
+    if (gridDim.x == 1 && blockDim.x == (1 << lg_domain_size)) {
+        uint32_t idx = threadIdx.x;
+        uint32_t rev = bit_rev(idx, lg_domain_size);
 
-    if (i < r || (d_out != d_in && i == r)) {
-        fr_t t0 = d_in[i];
-        fr_t t1 = d_in[r];
-        d_out[r] = t0;
-        d_out[i] = t1;
+        fr_t t = d_in[idx];
+        if (d_out == d_in)
+            __syncthreads();
+        d_out[rev] = t;
+    } else {
+        index_t idx = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
+        index_t rev = bit_rev(idx, lg_domain_size);
+        bool copy = d_out != d_in && idx == rev;
+
+        if (idx < rev || copy) {
+            fr_t t0 = d_in[idx];
+            if (!copy) {
+                fr_t t1 = d_in[rev];
+                d_out[idx] = t1;
+            }
+            d_out[rev] = t0;
+        }
     }
 }
 
@@ -61,41 +75,59 @@ template<typename T>
 static __device__ __host__ constexpr uint32_t lg2(T n)
 {   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
 
-__global__
-void bit_rev_permutation_aux(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
+__launch_bounds__(64, 6) __global__
+void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
-    const size_t Z_COUNT = 256 / sizeof(fr_t);
+    const uint32_t Z_COUNT = 256 / sizeof(fr_t);
     const uint32_t LG_Z_COUNT = lg2(Z_COUNT);
+    const index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
+
+    index_t group_idx = tid >> LG_Z_COUNT;
+    index_t group_rev = bit_rev(group_idx, lg_domain_size - 2*LG_Z_COUNT);
+
+    if (group_idx > group_rev)
+        return;
 
     extern __shared__ fr_t exchange[];
     fr_t (*xchg)[Z_COUNT][Z_COUNT] = reinterpret_cast<decltype(xchg)>(exchange);
 
+    uint32_t gid = threadIdx.x / Z_COUNT;
+    uint32_t idx = threadIdx.x % Z_COUNT;
+    uint32_t rev = bit_rev(idx, LG_Z_COUNT);
+
     index_t step = (index_t)1 << (lg_domain_size - LG_Z_COUNT);
-    index_t group_idx = (threadIdx.x + blockDim.x * (index_t)blockIdx.x) >> LG_Z_COUNT;
-    uint32_t brev_limit = lg_domain_size - LG_Z_COUNT * 2;
-    index_t brev_mask = ((index_t)1 << brev_limit) - 1;
-    index_t group_idx_brev =
-        (group_idx & ~brev_mask) | bit_rev(group_idx & brev_mask, brev_limit);
-    uint32_t group_thread = threadIdx.x & (Z_COUNT - 1);
-    uint32_t group_thread_rev = bit_rev(group_thread, LG_Z_COUNT);
-    uint32_t group_in_block_idx = threadIdx.x >> LG_Z_COUNT;
+    index_t base_idx = group_idx * Z_COUNT + idx;
+    index_t base_rev = group_rev * Z_COUNT + idx;
+
+    fr_t regs[Z_COUNT];
 
     #pragma unroll
     for (uint32_t i = 0; i < Z_COUNT; i++) {
-        xchg[group_in_block_idx][i][group_thread_rev] =
-            in[group_idx * Z_COUNT + i * step + group_thread];
+        xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
+        if (group_idx != group_rev)
+            regs[i] = in[i * step + base_rev];
     }
 
-    if (Z_COUNT > WARP_SZ)
-        __syncthreads();
-    else
-        __syncwarp();
+    (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
 
     #pragma unroll
-    for (uint32_t i = 0; i < Z_COUNT; i++) {
-        out[group_idx_brev * Z_COUNT + i * step + group_thread] =
-            xchg[group_in_block_idx][group_thread_rev][i];
-    }
+    for (uint32_t i = 0; i < Z_COUNT; i++)
+        out[i * step + base_rev] = xchg[gid][rev][i];
+
+    if (group_idx == group_rev)
+        return;
+
+    (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+
+    #pragma unroll
+    for (uint32_t i = 0; i < Z_COUNT; i++)
+        xchg[gid][i][rev] = regs[i];
+
+    (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+
+    #pragma unroll
+    for (uint32_t i = 0; i < Z_COUNT; i++)
+        out[i * step + base_idx] = xchg[gid][rev][i];
 }
 
 __device__ __forceinline__
