@@ -41,9 +41,15 @@ protected:
         else if (domain_size < bsize * Z_COUNT)
             bit_rev_permutation<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
                                (d_out, d_inp, lg_domain_size);
-        else
+        else if (Z_COUNT > WARP_SZ || lg_domain_size <= 32)
             bit_rev_permutation_z<<<domain_size / Z_COUNT / bsize, bsize,
                                     bsize * Z_COUNT * sizeof(fr_t), stream>>>
+                                 (d_out, d_inp, lg_domain_size);
+        else
+            // Those GPUs that can reserve 96KB of shared memory can
+            // schedule 2 blocks to each SM...
+            bit_rev_permutation_z<<<gpu_props(stream).multiProcessorCount*2, 192,
+                                    192 * Z_COUNT * sizeof(fr_t), stream>>>
                                  (d_out, d_inp, lg_domain_size);
 
         CUDA_OK(cudaGetLastError());

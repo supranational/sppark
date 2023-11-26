@@ -75,18 +75,11 @@ template<typename T>
 static __device__ __host__ constexpr uint32_t lg2(T n)
 {   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
 
-__launch_bounds__(64, 6) __global__
+__launch_bounds__(192, 2) __global__
 void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
     const uint32_t Z_COUNT = 256 / sizeof(fr_t);
     const uint32_t LG_Z_COUNT = lg2(Z_COUNT);
-    const index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
-
-    index_t group_idx = tid >> LG_Z_COUNT;
-    index_t group_rev = bit_rev(group_idx, lg_domain_size - 2*LG_Z_COUNT);
-
-    if (group_idx > group_rev)
-        return;
 
     extern __shared__ fr_t exchange[];
     fr_t (*xchg)[Z_COUNT][Z_COUNT] = reinterpret_cast<decltype(xchg)>(exchange);
@@ -96,38 +89,51 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
     uint32_t rev = bit_rev(idx, LG_Z_COUNT);
 
     index_t step = (index_t)1 << (lg_domain_size - LG_Z_COUNT);
-    index_t base_idx = group_idx * Z_COUNT + idx;
-    index_t base_rev = group_rev * Z_COUNT + idx;
+    index_t tid = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
 
-    fr_t regs[Z_COUNT];
+    #pragma unroll 1
+    do {
+        index_t group_idx = tid >> LG_Z_COUNT;
+        index_t group_rev = bit_rev(group_idx, lg_domain_size - 2*LG_Z_COUNT);
 
-    #pragma unroll
-    for (uint32_t i = 0; i < Z_COUNT; i++) {
-        xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
-        if (group_idx != group_rev)
-            regs[i] = in[i * step + base_rev];
-    }
+        if (group_idx > group_rev)
+            continue;
 
-    (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+        index_t base_idx = group_idx * Z_COUNT + idx;
+        index_t base_rev = group_rev * Z_COUNT + idx;
 
-    #pragma unroll
-    for (uint32_t i = 0; i < Z_COUNT; i++)
-        out[i * step + base_rev] = xchg[gid][rev][i];
+        fr_t regs[Z_COUNT];
 
-    if (group_idx == group_rev)
-        return;
+        #pragma unroll
+        for (uint32_t i = 0; i < Z_COUNT; i++) {
+            xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
+            if (group_idx != group_rev)
+                regs[i] = in[i * step + base_rev];
+        }
 
-    (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+        (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
 
-    #pragma unroll
-    for (uint32_t i = 0; i < Z_COUNT; i++)
-        xchg[gid][i][rev] = regs[i];
+        #pragma unroll
+        for (uint32_t i = 0; i < Z_COUNT; i++)
+            out[i * step + base_rev] = xchg[gid][rev][i];
 
-    (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+        if (group_idx == group_rev)
+            continue;
 
-    #pragma unroll
-    for (uint32_t i = 0; i < Z_COUNT; i++)
-        out[i * step + base_idx] = xchg[gid][rev][i];
+        (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+
+        #pragma unroll
+        for (uint32_t i = 0; i < Z_COUNT; i++)
+            xchg[gid][i][rev] = regs[i];
+
+        (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+
+        #pragma unroll
+        for (uint32_t i = 0; i < Z_COUNT; i++)
+            out[i * step + base_idx] = xchg[gid][rev][i];
+
+    } while (Z_COUNT <= WARP_SZ && (tid += blockDim.x*gridDim.x) < step);
+    // without "Z_COUNT <= WARP_SZ" compiler spills 128 bytes to stack :-(
 }
 
 __device__ __forceinline__
