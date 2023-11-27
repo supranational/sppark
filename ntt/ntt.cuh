@@ -58,7 +58,7 @@ protected:
 private:
     static void LDE_powers(fr_t* inout, bool innt, bool bitrev,
                            uint32_t lg_domain_size, uint32_t lg_blowup,
-                           stream_t& stream, bool ext_pow = false)
+                           stream_t& stream)
     {
         size_t domain_size = (size_t)1 << lg_domain_size;
         const auto gen_powers =
@@ -66,23 +66,21 @@ private:
 
         if (domain_size < WARP_SZ)
             LDE_distribute_powers<<<1, domain_size, 0, stream>>>
-                                 (inout, lg_blowup, bitrev, gen_powers, ext_pow);
+                                 (inout, lg_blowup, bitrev, gen_powers);
         else if (domain_size < 512)
             LDE_distribute_powers<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
-                                 (inout, lg_blowup, bitrev, gen_powers, ext_pow);
+                                 (inout, lg_blowup, bitrev, gen_powers);
         else
             LDE_distribute_powers<<<domain_size / 512, 512, 0, stream>>>
-                                 (inout, lg_blowup, bitrev, gen_powers, ext_pow);
+                                 (inout, lg_blowup, bitrev, gen_powers);
 
         CUDA_OK(cudaGetLastError());
     }
 
 protected:
-    // coset_ext_pow is only used when NTT type is coset
     static void NTT_internal(fr_t* d_inout, uint32_t lg_domain_size,
                              InputOutputOrder order, Direction direction,
-                             Type type, stream_t& stream,
-                             bool coset_ext_pow = false)
+                             Type type, stream_t& stream)
     {
         // Pick an NTT algorithm based on the input order and the desired output
         // order of the data. In certain cases, bit reversal can be avoided which
@@ -116,8 +114,7 @@ protected:
         }
 
         if (!intt && type == Type::coset)
-            LDE_powers(d_inout, intt, bitrev, lg_domain_size, 0, stream,
-                       coset_ext_pow);
+            LDE_powers(d_inout, intt, bitrev, lg_domain_size, 0, stream);
 
         switch (algorithm) {
             case Algorithm::GS:
@@ -129,8 +126,7 @@ protected:
         }
 
         if (intt && type == Type::coset)
-            LDE_powers(d_inout, intt, !bitrev, lg_domain_size, 0, stream,
-                       coset_ext_pow);
+            LDE_powers(d_inout, intt, !bitrev, lg_domain_size, 0, stream);
 
         if (order == InputOutputOrder::RR)
             bit_rev(d_inout, d_inout, lg_domain_size, stream);
@@ -139,7 +135,7 @@ protected:
 public:
     static RustError Base(const gpu_t& gpu, fr_t* inout, uint32_t lg_domain_size,
                           InputOutputOrder order, Direction direction,
-                          Type type, bool coset_ext_pow = false)
+                          Type type)
     {
         if (lg_domain_size == 0)
             return RustError{cudaSuccess};
@@ -151,8 +147,7 @@ public:
             dev_ptr_t<fr_t> d_inout{domain_size, gpu};
             gpu.HtoD(&d_inout[0], inout, domain_size);
 
-            NTT_internal(&d_inout[0], lg_domain_size, order, direction, type, gpu,
-                         coset_ext_pow);
+            NTT_internal(&d_inout[0], lg_domain_size, order, direction, type, gpu);
 
             gpu.DtoH(inout, &d_inout[0], domain_size);
             gpu.sync();
@@ -169,8 +164,7 @@ public:
     }
 
     static RustError LDE(const gpu_t& gpu, fr_t* inout,
-                         uint32_t lg_domain_size, uint32_t lg_blowup,
-                         bool ext_pow = false)
+                         uint32_t lg_domain_size, uint32_t lg_blowup)
     {
         try {
             gpu.select();
@@ -190,7 +184,7 @@ public:
                 NTTParameters::all()[gpu.id()]->partial_group_gen_powers;
 
             LDE_launch(gpu, &d_ext_domain[0], &d_domain[0],
-                       gen_powers, lg_domain_size, lg_blowup, ext_pow);
+                       gen_powers, lg_domain_size, lg_blowup);
 
             NTT_internal(&d_ext_domain[0], lg_domain_size + lg_blowup,
                          InputOutputOrder::RN, Direction::forward,
@@ -251,8 +245,7 @@ protected:
 
 public:
     static RustError LDE_aux(const gpu_t& gpu, fr_t* inout,
-                             uint32_t lg_domain_size, uint32_t lg_blowup,
-                             bool ext_pow = false)
+                             uint32_t lg_domain_size, uint32_t lg_blowup)
     {
         try {
             size_t domain_size = (size_t)1 << lg_domain_size;
@@ -275,7 +268,7 @@ public:
             bit_rev(aux_data, domain_data, lg_domain_size, gpu);
 
             LDE_launch(gpu, ext_domain_data, domain_data, gen_powers,
-                       lg_domain_size, lg_blowup, true, ext_pow);
+                       lg_domain_size, lg_blowup);
 
             // NTT - RN
             NTT_internal(ext_domain_data, lg_domain_size + lg_blowup,
@@ -296,22 +289,20 @@ public:
         return RustError{cudaSuccess};
     }
 
-    // coset_ext_pow is only used when NTT type is coset
     static void Base_dev_ptr(stream_t& stream, fr_t* d_inout,
                              uint32_t lg_domain_size, InputOutputOrder order,
-                             Direction direction, Type type,
-                             bool coset_ext_pow = false)
+                             Direction direction, Type type)
     {
         size_t domain_size = (size_t)1 << lg_domain_size;
 
         NTT_internal(&d_inout[0], lg_domain_size, order, direction, type,
-                     stream, coset_ext_pow);
+                     stream);
     }
 
     static void LDE_powers(stream_t& stream, fr_t* d_inout,
-                           uint32_t lg_domain_size, bool ext_pow = false)
+                           uint32_t lg_domain_size)
     {
-        LDE_powers(d_inout, false, true, lg_domain_size, 0, stream, ext_pow);
+        LDE_powers(d_inout, false, true, lg_domain_size, 0, stream);
     }
 
     // If d_out and d_in overlap, d_out is expected to encompass d_in and

@@ -176,8 +176,7 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
 
 __launch_bounds__(1024) __global__
 void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_blowup, bool bitrev,
-                           const fr_t (*gen_powers)[WINDOW_SIZE],
-                           bool ext_pow = false)
+                           const fr_t (*gen_powers)[WINDOW_SIZE])
 {
     index_t idx = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
     index_t pow = idx;
@@ -191,8 +190,7 @@ void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_blowup, bool bitrev,
         pow = bit_rev(idx, lg_domain_size);
     }
 
-    if (ext_pow)
-        pow <<= lg_blowup;
+    pow <<= lg_blowup;
 
     r = r * get_intermediate_root(pow, gen_powers);
 
