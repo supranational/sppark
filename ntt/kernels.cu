@@ -175,26 +175,26 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
 }
 
 __launch_bounds__(1024) __global__
-void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_blowup, bool bitrev,
+void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_domain_size,
+                           uint32_t lg_blowup, bool bitrev,
                            const fr_t (*gen_powers)[WINDOW_SIZE])
 {
-    index_t idx = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
-    index_t pow = idx;
-    fr_t r = d_inout[idx];
+#if 0
+    assert(blockDim.x * gridDim.x == blockDim.x * (size_t)gridDim.x);
+#endif
+    size_t domain_size = (size_t)1 << lg_domain_size;
+    index_t idx = threadIdx.x + blockDim.x * blockIdx.x;
 
-    if (bitrev) {
-        size_t domain_size = gridDim.x * (size_t)blockDim.x;
-        assert((domain_size & (domain_size-1)) == 0);
-        uint32_t lg_domain_size = 63 - __clzll(domain_size);
+    #pragma unroll 1
+    for (; idx < domain_size; idx += blockDim.x * gridDim.x) {
+        fr_t r = d_inout[idx];
 
-        pow = bit_rev(idx, lg_domain_size);
+        index_t pow = bitrev ? bit_rev(idx, lg_domain_size) : idx;
+        pow <<= lg_blowup;
+        r *= get_intermediate_root(pow, gen_powers);
+
+        d_inout[idx] = r;
     }
-
-    pow <<= lg_blowup;
-
-    r = r * get_intermediate_root(pow, gen_powers);
-
-    d_inout[idx] = r;
 }
 
 __launch_bounds__(1024) __global__

@@ -57,22 +57,23 @@ protected:
 
 private:
     static void LDE_powers(fr_t* inout, bool innt, bool bitrev,
-                           uint32_t lg_domain_size, uint32_t lg_blowup,
+                           uint32_t lg_dsz, uint32_t lg_blowup,
                            stream_t& stream)
     {
-        size_t domain_size = (size_t)1 << lg_domain_size;
+        size_t domain_size = (size_t)1 << lg_dsz;
         const auto gen_powers =
             NTTParameters::all(innt)[stream]->partial_group_gen_powers;
 
         if (domain_size < WARP_SZ)
             LDE_distribute_powers<<<1, domain_size, 0, stream>>>
-                                 (inout, lg_blowup, bitrev, gen_powers);
-        else if (domain_size < 512)
+                                 (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
+        else if (lg_dsz < 32)
             LDE_distribute_powers<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
-                                 (inout, lg_blowup, bitrev, gen_powers);
+                                 (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else
-            LDE_distribute_powers<<<domain_size / 512, 512, 0, stream>>>
-                                 (inout, lg_blowup, bitrev, gen_powers);
+            LDE_distribute_powers<<<gpu_props(stream).multiProcessorCount, 1024,
+                                    0, stream>>>
+                                 (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
 
         CUDA_OK(cudaGetLastError());
     }
