@@ -97,11 +97,11 @@ public:
 #endif
 
 #ifndef NDEBUG
-    friend inline __host__ __device__ bool operator==(const Affine_t& a, const Affine_t& b)
-    {   return (a.X == b.X) && (a.Y == b.Y);   }
+    friend inline __host__ bool operator==(const Affine_t& a, const Affine_t& b)
+    {   return (a.X == b.X) & (a.Y == b.Y);   }
 
-    friend inline __host__ __device__ bool operator!=(const Affine_t& a, const Affine_t& b)
-    {   return (a.X != b.X) || (a.Y != b.Y);   }
+    friend inline __host__ bool operator!=(const Affine_t& a, const Affine_t& b)
+    {   return !(a == b);   }
 
 # if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend __host__ std::ostream& operator<<(std::ostream& os, const Affine_t& p)

@@ -505,11 +505,20 @@ public:
 #endif
 
 #ifndef NDEBUG
-    friend inline __host__ __device__ bool operator==(const xyzz_t& a, const xyzz_t& b)
-    {   return (a.X == b.X) && (a.Y == b.Y)&& (a.ZZZ == b.ZZZ) && (a.ZZ == b.ZZ);   }
+    friend inline __host__ bool operator==(const xyzz_t& a, const xyzz_t& b)
+    {
+        field_t X1, Y1, X2, Y2;
+        X1 = a.X * b.ZZ;
+        X2 = b.X * a.ZZ;
 
-    friend inline __host__ __device__ bool operator!=(const xyzz_t& a, const xyzz_t& b)
-    {   return (a.X != b.X) || (a.Y != b.Y) || (a.ZZZ != b.ZZZ) || (a.ZZ != b.ZZ);   }
+        Y1 = a.Y * b.ZZZ;
+        Y2 = b.Y * a.ZZZ;
+
+        return (X1 == X2 & Y1 == Y2) & (a.is_inf() ^ b.is_inf() ^ 1);
+    }
+
+    friend inline __host__ bool operator!=(const xyzz_t& a, const xyzz_t& b)
+    {   return !(a == b);   }
 
 # if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend __host__ std::ostream& operator<<(std::ostream& os, const xyzz_t& p)

@@ -529,10 +529,25 @@ public:
 
 #ifndef NDEBUG
     friend inline bool operator==(const jacobian_t& a, const jacobian_t& b)
-    {   return (a.X == b.X) && (a.Y == b.Y) && (a.Z == b.Z);   }
+    {
+        field_t X1, Y1, X2, Y2;
+        Y1 = a.Z^2;
+        Y2 = b.Z^2;
+
+        X2 = a.X * Y2; // a.X * b.Z^2
+        X1 = b.X * Y1; // b.X * a.Z^2
+
+        Y2 *= a.Y;     // a.Y * b.Z^2
+        Y1 *= b.Y;     // b.Y * a.Z^2
+
+        Y2 *= b.Z;     // a.Y * b.Z^3
+        Y1 *= a.Z;     // b.Y * a.Z^3
+
+        return (X1 == X2 & Y1 == Y2) & (a.is_inf() ^ b.is_inf() ^ 1);
+    }
 
     friend inline bool operator!=(const jacobian_t& a, const jacobian_t& b)
-    {   return (a.X != b.X) || (a.Y != b.Y) || (a.Z != b.Z);   }
+    {   return !(a == b);   }
 
 # if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend std::ostream& operator<<(std::ostream& os, const jacobian_t& p)
