@@ -142,7 +142,31 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
 {
     unsigned int off = 0;
 
-    fr_t t, root = roots[off][pow % WINDOW_SIZE];
+    fr_t t, root;
+
+    if (sizeof(fr_t) <= 8) {
+        root = fr_t::one();
+        bool root_set = false;
+
+        #pragma unroll
+        for (unsigned int pow_win, i = 0; i < WINDOW_NUM; i++) {
+            if (!root_set && (pow_win = pow % WINDOW_SIZE)) {
+                root = roots[i][pow_win];
+                root_set = true;
+            }
+            if (!root_set) {
+                pow >>= LG_WINDOW_SIZE;
+                off++;
+            }
+        }
+    } else {
+        if ((pow % WINDOW_SIZE) == 0) {
+            pow >>= LG_WINDOW_SIZE;
+            off++;
+        }
+        root = roots[off][pow % WINDOW_SIZE];
+    }
+
     #pragma unroll 1
     while (pow >>= LG_WINDOW_SIZE)
         root *= (t = roots[++off][pow % WINDOW_SIZE]);
@@ -252,13 +276,16 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
 {
     int win = (WINDOW_NUM - 1) * LG_WINDOW_SIZE;
     int off = (WINDOW_NUM - 1);
+    index_t idxo = idx0 | idx1;
+    index_t mask = ((index_t)1 << win) - 1;
 
     root0 = roots[off][idx0 >> win];
     root1 = roots[off][idx1 >> win];
     #pragma unroll 1
-    while (off--) {
+    while (off-- && (idxo & mask)) {
         fr_t t;
         win -= LG_WINDOW_SIZE;
+        mask >>= LG_WINDOW_SIZE;
         root0 *= (t = roots[off][(idx0 >> win) % WINDOW_SIZE]);
         root1 *= (t = roots[off][(idx1 >> win) % WINDOW_SIZE]);
     }
