@@ -43,12 +43,11 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         unsigned int nbits = MAX_LG_DOMAIN_SIZE - stage;
 
         index_t root_idx0 = bit_rev(thread_ntt_idx, nbits) * thread_ntt_pos;
-        index_t root_idx1 = thread_ntt_pos << (nbits - 1);
+        index_t root_idx1 = root_idx0 + (thread_ntt_pos << (nbits - 1));
 
         fr_t first_root, second_root;
         get_intermediate_roots(first_root, second_root,
                                root_idx0, root_idx1, d_partial_twiddles);
-        second_root *= first_root;
 
         r0 *= first_root;
         r1 *= second_root;
