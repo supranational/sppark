@@ -1,5 +1,8 @@
 # sppark
 
+> [!NOTE]
+> This repository is a fork of the original hosted at https://github.com/supranational/sppark. It's an incubator for experimenting with more advanced variants of the original software and working out the kinks in them. Note that changes in the present repository have not undergone the a rigorous level of review.
+
 sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitives for **ar**guments of **k**nowledge such as SNARKs and STARKs. The library focuses on accelerating the most computationally expensive pieces of zero-knowledge proofs generation such as multi-scalar multiplication (MSM), number theoretic transform (NTT), arithmetic hashes, and more. The library is a collection of CUDA/C++ templates that can be instantiated for a range of finite fields and elliptic curves.
 
 ## Table of Contents
