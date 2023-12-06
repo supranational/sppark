@@ -1,4 +1,4 @@
-name: build
+name: test-build
 
 on:
   push:
@@ -29,7 +29,6 @@ jobs:
           ~/.cargo/registry
           **/Cargo.lock
           **/target
-          /usr/local/cuda-12.3
         key: ${{ runner.os }}-cargo-${{ steps.get-date.outputs.date }}
 
     - name: Environment
@@ -41,43 +40,69 @@ jobs:
     - name: Install cuda-minimal-build-12-3
       shell: bash
       run: |
-        if [ ! -d /usr/local/cuda-12.3 ]; then
-            # https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_network
-            wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
-            sudo dpkg -i cuda-keyring_1.1-1_all.deb
-            sudo apt-get update
-            sudo apt-get -y install cuda-minimal-build-12-3
-        fi
+        # https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_network
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get -y install cuda-minimal-build-12-3
         [ -d /usr/local/cuda-12.3/bin ]
 
-    - name: The test
+    - name: Test-build poc/ntt-cuda
       shell: bash
       run: |
         rustc --version --verbose
         export PATH=$PATH:/usr/local/cuda-12.3/bin
         ( cd poc/ntt-cuda
-          cargo test --release --no-run --features=bls12_381
-          cargo test --release --no-run --features=gl64
-          cargo test --release --no-run --features=bb31
-          export CXX=clang++
-          cargo test --release --no-run --features=bls12_381
-          cargo test --release --no-run --features=gl64
-          cargo test --release --no-run --features=bb31
+          cargo update
+          cargo test --no-run --release --features=bls12_381
+          cargo test --no-run --release --features=gl64
+          cargo test --no-run --release --features=bb31
+          if which clang++ 2>/dev/null; then
+              echo
+              echo Testing with clang++
+              echo
+              clang++ --version
+              echo
+              export CXX=clang++
+              cargo test --no-run --release --features=bls12_381
+              cargo test --no-run --release --features=gl64
+              cargo test --no-run --release --features=bb31
+          fi
           cargo clean -p ntt-cuda
           cargo clean -p ntt-cuda --release
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
         )
+
+    - name: Test-build poc/msm-cuda
+      shell: bash
+      run: |
+        rustc --version --verbose
+        export PATH=$PATH:/usr/local/cuda-12.3/bin
         ( cd poc/msm-cuda
-          cargo test --release --no-run --features=bls12_381
-          cargo test --release --no-run --features=bn254
-          export CXX=clang++
-          cargo test --release --no-run --features=bls12_381
-          cargo test --release --no-run --features=bn254
+          sed "s/^crit/#crit/" Cargo.toml > Cargo.$$.toml && \
+          mv Cargo.$$.toml Cargo.toml
+          cargo update
+          cargo test --no-run --release --features=bls12_381,quiet
+          cargo test --no-run --release --features=bn254,quiet
+          if which clang++ 2>/dev/null; then
+              echo
+              echo Testing with clang++
+              echo
+              clang++ --version
+              echo
+              export CXX=clang++
+              cargo test --no-run --release --features=bls12_381,quiet
+              cargo test --no-run --release --features=bn254,quiet
+          fi
           cargo clean -p msm-cuda
           cargo clean -p msm-cuda --release
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
         )
-        rm -rf poc/*/target/.rustc_info.json
-        rm -rf poc/*/target/package
-        rm -rf poc/*/target/{debug,release}/incremental
-        rm -rf poc/*/target/*/{debug,release}/incremental
         rm -rf ~/.cargo/registry/src
         rm -rf ~/.cargo/registry/index/*/.cache
