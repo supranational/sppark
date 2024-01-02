@@ -24,7 +24,7 @@ struct RustError { /* to be returned exclusively by value */
     {   message = str==nullptr ? nullptr : strdup(str);   }
     // no destructor[!], Rust takes care of the |message|
 
-    struct by_value {
+    using by_value = struct {
         int code;
         char *message;
     };
