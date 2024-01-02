@@ -70,7 +70,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         bool pos = rank < laneMask;
 #ifdef __CUDA_ARCH__
         t = fr_t::csel(r1, r0, pos);
-        shfl_bfly(t, laneMask);
+        t.shfl_bfly(laneMask);
         r0 = fr_t::csel(t, r0, !pos);
         r1 = fr_t::csel(t, r1, pos);
 #endif

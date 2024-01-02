@@ -80,7 +80,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
 #ifdef __CUDA_ARCH__
         fr_t x = fr_t::csel(r1, r0, pos);
-        shfl_bfly(x, laneMask);
+        x.shfl_bfly(laneMask);
         r0 = fr_t::csel(x, r0, !pos);
         r1 = fr_t::csel(x, r1, pos);
 #endif

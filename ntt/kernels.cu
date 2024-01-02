@@ -7,31 +7,6 @@
 
 #include <cooperative_groups.h>
 
-#ifdef __CUDA_ARCH__
-__device__ __forceinline__
-void shfl_bfly(fr_t& r, int laneMask)
-{
-    #pragma unroll
-    for (int iter = 0; iter < r.len(); iter++)
-        r[iter] = __shfl_xor_sync(0xFFFFFFFF, r[iter], laneMask);
-}
-#endif
-
-__device__ __forceinline__
-void shfl_bfly(index_t& index, int laneMask)
-{
-    index = __shfl_xor_sync(0xFFFFFFFF, index, laneMask);
-}
-
-template<typename T>
-__device__ __forceinline__
-void swap(T& u1, T& u2)
-{
-    T temp = u1;
-    u1 = u2;
-    u2 = temp;
-}
-
 template<typename T>
 __device__ __forceinline__
 T bit_rev(T i, unsigned int nbits)

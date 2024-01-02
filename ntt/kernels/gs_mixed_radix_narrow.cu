@@ -104,7 +104,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 #ifdef __CUDA_ARCH__
             t = fr_t::csel(r[1][z], r[0][z], pos);
 
-            shfl_bfly(t, laneMask);
+            t.shfl_bfly(laneMask);
 
             r[0][z] = fr_t::csel(t, r[0][z], !pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
