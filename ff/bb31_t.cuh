@@ -353,6 +353,9 @@ public:
     {   return a * b.reciprocal();   }
     inline bb31_t& operator/=(const bb31_t a)
     {   return *this *= a.reciprocal();   }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
 };
 
 #  undef inline

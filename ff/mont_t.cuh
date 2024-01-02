@@ -1109,6 +1109,13 @@ public:
     {   return a * b.reciprocal();   }
     inline mont_t& operator/=(const mont_t& a)
     {   return *this *= a.reciprocal();   }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {
+        #pragma unroll
+        for (size_t i=0; i<n; i++)
+            even[i] = __shfl_xor_sync(0xFFFFFFFF, even[i], laneMask);
+    }
 };
 
 # undef inline

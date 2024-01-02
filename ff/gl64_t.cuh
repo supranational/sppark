@@ -608,6 +608,9 @@ public:
 
         return t1;
     }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
 };
 
 # undef inline
