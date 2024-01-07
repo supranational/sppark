@@ -93,3 +93,23 @@ impl<T> Clone for Gpu_Ptr<T> {
         unsafe { transmute::<_, _>(clone_gpu_ptr_t(transmute::<&_, &_>(self))) }
     }
 }
+
+#[repr(C)]
+pub enum NTTInputOutputOrder {
+    NN = 0,
+    NR = 1,
+    RN = 2,
+    RR = 3,
+}
+
+#[repr(C)]
+pub enum NTTDirection {
+    Forward = 0,
+    Inverse = 1,
+}
+
+#[repr(C)]
+pub enum NTTType {
+    Standard = 0,
+    Coset = 1,
+}
