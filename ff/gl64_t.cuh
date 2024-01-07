@@ -190,10 +190,10 @@ public:
 
         return *this;
     }
-    friend inline gl64_t cneg(gl64_t a, bool flag)
+    static inline gl64_t cneg(gl64_t a, bool flag)
     {   return a.cneg(flag);   }
     inline gl64_t operator-() const
-    {   gl64_t ret = *this; return ret.cneg(true);   }
+    {   return cneg(*this, true);   }
 
     static inline const gl64_t one()
     {   gl64_t ret; ret.val = 1; return ret;   }

@@ -104,10 +104,10 @@ public:
 
         return *this;
     }
-    friend inline bb31_t cneg(bb31_t a, bool flag)
+    static inline bb31_t cneg(bb31_t a, bool flag)
     {   return a.cneg(flag);   }
     inline bb31_t operator-() const
-    {   bb31_t ret = *this; return ret.cneg(true);   }
+    {   return cneg(*this, true);   }
 
     static inline const bb31_t one()    { return bb31_t{ONE}; }
     inline bool is_one() const          { return val == ONE;  }
