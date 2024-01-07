@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template <int intermediate_mul>
+template <int intermediate_mul, class fr_t>
 __launch_bounds__(768, 1) __global__
 void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
@@ -45,7 +45,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         extern __shared__ fr_t shared_exchange[];
 
         bool pos = rank < laneMask;
-#ifdef __CUDA_ARCH__
+
         t = fr_t::csel(r1, r0, pos);
         __syncthreads();
         shared_exchange[threadIdx.x] = t;
@@ -53,7 +53,6 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         t = shared_exchange[threadIdx.x ^ laneMask];
         r0 = fr_t::csel(t, r0, !pos);
         r1 = fr_t::csel(t, r1, pos);
-#endif
     }
 
     for (int s = min(iterations, 6); --s >= 1;) {
@@ -68,12 +67,11 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r1 = t;
 
         bool pos = rank < laneMask;
-#ifdef __CUDA_ARCH__
+
         t = fr_t::csel(r1, r0, pos);
         t.shfl_bfly(laneMask);
         r0 = fr_t::csel(t, r0, !pos);
         r1 = fr_t::csel(t, r1, pos);
-#endif
     }
 
     {
@@ -130,19 +128,6 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     d_inout[idx0] = r0;
     d_inout[idx1] = r1;
 }
-
-#define NTT_ARGUMENTS \
-        unsigned int, unsigned int, unsigned int, unsigned int, fr_t*, \
-        const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*, const fr_t*, \
-        unsigned int, bool, fr_t
-
-template __global__ void _GS_NTT<0>(NTT_ARGUMENTS);
-template __global__ void _GS_NTT<1>(NTT_ARGUMENTS);
-template __global__ void _GS_NTT<2>(NTT_ARGUMENTS);
-
-#undef NTT_ARGUMENTS
-
-#ifndef __CUDA_ARCH__
 
 class GS_launcher {
     fr_t* d_inout;
@@ -311,5 +296,3 @@ void GS_NTT(fr_t* d_inout, const int lg_domain_size, const bool is_intt,
         assert(false);
     }
 }
-
-#endif

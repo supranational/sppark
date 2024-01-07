@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-__global__
+template<class fr_t> __global__
 void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
                                const fr_t root_of_unity)
 {
@@ -16,16 +16,12 @@ void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
 
     for (int off = 1; off < WINDOW_NUM; off++) {
         for (int i = 0; i < LG_WINDOW_SIZE; i++)
-#if defined(__CUDA_ARCH__)
             root.sqr();
-#else
-            root *= root;
-#endif
         roots[off][tid] = root;
     }
 }
 
-__global__
+template<class fr_t> __global__
 void generate_all_twiddles(fr_t* d_radixX_twiddles, const fr_t root6,
                                                     const fr_t root7,
                                                     const fr_t root8,
@@ -58,8 +54,7 @@ void generate_all_twiddles(fr_t* d_radixX_twiddles, const fr_t root6,
     d_radixX_twiddles[tid] = root_of_unity^pow;
 }
 
-#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-__launch_bounds__(512) __global__
+template<class fr_t> __launch_bounds__(512) __global__
 void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
                                 const fr_t root_of_unity)
 {
@@ -97,4 +92,3 @@ void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
         }
     }
 }
-#endif

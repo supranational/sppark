@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template<unsigned int z_count, bool coalesced = false>
+template<unsigned int z_count, bool coalesced = false, class fr_t>
 __launch_bounds__(768, 1) __global__
 void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
@@ -95,7 +95,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
         fr_t root = d_radix6_twiddles[rank << (6 - (s + 1))];
 
-#ifdef __CUDA_ARCH__
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
@@ -109,7 +108,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[1][z] = r[0][z] - t;
             r[0][z] = r[0][z] + t;
         }
-#endif
     }
 
     #pragma unroll 1
@@ -122,7 +120,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         fr_t root = d_radixX_twiddles[rank << (radix - (s + 1))];
 
         fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
-#ifdef __CUDA_ARCH__
+
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
@@ -144,7 +142,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         }
 
         __syncthreads();
-#endif
     }
 
     if (is_intt && (stage + iterations) == lg_domain_size) {
@@ -179,23 +176,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         }
     }
 }
-
-template __global__
-void _CT_NTT<1>(unsigned int, unsigned int, unsigned int, unsigned int,
-                fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                bool, const fr_t);
-
-template __global__
-void _CT_NTT<Z_COUNT>(unsigned int, unsigned int, unsigned int, unsigned int,
-                      fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                      bool, const fr_t);
-
-template __global__
-void _CT_NTT<Z_COUNT, true>(unsigned int, unsigned int, unsigned int, unsigned int,
-                            fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                            bool, const fr_t);
-
-#ifndef __CUDA_ARCH__
 
 class CT_launcher {
     fr_t* d_inout;
@@ -290,5 +270,3 @@ void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
         assert(false);
     }
 }
-
-#endif

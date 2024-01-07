@@ -15,8 +15,6 @@
 #include "parameters.cuh"
 #include "kernels.cu"
 
-#ifndef __CUDA_ARCH__
-
 class NTT {
 public:
     enum class InputOutputOrder { NN, NR, RN, RR };
@@ -287,6 +285,4 @@ public:
         LDE_launch(stream, d_out, d_in, NULL, lg_domain_size, lg_blowup, false);
     }
 };
-
-#endif
 #endif
