@@ -68,7 +68,7 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 
 class NTTParameters {
 private:
-    stream_t& gpu;
+    const gpu_t& gpu;
     bool inverse;
 
 public:
@@ -77,14 +77,12 @@ public:
     fr_t* radix6_twiddles, * radix7_twiddles, * radix8_twiddles,
         * radix9_twiddles, * radix10_twiddles;
 
-#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-    fr_t* radix6_twiddles_6, * radix6_twiddles_12, * radix7_twiddles_7,
-        * radix8_twiddles_8, * radix9_twiddles_9;
-#endif
-
     fr_t (*partial_group_gen_powers)[WINDOW_SIZE]; // for LDE
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
+    fr_t* radix6_twiddles_6, * radix6_twiddles_12, * radix7_twiddles_7,
+        * radix8_twiddles_8, * radix9_twiddles_9;
+
 private:
     fr_t* twiddles_X(int num_blocks, int block_size, const fr_t& root)
     {
@@ -148,9 +146,14 @@ public:
         CUDA_OK(cudaGetLastError());
     }
     NTTParameters(const NTTParameters&) = delete;
+    NTTParameters(NTTParameters&&) = default;
 
     ~NTTParameters()
     {
+        int current_id;
+        cudaGetDevice(&current_id);
+
+        gpu.select();
         gpu.Dfree(partial_twiddles);
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
@@ -162,14 +165,16 @@ public:
 #endif
 
         gpu.Dfree(radix7_twiddles);
+
+        cudaSetDevice(current_id);
     }
 
     inline void sync() const    { gpu.sync(); }
 
 private:
     class all_params { friend class NTTParameters;
-        std::vector<const NTTParameters*> forward;
-        std::vector<const NTTParameters*> inverse;
+        std::vector<NTTParameters> forward;
+        std::vector<NTTParameters> inverse;
 
         all_params()
         {
@@ -177,19 +182,16 @@ private:
             cudaGetDevice(&current_id);
 
             size_t nids = ngpus();
+            forward.reserve(nids);
             for (size_t id = 0; id < nids; id++)
-                forward.push_back(new NTTParameters(false, id));
+                forward.emplace_back(false, id);
+            inverse.reserve(nids);
             for (size_t id = 0; id < nids; id++)
-                inverse.push_back(new NTTParameters(true, id));
+                inverse.emplace_back(true, id);
             for (size_t id = 0; id < nids; id++)
-                inverse[id]->sync();
+                inverse[id].sync();
 
             cudaSetDevice(current_id);
-        }
-        ~all_params()
-        {
-            for (auto* ptr: forward) delete ptr;
-            for (auto* ptr: inverse) delete ptr;
         }
     };
 
