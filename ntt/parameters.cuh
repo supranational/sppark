@@ -49,7 +49,6 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 #include "gen_twiddles.cu"
 
 #ifndef __CUDA_ARCH__
-
 # if defined(FEATURE_BLS12_377)
 #  include "parameters/bls12_377.h"
 # elif defined(FEATURE_BLS12_381)
@@ -65,6 +64,12 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 # elif defined(FEATURE_GOLDILOCKS)
 #  include "parameters/goldilocks.h"
 # endif
+#else
+extern const fr_t group_gen, group_gen_inverse;
+extern const fr_t forward_roots_of_unity[];
+extern const fr_t inverse_roots_of_unity[];
+extern const fr_t domain_size_inverse[];
+#endif
 
 class NTTParameters {
 private:
@@ -202,6 +207,4 @@ public:
         return inverse ? params.inverse : params.forward;
     }
 };
-
-#endif
 #endif /* __SPPARK_NTT_PARAMETERS_CUH__ */

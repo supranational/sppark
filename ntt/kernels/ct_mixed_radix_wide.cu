@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template <int intermediate_mul>
+template <int intermediate_mul, class fr_t>
 __launch_bounds__(768, 1) __global__
 void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
@@ -78,12 +78,10 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         unsigned int rank = threadIdx.x & thrdMask;
         bool pos = rank < laneMask;
 
-#ifdef __CUDA_ARCH__
         fr_t x = fr_t::csel(r1, r0, pos);
         x.shfl_bfly(laneMask);
         r0 = fr_t::csel(x, r0, !pos);
         r1 = fr_t::csel(x, r1, pos);
-#endif
 
         fr_t t = d_radix6_twiddles[rank << (6 - (s + 1))];
         t *= r1;
@@ -103,7 +101,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         // shfl_bfly through the shared memory
         extern __shared__ fr_t shared_exchange[];
 
-#ifdef __CUDA_ARCH__
         fr_t x = fr_t::csel(r1, r0, pos);
         __syncthreads();
         shared_exchange[threadIdx.x] = x;
@@ -111,7 +108,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         x = shared_exchange[threadIdx.x ^ laneMask];
         r0 = fr_t::csel(x, r0, !pos);
         r1 = fr_t::csel(x, r1, pos);
-#endif
 
         t *= r1;
 
@@ -136,19 +132,6 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     d_inout[idx0] = r0;
     d_inout[idx1] = r1;
 }
-
-#define NTT_ARGUMENTS \
-        unsigned int, unsigned int, unsigned int, unsigned int, fr_t*, \
-        const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*, const fr_t*, \
-        unsigned int, bool, fr_t
-
-template __global__ void _CT_NTT<0>(NTT_ARGUMENTS);
-template __global__ void _CT_NTT<1>(NTT_ARGUMENTS);
-template __global__ void _CT_NTT<2>(NTT_ARGUMENTS);
-
-#undef NTT_ARGUMENTS
-
-#ifndef __CUDA_ARCH__
 
 class CT_launcher {
     fr_t* d_inout;
@@ -313,5 +296,3 @@ void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
         assert(false);
     }
 }
-
-#endif
