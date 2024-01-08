@@ -20,9 +20,9 @@
 # error "invalid BATCH_ADD_NSTREAMS"
 #endif
 
-template<class bucket_t, class affine_h,
+template<class bucket_t, class affine_t,
          class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class affine_h = class affine_t::mem_t>
 __device__ __forceinline__
 static void add(bucket_h ret[], const affine_h points[], uint32_t npoints,
                 const uint32_t bitmap[], const uint32_t refmap[],
@@ -113,27 +113,27 @@ static void add(bucket_h ret[], const affine_h points[], uint32_t npoints,
         current = 0;
 }
 
-template<class bucket_t, class affine_h,
+template<class bucket_t, class affine_t,
          class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class affine_h = class affine_t::mem_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
                     const uint32_t bitmap[], bool accumulate = false,
                     uint32_t sid = 0)
 {   add<bucket_t>(ret, points, npoints, bitmap, nullptr, accumulate, sid);   }
 
-template<class bucket_t, class affine_h,
+template<class bucket_t, class affine_t,
          class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class affine_h = class affine_t::mem_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_diff(bucket_h ret[], const affine_h points[], uint32_t npoints,
                 const uint32_t bitmap[], const uint32_t refmap[],
                 bool accumulate = false, uint32_t sid = 0)
 {   add<bucket_t>(ret, points, npoints, bitmap, refmap, accumulate, sid);   }
 
-template<class bucket_t, class affine_h,
+template<class bucket_t, class affine_t,
          class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class affine_h = class affine_t::mem_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_addition(bucket_h ret[], const affine_h points[], size_t npoints,
                     const uint32_t digits[], const uint32_t& ndigits)
