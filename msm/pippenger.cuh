@@ -363,6 +363,7 @@ class msm_t
     affine_h *d_points;
     scalar_t *d_scalars;
     vec2d_t<uint32_t> d_hist;
+    bool owned;
 
     template <typename T>
     using vec_t = slice_t<T>;
@@ -386,9 +387,9 @@ class msm_t
     }
 
 public:
-    msm_t(const affine_t points[], size_t np,
+    msm_t(const affine_t points[], size_t np, bool owned,
           size_t ffi_affine_sz = sizeof(affine_t), int device_id = -1)
-        : gpu(select_gpu(device_id)), d_points(nullptr), d_scalars(nullptr)
+        : owned(owned), gpu(select_gpu(device_id)), d_points(nullptr), d_scalars(nullptr)
     {
         npoints = (np + WARP_SZ - 1) & ((size_t)0 - WARP_SZ);
 
@@ -408,20 +409,20 @@ public:
         uint32_t row_sz = 1U << (wbits - 1);
 
         size_t d_buckets_sz = (nwins * row_sz) + (gpu.sm_count() * BATCH_ADD_BLOCK_SIZE / WARP_SZ);
-        size_t d_blob_sz = (d_buckets_sz * sizeof(d_buckets[0])) + (nwins * row_sz * sizeof(uint32_t)) + (points ? npoints * sizeof(d_points[0]) : 0);
+        size_t d_blob_sz = (d_buckets_sz * sizeof(d_buckets[0])) + (nwins * row_sz * sizeof(uint32_t));
 
         d_buckets = reinterpret_cast<decltype(d_buckets)>(gpu.Dmalloc(d_blob_sz));
         d_hist = vec2d_t<uint32_t>(&d_buckets[d_buckets_sz], row_sz);
         if (points)
         {
-            d_points = reinterpret_cast<decltype(d_points)>(d_hist[nwins]);
+            d_points = reinterpret_cast<decltype(d_points)>(gpu.Dmalloc(points ? npoints * sizeof(d_points[0]) : 0));
             gpu.HtoD(d_points, points, np, ffi_affine_sz);
-            npoints = np;
         }
-        else
-        {
+
+        if (owned)
             npoints = 0;
-        }
+        else
+            npoints = np;
     }
     inline msm_t(vec_t<affine_t> points, size_t ffi_affine_sz = sizeof(affine_t),
                  int device_id = -1)
@@ -433,6 +434,17 @@ public:
         gpu.sync();
         if (d_buckets)
             gpu.Dfree(d_buckets);
+        if (d_points && owned)
+            gpu.Dfree(d_points);
+    }
+    affine_h *get_d_points()
+    {
+        return d_points;
+    }
+    void set_d_points(affine_h *d_points)
+    {
+        assert(!this->owned);
+        this->d_points = d_points;
     }
 
 private:
@@ -768,6 +780,40 @@ private:
     }
 };
 
+template <typename T>
+struct msm_context_t
+{
+    T *d_points;
+};
+
+template <typename T>
+void drop_msm_context_t(msm_context_t<T> &ref)
+{
+    CUDA_OK(cudaFree(ref.d_points));
+}
+
+template <class bucket_t, class point_t, class affine_t, class scalar_t,
+          class affine_h = class affine_t::mem_t,
+          class bucket_h = class bucket_t::mem_t>
+static RustError mult_pippenger_init(const affine_t points[], size_t npoints,
+                                     msm_context_t<affine_h> *msm_context)
+{
+    try
+    {
+        msm_t<bucket_t, point_t, affine_t, scalar_t> msm{points, npoints, false};
+        msm_context->d_points = msm.get_d_points();
+        return RustError{cudaSuccess};
+    }
+    catch (const cuda_error &e)
+    {
+#ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
+        return RustError{e.code(), e.what()};
+#else
+        return RustError{e.code()};
+#endif
+    }
+}
+
 template <class bucket_t, class point_t, class affine_t, class scalar_t>
 static RustError mult_pippenger(point_t *out, const affine_t points[], size_t npoints,
                                 const scalar_t scalars[], bool mont = true,
@@ -775,7 +821,7 @@ static RustError mult_pippenger(point_t *out, const affine_t points[], size_t np
 {
     try
     {
-        msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints};
+        msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints, true};
         return msm.invoke(*out, slice_t<affine_t>{points, npoints},
                           scalars, mont, ffi_affine_sz);
     }
@@ -789,4 +835,30 @@ static RustError mult_pippenger(point_t *out, const affine_t points[], size_t np
 #endif
     }
 }
+
+template <class bucket_t, class point_t, class affine_t, class scalar_t,
+          class affine_h = class affine_t::mem_t,
+          class bucket_h = class bucket_t::mem_t>
+static RustError mult_pippenger_with(point_t *out, msm_context_t<affine_h> *msm_context, size_t npoints,
+                                     const scalar_t scalars[], bool mont = true,
+                                     size_t ffi_affine_sz = sizeof(affine_t))
+{
+    try
+    {
+        msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints, false};
+        msm.set_d_points(msm_context->d_points);
+        return msm.invoke(*out, nullptr, npoints,
+                          scalars, mont, ffi_affine_sz);
+    }
+    catch (const cuda_error &e)
+    {
+        out->inf();
+#ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
+        return RustError{e.code(), e.what()};
+#else
+        return RustError{e.code()};
+#endif
+    }
+}
+
 #endif
