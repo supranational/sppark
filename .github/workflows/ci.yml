@@ -1,0 +1,108 @@
+name: test-build
+
+on:
+  push:
+    branches:
+    - '**'
+  workflow_dispatch:
+    branches:
+    - '**'
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  cargo-test-no-run:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Get date
+      id: get-date
+      run: echo "date=$(date -u +%Y-%m)" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          **/Cargo.lock
+          **/target
+        key: ${{ runner.os }}-cargo-${{ steps.get-date.outputs.date }}
+
+    - name: Environment
+      shell: bash
+      run: |
+        lscpu 2>/dev/null && echo --- || true
+        env | sort
+
+    - name: Install cuda-minimal-build-12-3
+      shell: bash
+      run: |
+        # https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_network
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get -y install cuda-minimal-build-12-3
+        [ -d /usr/local/cuda-12.3/bin ]
+
+    - name: Test-build poc/ntt-cuda
+      shell: bash
+      run: |
+        rustc --version --verbose
+        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        ( cd poc/ntt-cuda
+          cargo update
+          cargo test --no-run --release --features=bls12_381
+          cargo test --no-run --release --features=gl64
+          cargo test --no-run --release --features=bb31
+          if which clang++ 2>/dev/null; then
+              echo
+              echo Testing with clang++
+              echo
+              clang++ --version
+              echo
+              export CXX=clang++
+              cargo test --no-run --release --features=bls12_381
+              cargo test --no-run --release --features=gl64
+              cargo test --no-run --release --features=bb31
+          fi
+          cargo clean -p ntt-cuda
+          cargo clean -p ntt-cuda --release
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
+        )
+
+    - name: Test-build poc/msm-cuda
+      shell: bash
+      run: |
+        rustc --version --verbose
+        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        ( cd poc/msm-cuda
+          sed "s/^crit/#crit/" Cargo.toml > Cargo.$$.toml && \
+          mv Cargo.$$.toml Cargo.toml
+          cargo update
+          cargo test --no-run --release --features=bls12_381,quiet
+          cargo test --no-run --release --features=bn254,quiet
+          if which clang++ 2>/dev/null; then
+              echo
+              echo Testing with clang++
+              echo
+              clang++ --version
+              echo
+              export CXX=clang++
+              cargo test --no-run --release --features=bls12_381,quiet
+              cargo test --no-run --release --features=bn254,quiet
+          fi
+          cargo clean -p msm-cuda
+          cargo clean -p msm-cuda --release
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
+        )
+        rm -rf ~/.cargo/registry/src
+        rm -rf ~/.cargo/registry/index/*/.cache

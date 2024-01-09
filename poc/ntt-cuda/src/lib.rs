@@ -2,27 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-sppark::cuda_error!();
-
-#[repr(C)]
-pub enum NTTInputOutputOrder {
-    NN = 0,
-    NR = 1,
-    RN = 2,
-    RR = 3,
-}
-
-#[repr(C)]
-enum NTTDirection {
-    Forward = 0,
-    Inverse = 1,
-}
-
-#[repr(C)]
-enum NTTType {
-    Standard = 0,
-    Coset = 1,
-}
+use sppark::{NTTInputOutputOrder, NTTDirection, NTTType};
 
 extern "C" {
     fn compute_ntt(
@@ -32,7 +12,7 @@ extern "C" {
         ntt_order: NTTInputOutputOrder,
         ntt_direction: NTTDirection,
         ntt_type: NTTType,
-    ) -> cuda::Error;
+    ) -> sppark::Error;
 }
 
 /// Compute an in-place NTT on the input data.

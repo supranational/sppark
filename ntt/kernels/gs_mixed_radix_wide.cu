@@ -70,7 +70,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         bool pos = rank < laneMask;
 #ifdef __CUDA_ARCH__
         t = fr_t::csel(r1, r0, pos);
-        shfl_bfly(t, laneMask);
+        t.shfl_bfly(laneMask);
         r0 = fr_t::csel(t, r0, !pos);
         r1 = fr_t::csel(t, r1, pos);
 #endif
@@ -89,12 +89,11 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         unsigned int nbits = MAX_LG_DOMAIN_SIZE - (stage - iterations);
 
         index_t root_idx0 = bit_rev(thread_ntt_idx, nbits) * thread_ntt_pos;
-        index_t root_idx1 = thread_ntt_pos << (nbits - 1);
+        index_t root_idx1 = root_idx0 + (thread_ntt_pos << (nbits - 1));
 
         fr_t first_root, second_root;
         get_intermediate_roots(first_root, second_root,
                                root_idx0, root_idx1, d_partial_twiddles);
-        second_root *= first_root;
 
         r0 *= first_root;
         r1 *= second_root;
@@ -120,7 +119,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     // rotate "iterations" bits in indices
-    index_t mask = ((index_t)1 << stage) - ((index_t)1 << (stage - iterations));
+    index_t mask = (index_t)((1 << iterations) - 1) << (stage - iterations);
     index_t rotw = idx0 & mask;
     rotw = (rotw << 1) | (rotw >> (iterations - 1));
     idx0 = (idx0 & ~mask) | (rotw & mask);

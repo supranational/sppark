@@ -299,7 +299,7 @@ public:
     inline operator T*() const                  { return ptr->ptr; }
 
     // facilitate return by value through FFI, as gpu_ptr_t<T>::by_value.
-    struct by_value         { inner *ptr; };
+    using by_value = struct { inner *ptr; };
     operator by_value() const
     {   ptr->ref_cnt.fetch_add(1, std::memory_order_relaxed); return {ptr};   }
     gpu_ptr_t(by_value v)   { ptr = v.ptr; }

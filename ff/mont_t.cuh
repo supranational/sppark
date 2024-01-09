@@ -311,10 +311,10 @@ public:
         asm("}");
         return *this;
     }
-    friend inline mont_t cneg(mont_t a, bool flag)
+    static inline mont_t cneg(mont_t a, bool flag)
     {   return a.cneg(flag);   }
 #else
-    friend inline mont_t cneg(const mont_t& a, bool flag)
+    static inline mont_t cneg(const mont_t& a, bool flag)
     {
         size_t i;
         uint32_t tmp[n], is_zero = a[0];
@@ -335,6 +335,8 @@ public:
         asm("}");
         return ret;
     }
+    inline mont_t& cneg(bool flag)
+    {   return *this = cneg(*this, flag);   }
 #endif
     inline mont_t operator-() const
     {   return cneg(*this, true);   }
@@ -1109,6 +1111,13 @@ public:
     {   return a * b.reciprocal();   }
     inline mont_t& operator/=(const mont_t& a)
     {   return *this *= a.reciprocal();   }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {
+        #pragma unroll
+        for (size_t i=0; i<n; i++)
+            even[i] = __shfl_xor_sync(0xFFFFFFFF, even[i], laneMask);
+    }
 };
 
 # undef inline

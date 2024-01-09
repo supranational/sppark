@@ -190,10 +190,10 @@ public:
 
         return *this;
     }
-    friend inline gl64_t cneg(gl64_t a, bool flag)
+    static inline gl64_t cneg(gl64_t a, bool flag)
     {   return a.cneg(flag);   }
     inline gl64_t operator-() const
-    {   gl64_t ret = *this; return ret.cneg(true);   }
+    {   return cneg(*this, true);   }
 
     static inline const gl64_t one()
     {   gl64_t ret; ret.val = 1; return ret;   }
@@ -267,45 +267,28 @@ private:
 
     inline void reduce(uint32_t temp[4])
     {
-        uint32_t carry;
 # if __CUDA_ARCH__ >= 700
-        asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, %4; subc.u32 %2, 0, 0;"
-            : "+r"(temp[0]), "+r"(temp[1]), "=r"(carry)
-            : "r"(temp[2]), "r"(temp[3]));
-        asm("add.cc.u32 %0, %0, %2; addc.u32 %1, %1, %3;"
-            : "+r"(temp[1]), "+r"(carry)
-            : "r"(temp[2]), "r"(temp[3]));
-
-        asm("mad.lo.cc.u32 %0, %3, %4, %0; madc.hi.cc.u32 %1, %3, %4, %1; addc.u32 %2, 0, 0;"
-            : "+r"(temp[0]), "+r"(temp[1]), "=r"(temp[2])
-            : "r"(carry), "r"(gl64_device::W));
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(temp[2]), "r"(gl64_device::W));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1; addc.u32 %2, 0, 0;"
+            : "+r"(temp[0]), "+r"(temp[1]), "+r"(temp[2])
+            : "r"(gl64_device::W));
 # else
         uint32_t b0, b1;
-        asm("add.cc.u32 %0, %2, %3; addc.u32 %1, 0, 0;"
-            : "=r"(b0), "=r"(b1)
-            : "r"(temp[2]), "r"(temp[3]));
-        asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, %4; subc.u32 %2, 0, 0;"
-            : "+r"(temp[0]), "+r"(temp[1]), "=r"(carry)
-            : "r"(b0), "r"(b1));
-        asm("add.cc.u32 %0, %0, %2; addc.u32 %1, %1, %3;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(-carry), "r"(carry));
-        asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
-            : "+r"(temp[1]), "+r"(temp[2]));
 
-#  if __CUDA_ARCH__ >= 700
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(temp[2]), "r"(gl64_device::W));
-#  else
-        asm("add.cc.u32 %0, %0, %2; addc.u32 %1, %1, 0;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(-temp[2]));
-#  endif
+        asm("sub.cc.u32 %0, 0, %2; subc.u32 %1, %2, 0;"
+            : "=r"(b0), "=r"(b1)
+            : "r"(temp[2]));
+        asm("add.cc.u32 %0, %0, %3; addc.cc.u32 %1, %1, %4; addc.u32 %2, 0, 0;"
+            : "+r"(temp[0]), "+r"(temp[1]), "=r"(temp[2])
+            : "r"(b0), "r"(b1));
 # endif
+        asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, 0; subc.u32 %2, %2, 0;"
+            : "+r"(temp[0]), "+r"(temp[1]), "+r"(temp[2])
+            : "r"(temp[3]));
+
+        asm("sub.cc.u32 %0, %0, %2; subc.u32 %1, %1, %3;"
+            : "+r"(temp[0]), "+r"(temp[1])
+            : "r"(temp[2]), "r"(-(int)temp[2]>>1));
+
         asm("mov.b64 %0, {%1, %2};" : "=l"(val) : "r"(temp[0]), "r"(temp[1]));
     }
 
@@ -608,6 +591,9 @@ public:
 
         return t1;
     }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
 };
 
 # undef inline

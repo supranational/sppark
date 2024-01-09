@@ -100,7 +100,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
 
-            shfl_bfly(t, laneMask);
+            t.shfl_bfly(laneMask);
 
             r[0][z] = fr_t::csel(t, r[0][z], !pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
@@ -156,7 +156,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     // rotate "iterations" bits in indices
-    index_t mask = ((index_t)1 << (stage + iterations)) - ((index_t)1 << stage);
+    index_t mask = (index_t)((1 << iterations) - 1) << stage;
     index_t rotw = idx0 & mask;
     rotw = (rotw >> 1) | (rotw << (iterations - 1));
     idx0 = (idx0 & ~mask) | (rotw & mask);

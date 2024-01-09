@@ -7,31 +7,6 @@
 
 #include <cooperative_groups.h>
 
-#ifdef __CUDA_ARCH__
-__device__ __forceinline__
-void shfl_bfly(fr_t& r, int laneMask)
-{
-    #pragma unroll
-    for (int iter = 0; iter < r.len(); iter++)
-        r[iter] = __shfl_xor_sync(0xFFFFFFFF, r[iter], laneMask);
-}
-#endif
-
-__device__ __forceinline__
-void shfl_bfly(index_t& index, int laneMask)
-{
-    index = __shfl_xor_sync(0xFFFFFFFF, index, laneMask);
-}
-
-template<typename T>
-__device__ __forceinline__
-void swap(T& u1, T& u2)
-{
-    T temp = u1;
-    u1 = u2;
-    u2 = temp;
-}
-
 template<typename T>
 __device__ __forceinline__
 T bit_rev(T i, unsigned int nbits)
@@ -142,7 +117,31 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
 {
     unsigned int off = 0;
 
-    fr_t t, root = roots[off][pow % WINDOW_SIZE];
+    fr_t t, root;
+
+    if (sizeof(fr_t) <= 8) {
+        root = fr_t::one();
+        bool root_set = false;
+
+        #pragma unroll
+        for (unsigned int pow_win, i = 0; i < WINDOW_NUM; i++) {
+            if (!root_set && (pow_win = pow % WINDOW_SIZE)) {
+                root = roots[i][pow_win];
+                root_set = true;
+            }
+            if (!root_set) {
+                pow >>= LG_WINDOW_SIZE;
+                off++;
+            }
+        }
+    } else {
+        if ((pow % WINDOW_SIZE) == 0) {
+            pow >>= LG_WINDOW_SIZE;
+            off++;
+        }
+        root = roots[off][pow % WINDOW_SIZE];
+    }
+
     #pragma unroll 1
     while (pow >>= LG_WINDOW_SIZE)
         root *= (t = roots[++off][pow % WINDOW_SIZE]);
@@ -151,28 +150,26 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
 }
 
 __launch_bounds__(1024) __global__
-void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_blowup, bool bitrev,
-                           const fr_t (*gen_powers)[WINDOW_SIZE],
-                           bool ext_pow = false)
+void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_domain_size,
+                           uint32_t lg_blowup, bool bitrev,
+                           const fr_t (*gen_powers)[WINDOW_SIZE])
 {
-    index_t idx = threadIdx.x + blockDim.x * (index_t)blockIdx.x;
-    index_t pow = idx;
-    fr_t r = d_inout[idx];
+#if 0
+    assert(blockDim.x * gridDim.x == blockDim.x * (size_t)gridDim.x);
+#endif
+    size_t domain_size = (size_t)1 << lg_domain_size;
+    index_t idx = threadIdx.x + blockDim.x * blockIdx.x;
 
-    if (bitrev) {
-        size_t domain_size = gridDim.x * (size_t)blockDim.x;
-        assert((domain_size & (domain_size-1)) == 0);
-        uint32_t lg_domain_size = 63 - __clzll(domain_size);
+    #pragma unroll 1
+    for (; idx < domain_size; idx += blockDim.x * gridDim.x) {
+        fr_t r = d_inout[idx];
 
-        pow = bit_rev(idx, lg_domain_size);
-    }
-
-    if (ext_pow)
+        index_t pow = bitrev ? bit_rev(idx, lg_domain_size) : idx;
         pow <<= lg_blowup;
+        r *= get_intermediate_root(pow, gen_powers);
 
-    r = r * get_intermediate_root(pow, gen_powers);
-
-    d_inout[idx] = r;
+        d_inout[idx] = r;
+    }
 }
 
 __launch_bounds__(1024) __global__
@@ -252,13 +249,16 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
 {
     int win = (WINDOW_NUM - 1) * LG_WINDOW_SIZE;
     int off = (WINDOW_NUM - 1);
+    index_t idxo = idx0 | idx1;
+    index_t mask = ((index_t)1 << win) - 1;
 
     root0 = roots[off][idx0 >> win];
     root1 = roots[off][idx1 >> win];
     #pragma unroll 1
-    while (off--) {
+    while (off-- && (idxo & mask)) {
         fr_t t;
         win -= LG_WINDOW_SIZE;
+        mask >>= LG_WINDOW_SIZE;
         root0 *= (t = roots[off][(idx0 >> win) % WINDOW_SIZE]);
         root1 *= (t = roots[off][(idx1 >> win) % WINDOW_SIZE]);
     }

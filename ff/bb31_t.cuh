@@ -104,10 +104,10 @@ public:
 
         return *this;
     }
-    friend inline bb31_t cneg(bb31_t a, bool flag)
+    static inline bb31_t cneg(bb31_t a, bool flag)
     {   return a.cneg(flag);   }
     inline bb31_t operator-() const
-    {   bb31_t ret = *this; return ret.cneg(true);   }
+    {   return cneg(*this, true);   }
 
     static inline const bb31_t one()    { return bb31_t{ONE}; }
     inline bool is_one() const          { return val == ONE;  }
@@ -353,6 +353,9 @@ public:
     {   return a * b.reciprocal();   }
     inline bb31_t& operator/=(const bb31_t a)
     {   return *this *= a.reciprocal();   }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
 };
 
 #  undef inline

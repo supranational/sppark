@@ -2,6 +2,7 @@
 name = "msm-cuda"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [features]
 # By default, compile with ADX extension if the host supports it.
@@ -37,7 +38,6 @@ which = "^4.0"
 
 [dev-dependencies]
 criterion = { version = "0.3", features = [ "html_reports" ] }
-rayon = "1.5"
 
 [[bench]]
 name = "msm"

@@ -27,18 +27,18 @@ public:
     // this is used in constant declaration, e.g. as bb31_t{11}
     inline constexpr bb31_t(int a) : val(((uint64_t)a << 32) % MOD) {}
 
-    static inline const bb31_t one()            { return bb31_t(1); }
-    inline bb31_t& operator+=(bb31_t b)         { return *this;     }
-    inline bb31_t& operator-=(bb31_t b)         { return *this;     }
-    inline bb31_t& operator*=(bb31_t b)         { return *this;     }
-    inline bb31_t& operator^=(int b)            { return *this;     }
-    inline bb31_t& sqr()                        { return *this;     }
-    friend bb31_t operator+(bb31_t a, bb31_t b) { return a += b;    }
-    friend bb31_t operator-(bb31_t a, bb31_t b) { return a -= b;    }
-    friend bb31_t operator*(bb31_t a, bb31_t b) { return a *= b;    }
-    friend bb31_t operator^(bb31_t a, int b)    { return a ^= b;    }
-    inline void zero()                          { val = 0;          }
-    inline bool is_zero() const                 { return val==0;    }
+    static inline const bb31_t one()                { return bb31_t(1); }
+    inline bb31_t& operator+=(bb31_t b)             { return *this;     }
+    inline bb31_t& operator-=(bb31_t b)             { return *this;     }
+    inline bb31_t& operator*=(bb31_t b)             { return *this;     }
+    inline bb31_t& operator^=(int b)                { return *this;     }
+    inline bb31_t& sqr()                            { return *this;     }
+    friend bb31_t operator+(bb31_t a, bb31_t b)     { return a += b;    }
+    friend bb31_t operator-(bb31_t a, bb31_t b)     { return a -= b;    }
+    friend bb31_t operator*(bb31_t a, bb31_t b)     { return a *= b;    }
+    friend bb31_t operator^(bb31_t a, uint32_t b)   { return a ^= b;    }
+    inline void zero()                              { val = 0;          }
+    inline bool is_zero() const                     { return val==0;    }
     inline operator uint32_t() const
     {   return ((val*M)*(uint64_t)MOD + val) >> 32;  }
     inline void to()    { val = ((uint64_t)val<<32) % MOD;  }
