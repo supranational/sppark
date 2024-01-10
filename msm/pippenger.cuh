@@ -784,6 +784,7 @@ template <typename T>
 struct msm_context_t
 {
     T *d_points;
+    size_t npoints;
 };
 
 template <typename T>
@@ -802,6 +803,7 @@ static RustError mult_pippenger_init(const affine_t points[], size_t npoints,
     {
         msm_t<bucket_t, point_t, affine_t, scalar_t> msm{points, npoints, false};
         msm_context->d_points = msm.get_d_points();
+        msm_context->npoints = npoints;
         return RustError{cudaSuccess};
     }
     catch (const cuda_error &e)
@@ -839,15 +841,15 @@ static RustError mult_pippenger(point_t *out, const affine_t points[], size_t np
 template <class bucket_t, class point_t, class affine_t, class scalar_t,
           class affine_h = class affine_t::mem_t,
           class bucket_h = class bucket_t::mem_t>
-static RustError mult_pippenger_with(point_t *out, msm_context_t<affine_h> *msm_context, size_t npoints,
+static RustError mult_pippenger_with(point_t *out, msm_context_t<affine_h> *msm_context,
                                      const scalar_t scalars[], bool mont = true,
                                      size_t ffi_affine_sz = sizeof(affine_t))
 {
     try
     {
-        msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints, false};
+        msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, msm_context->npoints, false};
         msm.set_d_points(msm_context->d_points);
-        return msm.invoke(*out, nullptr, npoints,
+        return msm.invoke(*out, nullptr, msm_context->npoints,
                           scalars, mont, ffi_affine_sz);
     }
     catch (const cuda_error &e)
