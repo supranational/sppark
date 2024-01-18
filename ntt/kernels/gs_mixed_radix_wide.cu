@@ -135,11 +135,11 @@ class GS_launcher {
     bool is_intt;
     int stage;
     const NTTParameters& ntt_parameters;
-    const cudaStream_t& stream;
+    const stream_t& stream;
 
 public:
     GS_launcher(fr_t* d_ptr, int lg_dsz, bool innt,
-                const NTTParameters& params, const cudaStream_t& s)
+                const NTTParameters& params, const stream_t& s)
       : d_inout(d_ptr), lg_domain_size(lg_dsz), is_intt(innt), stage(lg_dsz),
         ntt_parameters(params), stream(s)
     {}
@@ -267,7 +267,7 @@ public:
 };
 
 void GS_NTT(fr_t* d_inout, const int lg_domain_size, const bool is_intt,
-    const NTTParameters& ntt_parameters, const cudaStream_t& stream)
+    const NTTParameters& ntt_parameters, const stream_t& stream)
 {
     GS_launcher params{d_inout, lg_domain_size, is_intt, ntt_parameters, stream};
 
