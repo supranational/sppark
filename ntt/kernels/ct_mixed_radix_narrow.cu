@@ -224,6 +224,7 @@ public:
             break;
         }
 
+        const int Z_COUNT = 256/8/sizeof(fr_t);
         size_t shared_sz = sizeof(fr_t) << (radix - 1);
         #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
                 d_inout, ntt_parameters.partial_twiddles, \

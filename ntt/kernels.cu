@@ -50,14 +50,13 @@ template<typename T>
 static __device__ __host__ constexpr uint32_t lg2(T n)
 {   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
 
+template<unsigned int Z_COUNT>
 __launch_bounds__(192, 2) __global__
 void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
-    const uint32_t Z_COUNT = 256 / sizeof(fr_t);
     const uint32_t LG_Z_COUNT = lg2(Z_COUNT);
 
-    extern __shared__ fr_t exchange[];
-    fr_t (*xchg)[Z_COUNT][Z_COUNT] = reinterpret_cast<decltype(xchg)>(exchange);
+    extern __shared__ fr_t xchg[][Z_COUNT][Z_COUNT];
 
     uint32_t gid = threadIdx.x / Z_COUNT;
     uint32_t idx = threadIdx.x % Z_COUNT;
@@ -313,7 +312,6 @@ void coalesced_store(fr_t* inout, index_t idx, const fr_t r[z_count],
 }
 
 #if defined(FEATURE_BABY_BEAR) || defined(FEATURE_GOLDILOCKS)
-const static int Z_COUNT = 256/8/sizeof(fr_t);
 # include "kernels/gs_mixed_radix_narrow.cu"
 # include "kernels/ct_mixed_radix_narrow.cu"
 #else // 256-bit fields
