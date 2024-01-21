@@ -764,7 +764,7 @@ public:
         // reduce |even| modulo |MOD<<(n*32)|
         even.final_sub(carry, &tmp[0]);
 
-        return even; // implict cast to mont_t performs the reduction
+        return even; // implicit cast to mont_t performs the reduction
     }
 
     inline mont_t shfl_down(uint32_t off) const
