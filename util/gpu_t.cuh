@@ -58,12 +58,14 @@ class stream_t {
     const int gpu_id;
 public:
     stream_t(int id) : gpu_id(id)
-    {   cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);   }
+    {   CUDA_OK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));   }
     ~stream_t()
     {   cudaStreamDestroy(stream);   }
     inline operator decltype(stream)() const    { return stream; }
     inline int id() const                       { return gpu_id; }
     inline operator int() const                 { return gpu_id; }
+    inline int sm_count() const
+    {   return gpu_props(gpu_id).multiProcessorCount;   }
 
     inline void* Dmalloc(size_t sz) const
     {   void *d_ptr;
