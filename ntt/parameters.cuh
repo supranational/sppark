@@ -96,7 +96,7 @@ void generate_all_twiddles(fr_t* d_radixX_twiddles, const fr_t root6,
                                                     const fr_t root10)
 {
     const unsigned int tid = threadIdx.x + blockDim.x * blockIdx.x;
-    unsigned int pow;
+    unsigned int pow = 0;
     fr_t root_of_unity;
 
     if (tid < 64) {

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template<unsigned int z_count, bool coalesced = false, class fr_t>
+template<int z_count, bool coalesced = false, class fr_t>
 __launch_bounds__(768, 1) __global__
 void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
@@ -50,7 +50,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     #pragma unroll 1
-    for (int s = iterations; --s >= 6;) {
+    for (unsigned int s = iterations; --s >= 6;) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -86,7 +86,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     #pragma unroll 1
-    for (int s = min(iterations, 6); --s >= 1;) {
+    for (unsigned int s = min(iterations, 6u); --s >= 1;) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;

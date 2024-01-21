@@ -72,7 +72,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 = r0 + t;
     }
 
-    for (int s = 1; s < min(iterations, 6); s++) {
+    for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -90,7 +90,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 = r0 + t;
     }
 
-    for (int s = 6; s < iterations; s++) {
+    for (unsigned int s = 6; s < iterations; s++) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
