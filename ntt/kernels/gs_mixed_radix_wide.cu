@@ -31,7 +31,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     fr_t r0 = d_inout[idx0];
     fr_t r1 = d_inout[idx1];
 
-    for (int s = iterations; --s >= 6;) {
+    for (unsigned int s = iterations; --s >= 6;) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -55,7 +55,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r1 = fr_t::csel(t, r1, pos);
     }
 
-    for (int s = min(iterations, 6); --s >= 1;) {
+    for (unsigned int s = min(iterations, 6u); --s >= 1;) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;

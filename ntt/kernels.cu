@@ -112,8 +112,7 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 }
 
 __device__ __forceinline__
-fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
-                           unsigned int nbits = MAX_LG_DOMAIN_SIZE)
+fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE])
 {
     unsigned int off = 0;
 
@@ -264,7 +263,7 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
     }
 }
 
-template<unsigned int z_count>
+template<int z_count>
 __device__ __forceinline__
 void coalesced_load(fr_t r[z_count], const fr_t* inout, index_t idx,
                     const unsigned int stage)
@@ -278,7 +277,7 @@ void coalesced_load(fr_t r[z_count], const fr_t* inout, index_t idx,
         r[z] = inout[idx];
 }
 
-template<unsigned int z_count>
+template<int z_count>
 __device__ __forceinline__
 void transpose(fr_t r[z_count])
 {
@@ -299,7 +298,7 @@ void transpose(fr_t r[z_count])
         r[z] = xchg[y + x][z];
 }
 
-template<unsigned int z_count>
+template<int z_count>
 __device__ __forceinline__
 void coalesced_store(fr_t* inout, index_t idx, const fr_t r[z_count],
                      const unsigned int stage)
