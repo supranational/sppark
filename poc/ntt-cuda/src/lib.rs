@@ -26,7 +26,7 @@ pub fn NTT<T>(device_id: usize, inout: &mut [T], order: NTTInputOutputOrder) {
     let err = unsafe {
         compute_ntt(
             device_id,
-            inout.as_mut_ptr() as *mut core::ffi::c_void,
+            inout.as_mut_ptr() as *mut _,
             len.trailing_zeros(),
             order,
             NTTDirection::Forward,
@@ -50,7 +50,7 @@ pub fn iNTT<T>(device_id: usize, inout: &mut [T], order: NTTInputOutputOrder) {
     let err = unsafe {
         compute_ntt(
             device_id,
-            inout.as_mut_ptr() as *mut core::ffi::c_void,
+            inout.as_mut_ptr() as *mut _,
             len.trailing_zeros(),
             order,
             NTTDirection::Inverse,
@@ -77,7 +77,7 @@ pub fn coset_NTT<T>(
     let err = unsafe {
         compute_ntt(
             device_id,
-            inout.as_mut_ptr() as *mut core::ffi::c_void,
+            inout.as_mut_ptr() as *mut _,
             len.trailing_zeros(),
             order,
             NTTDirection::Forward,
@@ -104,7 +104,7 @@ pub fn coset_iNTT<T>(
     let err = unsafe {
         compute_ntt(
             device_id,
-            inout.as_mut_ptr() as *mut core::ffi::c_void,
+            inout.as_mut_ptr() as *mut _,
             len.trailing_zeros(),
             order,
             NTTDirection::Inverse,
