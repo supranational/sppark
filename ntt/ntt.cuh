@@ -47,7 +47,7 @@ protected:
         else
             // Those GPUs that can reserve 96KB of shared memory can
             // schedule 2 blocks to each SM...
-            bit_rev_permutation_z<Z_COUNT><<<gpu_props(stream).multiProcessorCount*2, 192,
+            bit_rev_permutation_z<Z_COUNT><<<stream.sm_count()*2, 192,
                                              192 * Z_COUNT * sizeof(fr_t),
                                              stream>>>
                                  (d_out, d_inp, lg_domain_size);
@@ -71,8 +71,7 @@ private:
             LDE_distribute_powers<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else
-            LDE_distribute_powers<<<gpu_props(stream).multiProcessorCount, 1024,
-                                    0, stream>>>
+            LDE_distribute_powers<<<stream.sm_count(), 1024, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
 
         CUDA_OK(cudaGetLastError());
@@ -174,10 +173,8 @@ protected:
         assert(lg_domain_size + lg_blowup <= MAX_LG_DOMAIN_SIZE);
         size_t domain_size = (size_t)1 << lg_domain_size;
 
-        const cudaDeviceProp& gpu_prop = gpu_props(stream.id());
-
         // Determine the max power of 2 SM count
-        size_t kernel_sms = gpu_prop.multiProcessorCount;
+        size_t kernel_sms = stream.sm_count();
         while (kernel_sms & (kernel_sms - 1))
             kernel_sms -= (kernel_sms & (0 - kernel_sms));
 
