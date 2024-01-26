@@ -12,9 +12,12 @@
 # define __device__
 # undef  __noinline__
 # define __noinline__
+#else
+# pragma nv_diag_suppress 284   // NULL reference is not allowed
 #endif
 
-template<class field_t, class field_h = typename field_t::mem_t>
+template<class field_t, class field_h = typename field_t::mem_t,
+         const field_h* a4 = nullptr>
 class xyzz_t {
     field_t X, Y, ZZZ, ZZ;
 
@@ -268,6 +271,16 @@ public:
             S = p31.X * V;          /* S = X1*V */
             M = p31.X^2;
             M = M + M + M;          /* M = 3*X1^2[+a*ZZ1^2] */
+            if (a4 != nullptr) {
+#ifdef __CUDA_ARCH__
+                U = *a4;
+                U *= p31.ZZ^2;
+#else
+                U = p31.ZZ^2;
+                U *= *a4;
+#endif
+                M += U;
+            }
             p31.X = M^2;
             p31.X -= S;
             p31.X -= S;             /* X3 = M^2-2*S */
@@ -329,7 +342,12 @@ public:
                 inf = A.is_zero();      /* X1==X2, not add |p1| and |p2| */
                 dbl = R.is_zero() & inf;
                 if (dbl) {              /* X1==X2 && Y1==Y2, double |p2| */
-                    A = p2.Y<<1;        /* U = 2*Y1 */
+                    if (a4 != nullptr) {
+                        A = p2.ZZ;
+                        pc = 16;
+                    } else {
+                        A = p2.Y<<1;    /* U = 2*Y1 */
+                    }
                     inf = false;        /* don't set |p3| to infinity */
                 }
                 B = A;
@@ -389,6 +407,8 @@ public:
 #define S PP
             case 14:
                 A = A + A + A;          /* M = 3*X1^2[+a*ZZ1^2] */
+                if (a4 != nullptr)
+                    A += U;
                 B = A;
                 break;
             case 15:
@@ -400,6 +420,19 @@ public:
                 done = true;
                 break;
 #undef S
+            /*** account for a4 != nullptr when doubling ***/
+            case 17:                    /* ZZ1^2 */
+                if (a4 != nullptr)
+                    B = *a4;
+                break;
+            case 18:                    /* ZZ1^2*a4 */
+                if (a4 != nullptr) {
+                    U = A;
+                    A = p2.Y<<1;        /* U = 2*Y1 */
+                    B = A;
+                }
+                pc = 3;
+                break;
             }
         } while (!done);
         p31.Y = A - p31.Y;              /* Y3 = R*(Q-X3)-S1*PPP */
@@ -470,6 +503,13 @@ public:
                 S = p2.X * p31.ZZ;      /* S = X1*V */
                 M = p2.X^2;
                 M = M + M + M;          /* M = 3*X1^2[+a] */
+                if (a4 != nullptr) {
+#ifdef __CUDA_ARCH__
+                    M += (U = *a4);
+#else
+                    M += *a4;
+#endif
+                }
                 p31.X = M^2;
                 p31.X -= S;
                 p31.X -= S;             /* X3 = M^2-2*S */
@@ -581,6 +621,8 @@ public:
 #define S R
             case 10:                    /* X1^2 */
                 A += A<<1;              /* M = 3*X1^2[+a] */
+                if (a4 != nullptr)
+                    A += (B = *a4);
                 B = A;
                 break;
             case 11:                    /* M^2 */
@@ -619,4 +661,8 @@ public:
     }
 #endif
 };
+
+#ifdef __CUDACC__
+# pragma nv_diag_default 284
+#endif
 #endif
