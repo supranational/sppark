@@ -69,7 +69,7 @@ public:
         {   return (bool)(X.is_zero(Y));   }
 #else
         inline __host__   bool is_inf() const
-        {   return (bool)(X.is_zero() & Y.is_zero());   }
+        {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
 #endif
 
         inline __host__ affine_t& operator=(const xyzz_t& a)
@@ -188,9 +188,11 @@ public:
 #endif
 
 #ifdef __CUDA_ARCH__
-    inline __device__ bool is_inf() const          { return (bool)(ZZZ.is_zero(ZZ)); }
+    inline __device__ bool is_inf() const
+    {   return (bool)(ZZZ.is_zero(ZZ));   }
 #else
-    inline __host__   bool is_inf() const          { return (bool)(ZZZ.is_zero() & ZZ.is_zero()); }
+    inline __host__   bool is_inf() const
+    {   return (bool)((int)ZZZ.is_zero() & (int)ZZ.is_zero());   }
 #endif
     inline __host__ __device__ void inf()          { ZZZ.zero(); ZZ.zero(); }
     inline __host__ __device__ void cneg(bool neg) { ZZZ.cneg(neg); }

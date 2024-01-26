@@ -401,7 +401,7 @@ public:
             H = p2.X * Z1Z1;        /* U2 = X2*Z1Z1 */
             H -= U1;                /* H = U2-U1 */
 
-            if (H.is_zero() & p3.Z.is_zero()) {
+            if ((int)H.is_zero() & (int)p3.Z.is_zero()) {
                 field_t A, B, C;    /* double |p1| */
 
                 A = p1.X^2;         /* A = X1^2 */
