@@ -337,7 +337,7 @@ public:
 
     friend inline fp2_t czero(const fp2_t& a, int set_z)
     {   fp2_t ret;
-        const vec384x zero = { 0 };
+        const vec384x zero = {{0}};
         vec_select(ret.val, zero, a.val, sizeof(ret), set_z);
         return ret;
     }

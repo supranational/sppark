@@ -46,10 +46,7 @@ typedef size_t index_t;
 __device__ __constant__ fr_t forward_radix6_twiddles[32];
 __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 
-#include "gen_twiddles.cu"
-
 #ifndef __CUDA_ARCH__
-
 # if defined(FEATURE_BLS12_377)
 #  include "parameters/bls12_377.h"
 # elif defined(FEATURE_BLS12_381)
@@ -65,10 +62,107 @@ __device__ __constant__ fr_t inverse_radix6_twiddles[32];
 # elif defined(FEATURE_GOLDILOCKS)
 #  include "parameters/goldilocks.h"
 # endif
+#else
+extern const fr_t group_gen, group_gen_inverse;
+extern const fr_t forward_roots_of_unity[];
+extern const fr_t inverse_roots_of_unity[];
+extern const fr_t domain_size_inverse[];
+#endif
+
+template<class fr_t> __global__
+void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
+                               const fr_t root_of_unity)
+{
+    const unsigned int tid = threadIdx.x + blockDim.x * blockIdx.x;
+    assert(tid < WINDOW_SIZE);
+    fr_t root;
+
+    root = root_of_unity^tid;
+
+    roots[0][tid] = root;
+
+    for (int off = 1; off < WINDOW_NUM; off++) {
+        for (int i = 0; i < LG_WINDOW_SIZE; i++)
+            root.sqr();
+        roots[off][tid] = root;
+    }
+}
+
+template<class fr_t> __global__
+void generate_all_twiddles(fr_t* d_radixX_twiddles, const fr_t root6,
+                                                    const fr_t root7,
+                                                    const fr_t root8,
+                                                    const fr_t root9,
+                                                    const fr_t root10)
+{
+    const unsigned int tid = threadIdx.x + blockDim.x * blockIdx.x;
+    unsigned int pow = 0;
+    fr_t root_of_unity;
+
+    if (tid < 64) {
+        pow = tid;
+        root_of_unity = root7;
+    } else if (tid < 64 + 128) {
+        pow = tid - 64;
+        root_of_unity = root8;
+    } else if (tid < 64 + 128 + 256) {
+        pow = tid - 64 - 128;
+        root_of_unity = root9;
+    } else if (tid < 64 + 128 + 256 + 512) {
+        pow = tid - 64 - 128 - 256;
+        root_of_unity = root10;
+    } else if (tid < 64 + 128 + 256 + 512 + 32) {
+        pow = tid - 64 - 128 - 256 - 512;
+        root_of_unity = root6;
+    } else {
+        assert(false);
+    }
+
+    d_radixX_twiddles[tid] = root_of_unity^pow;
+}
+
+template<class fr_t> __launch_bounds__(512) __global__
+void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
+                                const fr_t root_of_unity)
+{
+    if (gridDim.x == 1) {
+        d_radixX_twiddles_X[threadIdx.x] = fr_t::one();
+        d_radixX_twiddles_X += blockDim.x;
+
+        fr_t root0 = root_of_unity^threadIdx.x;
+
+        d_radixX_twiddles_X[threadIdx.x] = root0;
+        d_radixX_twiddles_X += blockDim.x;
+
+        fr_t root1 = root0;
+
+        for (int i = 2; i < n; i++) {
+            root1 *= root0;
+            d_radixX_twiddles_X[threadIdx.x] = root1;
+            d_radixX_twiddles_X += blockDim.x;
+        }
+    } else {
+        fr_t root0 = root_of_unity^(threadIdx.x * gridDim.x);
+
+        unsigned int pow = blockIdx.x * threadIdx.x;
+        unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+        fr_t root1 = root_of_unity^pow;
+
+        d_radixX_twiddles_X[tid] = root1;
+        d_radixX_twiddles_X += gridDim.x * blockDim.x;
+
+        for (int i = gridDim.x; i < n; i += gridDim.x) {
+            root1 *= root0;
+            d_radixX_twiddles_X[tid] = root1;
+            d_radixX_twiddles_X += gridDim.x * blockDim.x;
+        }
+    }
+}
 
 class NTTParameters {
 private:
-    stream_t& gpu;
+    const gpu_t& gpu;
     bool inverse;
 
 public:
@@ -77,14 +171,12 @@ public:
     fr_t* radix6_twiddles, * radix7_twiddles, * radix8_twiddles,
         * radix9_twiddles, * radix10_twiddles;
 
-#if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-    fr_t* radix6_twiddles_6, * radix6_twiddles_12, * radix7_twiddles_7,
-        * radix8_twiddles_8, * radix9_twiddles_9;
-#endif
-
     fr_t (*partial_group_gen_powers)[WINDOW_SIZE]; // for LDE
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
+    fr_t* radix6_twiddles_6, * radix6_twiddles_12, * radix7_twiddles_7,
+        * radix8_twiddles_8, * radix9_twiddles_9;
+
 private:
     fr_t* twiddles_X(int num_blocks, int block_size, const fr_t& root)
     {
@@ -148,9 +240,14 @@ public:
         CUDA_OK(cudaGetLastError());
     }
     NTTParameters(const NTTParameters&) = delete;
+    NTTParameters(NTTParameters&&) = default;
 
     ~NTTParameters()
     {
+        int current_id;
+        cudaGetDevice(&current_id);
+
+        gpu.select();
         gpu.Dfree(partial_twiddles);
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
@@ -162,14 +259,16 @@ public:
 #endif
 
         gpu.Dfree(radix7_twiddles);
+
+        cudaSetDevice(current_id);
     }
 
     inline void sync() const    { gpu.sync(); }
 
 private:
     class all_params { friend class NTTParameters;
-        std::vector<const NTTParameters*> forward;
-        std::vector<const NTTParameters*> inverse;
+        std::vector<NTTParameters> forward;
+        std::vector<NTTParameters> inverse;
 
         all_params()
         {
@@ -177,19 +276,16 @@ private:
             cudaGetDevice(&current_id);
 
             size_t nids = ngpus();
+            forward.reserve(nids);
             for (size_t id = 0; id < nids; id++)
-                forward.push_back(new NTTParameters(false, id));
+                forward.emplace_back(false, id);
+            inverse.reserve(nids);
             for (size_t id = 0; id < nids; id++)
-                inverse.push_back(new NTTParameters(true, id));
+                inverse.emplace_back(true, id);
             for (size_t id = 0; id < nids; id++)
-                inverse[id]->sync();
+                inverse[id].sync();
 
             cudaSetDevice(current_id);
-        }
-        ~all_params()
-        {
-            for (auto* ptr: forward) delete ptr;
-            for (auto* ptr: inverse) delete ptr;
         }
     };
 
@@ -200,6 +296,4 @@ public:
         return inverse ? params.inverse : params.forward;
     }
 };
-
-#endif
 #endif /* __SPPARK_NTT_PARAMETERS_CUH__ */

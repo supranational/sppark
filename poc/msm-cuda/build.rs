@@ -102,6 +102,9 @@ fn main() {
         nvcc.flag("-arch=sm_80");
         nvcc.flag("-gencode").flag("arch=compute_70,code=sm_70");
         nvcc.flag("-t0");
+        if cfg!(feature = "quiet") {
+            nvcc.flag("-diag-suppress=177"); // bug in the warning system.
+        }
         #[cfg(not(target_env = "msvc"))]
         nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
         nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);

@@ -15,8 +15,6 @@
 #include "parameters.cuh"
 #include "kernels.cu"
 
-#ifndef __CUDA_ARCH__
-
 class NTT {
 public:
     enum class InputOutputOrder { NN, NR, RN, RR };
@@ -42,14 +40,16 @@ protected:
             bit_rev_permutation<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
                                (d_out, d_inp, lg_domain_size);
         else if (Z_COUNT > WARP_SZ || lg_domain_size <= 32)
-            bit_rev_permutation_z<<<domain_size / Z_COUNT / bsize, bsize,
-                                    bsize * Z_COUNT * sizeof(fr_t), stream>>>
+            bit_rev_permutation_z<Z_COUNT><<<domain_size / Z_COUNT / bsize, bsize,
+                                             bsize * Z_COUNT * sizeof(fr_t),
+                                             stream>>>
                                  (d_out, d_inp, lg_domain_size);
         else
             // Those GPUs that can reserve 96KB of shared memory can
             // schedule 2 blocks to each SM...
-            bit_rev_permutation_z<<<gpu_props(stream).multiProcessorCount*2, 192,
-                                    192 * Z_COUNT * sizeof(fr_t), stream>>>
+            bit_rev_permutation_z<Z_COUNT><<<stream.sm_count()*2, 192,
+                                             192 * Z_COUNT * sizeof(fr_t),
+                                             stream>>>
                                  (d_out, d_inp, lg_domain_size);
 
         CUDA_OK(cudaGetLastError());
@@ -62,7 +62,7 @@ private:
     {
         size_t domain_size = (size_t)1 << lg_dsz;
         const auto gen_powers =
-            NTTParameters::all(innt)[stream]->partial_group_gen_powers;
+            NTTParameters::all(innt)[stream].partial_group_gen_powers;
 
         if (domain_size < WARP_SZ)
             LDE_distribute_powers<<<1, domain_size, 0, stream>>>
@@ -71,8 +71,7 @@ private:
             LDE_distribute_powers<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else
-            LDE_distribute_powers<<<gpu_props(stream).multiProcessorCount, 1024,
-                                    0, stream>>>
+            LDE_distribute_powers<<<stream.sm_count(), 1024, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
 
         CUDA_OK(cudaGetLastError());
@@ -88,7 +87,7 @@ protected:
         // results in a considerable performance gain.
 
         const bool intt = direction == Direction::inverse;
-        const auto& ntt_parameters = *NTTParameters::all(intt)[stream];
+        const auto& ntt_parameters = NTTParameters::all(intt)[stream];
         bool bitrev;
         Algorithm algorithm;
 
@@ -173,12 +172,9 @@ protected:
     {
         assert(lg_domain_size + lg_blowup <= MAX_LG_DOMAIN_SIZE);
         size_t domain_size = (size_t)1 << lg_domain_size;
-        size_t ext_domain_size = domain_size << lg_blowup;
-
-        const cudaDeviceProp& gpu_prop = gpu_props(stream.id());
 
         // Determine the max power of 2 SM count
-        size_t kernel_sms = gpu_prop.multiProcessorCount;
+        size_t kernel_sms = stream.sm_count();
         while (kernel_sms & (kernel_sms - 1))
             kernel_sms -= (kernel_sms & (0 - kernel_sms));
 
@@ -226,7 +222,7 @@ public:
                          Type::standard, gpu);
 
             const auto gen_powers =
-                NTTParameters::all()[gpu.id()]->partial_group_gen_powers;
+                NTTParameters::all()[gpu.id()].partial_group_gen_powers;
 
             event_t sync_event;
 
@@ -269,8 +265,6 @@ public:
                              uint32_t lg_domain_size, InputOutputOrder order,
                              Direction direction, Type type)
     {
-        size_t domain_size = (size_t)1 << lg_domain_size;
-
         NTT_internal(&d_inout[0], lg_domain_size, order, direction, type,
                      stream);
     }
@@ -290,6 +284,4 @@ public:
         LDE_launch(stream, d_out, d_in, NULL, lg_domain_size, lg_blowup, false);
     }
 };
-
-#endif
 #endif

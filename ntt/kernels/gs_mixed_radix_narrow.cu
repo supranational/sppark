@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template<unsigned int z_count, bool coalesced = false>
+template<int z_count, bool coalesced = false, class fr_t>
 __launch_bounds__(768, 1) __global__
 void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
@@ -50,7 +50,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     #pragma unroll 1
-    for (int s = iterations; --s >= 6;) {
+    for (unsigned int s = iterations; --s >= 6;) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -68,7 +68,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         __syncthreads();
 
         fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
-#ifdef __CUDA_ARCH__
+
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
@@ -83,11 +83,10 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[0][z] = fr_t::csel(t, r[0][z], !pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
         }
-#endif
     }
 
     #pragma unroll 1
-    for (int s = min(iterations, 6); --s >= 1;) {
+    for (unsigned int s = min(iterations, 6u); --s >= 1;) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -101,14 +100,12 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[0][z] = r[0][z] + r[1][z];
             r[1][z] = t;
 
-#ifdef __CUDA_ARCH__
             t = fr_t::csel(r[1][z], r[0][z], pos);
 
             t.shfl_bfly(laneMask);
 
             r[0][z] = fr_t::csel(t, r[0][z], !pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
-#endif
         }
     }
 
@@ -183,33 +180,17 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 }
 
-template __global__
-void _GS_NTT<1>(unsigned int, unsigned int, unsigned int, unsigned int,
-                fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                bool, const fr_t);
-
-template __global__
-void _GS_NTT<Z_COUNT>(unsigned int, unsigned int, unsigned int, unsigned int,
-                      fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                      bool, const fr_t);
-template __global__
-void _GS_NTT<Z_COUNT, true>(unsigned int, unsigned int, unsigned int, unsigned int,
-                            fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                            bool, const fr_t);
-
-#ifndef __CUDA_ARCH__
-
 class GS_launcher {
     fr_t* d_inout;
     const int lg_domain_size;
     bool is_intt;
     int stage;
     const NTTParameters& ntt_parameters;
-    const cudaStream_t& stream;
+    const stream_t& stream;
 
 public:
     GS_launcher(fr_t* d_ptr, int lg_dsz, bool intt,
-                const NTTParameters& params, const cudaStream_t& s)
+                const NTTParameters& params, const stream_t& s)
       : d_inout(d_ptr), lg_domain_size(lg_dsz), is_intt(intt), stage(lg_dsz),
         ntt_parameters(params), stream(s)
     {}
@@ -246,6 +227,7 @@ public:
             break;
         }
 
+        const int Z_COUNT = 256/8/sizeof(fr_t);
         size_t shared_sz = sizeof(fr_t) << (radix - 1);
         #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
                 d_inout, ntt_parameters.partial_twiddles, \
@@ -266,7 +248,7 @@ public:
 };
 
 void GS_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
-            const NTTParameters& ntt_parameters, const cudaStream_t& stream)
+            const NTTParameters& ntt_parameters, const stream_t& stream)
 {
     GS_launcher params{d_inout, lg_domain_size, intt, ntt_parameters, stream};
 
@@ -295,5 +277,3 @@ void GS_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
         assert(false);
     }
 }
-
-#endif

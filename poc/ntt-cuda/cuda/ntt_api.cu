@@ -24,8 +24,6 @@
 
 #include <ntt/ntt.cuh>
 
-#ifndef __CUDA_ARCH__
-
 extern "C"
 RustError::by_value compute_ntt(size_t device_id,
                                 fr_t* inout, uint32_t lg_domain_size,
@@ -38,5 +36,3 @@ RustError::by_value compute_ntt(size_t device_id,
     return NTT::Base(gpu, inout, lg_domain_size,
                      ntt_order, ntt_direction, ntt_type);
 }
-
-#endif
