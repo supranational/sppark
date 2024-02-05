@@ -362,6 +362,7 @@ class msm_t
     bucket_h *d_buckets;
     affine_h *d_points;
     scalar_t *d_scalars;
+    uint32_t *d_pidx;
     vec2d_t<uint32_t> d_hist;
     bool owned;
 
@@ -389,7 +390,7 @@ class msm_t
 public:
     msm_t(const affine_t points[], size_t np, bool owned,
           size_t ffi_affine_sz = sizeof(affine_t), int device_id = -1)
-        : owned(owned), gpu(select_gpu(device_id)), d_points(nullptr), d_scalars(nullptr)
+        : owned(owned), gpu(select_gpu(device_id)), d_points(nullptr), d_scalars(nullptr), d_pidx(nullptr)
     {
         npoints = (np + WARP_SZ - 1) & ((size_t)0 - WARP_SZ);
 
@@ -449,7 +450,8 @@ public:
 
 private:
     void digits(const scalar_t d_scalars[], size_t len,
-                vec2d_t<uint32_t> &d_digits, vec2d_t<uint2> &d_temps, bool mont)
+                vec2d_t<uint32_t> &d_digits, vec2d_t<uint2> &d_temps,
+                bool mont, uint32_t *d_pidx)
     {
         // Using larger grid size doesn't make 'sort' run faster, actually
         // quite contrary. Arguably because global memory bus gets
@@ -487,20 +489,21 @@ private:
         {
             gpu[2].launch_coop(sort, {{grid_size, 2}, SORT_BLOCKDIM, shared_sz},
                                d_digits, len, win, d_temps, d_hist,
-                               wbits - 1, wbits - 1, win == nwins - 2 ? top - 1 : wbits - 1);
+                               wbits - 1, wbits - 1, win == nwins - 2 ? top - 1 : wbits - 1,
+                               d_pidx);
         }
         if (win < nwins)
         {
             gpu[2].launch_coop(sort, {{grid_size, 1}, SORT_BLOCKDIM, shared_sz},
                                d_digits, len, win, d_temps, d_hist,
-                               wbits - 1, top - 1, 0u);
+                               wbits - 1, top - 1, 0u, d_pidx);
         }
 #endif
     }
 
 public:
-    RustError invoke(point_t &out, const affine_t *points_, size_t npoints,
-                     const scalar_t *scalars, bool mont = true,
+    RustError invoke(point_t &out, const affine_t *points, size_t npoints,
+                     const scalar_t *scalars, uint32_t pidx[], bool mont = true,
                      size_t ffi_affine_sz = sizeof(affine_t))
     {
         assert(this->npoints == 0 || npoints <= this->npoints);
@@ -522,25 +525,29 @@ public:
         {
             // |scalars| being nullptr means the scalars are pre-loaded to
             // |d_scalars|, otherwise allocate stride.
-            size_t temp_sz = scalars ? sizeof(scalar_t) : 0;
-            temp_sz = stride * std::max(2 * sizeof(uint2), temp_sz);
+            size_t scalars_sz = scalars ? sizeof(scalar_t) : 0;
+            scalars_sz = stride * std::max(2 * sizeof(uint2), scalars_sz);
+
+            size_t pidx_sz = pidx ? sizeof(uint32_t) : 0;
+            pidx_sz *= stride;
 
             // |points| being nullptr means the points are pre-loaded to
             // |d_points|, otherwise allocate double-stride.
-            const char *points = reinterpret_cast<const char *>(points_);
-            size_t d_point_sz = points ? (batch > 1 ? 2 * stride : stride) : 0;
-            d_point_sz *= sizeof(affine_h);
+            size_t points_sz = points ? (batch > 1 ? 2 * stride : stride) : 0;
+            points_sz *= sizeof(affine_h);
 
             size_t digits_sz = nwins * stride * sizeof(uint32_t);
 
-            dev_ptr_t<uint8_t> d_temp{temp_sz + digits_sz + d_point_sz, gpu[2]};
+            dev_ptr_t<uint8_t> d_temp{scalars_sz + pidx_sz + digits_sz + points_sz, gpu[2]};
 
             vec2d_t<uint2> d_temps{&d_temp[0], stride};
-            vec2d_t<uint32_t> d_digits{&d_temp[temp_sz], stride};
+            vec2d_t<uint32_t> d_digits{&d_temp[scalars_sz + pidx_sz], stride};
 
             scalar_t *d_scalars = scalars ? (scalar_t *)&d_temp[0]
                                           : this->d_scalars;
-            affine_h *d_points = points ? (affine_h *)&d_temp[temp_sz + digits_sz]
+            uint32_t *d_pidx = pidx ? (uint32_t *)&d_temp[scalars_sz]
+                                    : this->d_pidx;
+            affine_h *d_points = points ? (affine_h *)&d_temp[scalars_sz + pidx_sz + digits_sz]
                                         : this->d_points;
 
             size_t d_off = 0; // device offset
@@ -550,12 +557,16 @@ public:
 
             if (scalars)
                 gpu[2].HtoD(&d_scalars[d_off], &scalars[h_off], num);
-            digits(&d_scalars[0], num, d_digits, d_temps, mont);
+            if (pidx)
+                gpu[2].HtoD(&d_pidx[d_off], &pidx[h_off], num);
+            digits(&d_scalars[0], num, d_digits, d_temps, mont, d_pidx);
             gpu[2].record(ev);
 
-            if (points)
+            if (points) {
                 gpu[0].HtoD(&d_points[d_off], &points[h_off],
                             num, ffi_affine_sz);
+                CUDA_OK(cudaGetLastError());
+            }
 
             for (uint32_t i = 0; i < batch; i++)
             {
@@ -563,13 +574,14 @@ public:
 
                 batch_addition<bucket_t><<<gpu.sm_count(), BATCH_ADD_BLOCK_SIZE,
                                            0, gpu[i & 1]>>>(
-                    &d_buckets[nwins << (wbits - 1)], &d_points[d_off], num,
+                    &d_buckets[nwins << (wbits - 1)], &d_points[pidx ? 0 : d_off], num,
                     &d_digits[0][0], d_hist[0][0]);
                 CUDA_OK(cudaGetLastError());
 
                 gpu[i & 1].launch_coop(accumulate<bucket_t, affine_h>,
                                        {gpu.sm_count(), 0},
-                                       d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i & 1);
+                                       d_buckets, nwins, wbits, &d_points[pidx ? 0 : d_off], d_digits, d_hist, i & 1);
+                CUDA_OK(cudaGetLastError());
                 gpu[i & 1].record(ev);
 
                 integrate<bucket_t><<<nwins, MSM_NTHREADS,
@@ -585,17 +597,20 @@ public:
 
                     if (scalars)
                         gpu[2].HtoD(&d_scalars[0], &scalars[h_off], num);
+                    if (pidx)
+                        gpu[2].HtoD(&d_pidx[0], &pidx[h_off], num);
                     gpu[2].wait(ev);
                     digits(&d_scalars[scalars ? 0 : h_off], num,
-                           d_digits, d_temps, mont);
+                           d_digits, d_temps, mont, d_pidx);
                     gpu[2].record(ev);
 
                     if (points)
                     {
                         size_t j = (i + 1) & 1;
                         d_off = j ? stride : 0;
-                        gpu[j].HtoD(&d_points[d_off], &points[h_off * ffi_affine_sz],
+                        gpu[j].HtoD(&d_points[d_off], &points[h_off],
                                     num, ffi_affine_sz);
+                        CUDA_OK(cudaGetLastError());
                     }
                     else
                     {
@@ -638,32 +653,32 @@ public:
         return invoke(out, points, npoints, nullptr, mont, ffi_affine_sz);
     }
 
-    RustError invoke(point_t &out, vec_t<scalar_t> scalars, bool mont = true)
+    RustError invoke(point_t &out, vec_t<scalar_t> scalars, uint32_t pidx[], bool mont = true)
     {
-        return invoke(out, nullptr, scalars.size(), scalars, mont);
+        return invoke(out, nullptr, scalars.size(), scalars, pidx, mont);
     }
 
     RustError invoke(point_t &out, vec_t<affine_t> points,
-                     const scalar_t *scalars, bool mont = true,
+                     const scalar_t *scalars, uint32_t pidx[], bool mont = true,
                      size_t ffi_affine_sz = sizeof(affine_t))
     {
-        return invoke(out, points, points.size(), scalars, mont, ffi_affine_sz);
+        return invoke(out, points, points.size(), scalars, pidx, mont, ffi_affine_sz);
     }
 
     RustError invoke(point_t &out, vec_t<affine_t> points,
-                     vec_t<scalar_t> scalars, bool mont = true,
+                     vec_t<scalar_t> scalars, uint32_t pidx[], bool mont = true,
                      size_t ffi_affine_sz = sizeof(affine_t))
     {
-        return invoke(out, points, points.size(), scalars, mont, ffi_affine_sz);
+        return invoke(out, points, points.size(), scalars, pidx, mont, ffi_affine_sz);
     }
 
     RustError invoke(point_t &out, const std::vector<affine_t> &points,
-                     const std::vector<scalar_t> &scalars, bool mont = true,
-                     size_t ffi_affine_sz = sizeof(affine_t))
+                     const std::vector<scalar_t> &scalars, uint32_t pidx[],
+                     bool mont = true, size_t ffi_affine_sz = sizeof(affine_t))
     {
         return invoke(out, points.data(),
                       std::min(points.size(), scalars.size()),
-                      scalars.data(), mont, ffi_affine_sz);
+                      scalars.data(), nullptr, mont, ffi_affine_sz);
     }
 
 private:
@@ -825,7 +840,7 @@ static RustError mult_pippenger(point_t *out, const affine_t points[], size_t np
     {
         msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints, true};
         return msm.invoke(*out, slice_t<affine_t>{points, npoints},
-                          scalars, mont, ffi_affine_sz);
+                          scalars, nullptr, mont, ffi_affine_sz);
     }
     catch (const cuda_error &e)
     {
@@ -842,15 +857,15 @@ template <class bucket_t, class point_t, class affine_t, class scalar_t,
           class affine_h = class affine_t::mem_t,
           class bucket_h = class bucket_t::mem_t>
 static RustError mult_pippenger_with(point_t *out, msm_context_t<affine_h> *msm_context, size_t npoints,
-                                     const scalar_t scalars[], bool mont = true,
+                                     const scalar_t scalars[], uint32_t pidx[], bool mont = true,
                                      size_t ffi_affine_sz = sizeof(affine_t))
 {
     try
     {
         msm_t<bucket_t, point_t, affine_t, scalar_t> msm{nullptr, npoints, false};
         msm.set_d_points(msm_context->d_points);
-        return msm.invoke(*out, nullptr, npoints,
-                          scalars, mont, ffi_affine_sz);
+        return msm.invoke(*out, nullptr, npoints, scalars, pidx,
+                          mont, ffi_affine_sz);
     }
     catch (const cuda_error &e)
     {

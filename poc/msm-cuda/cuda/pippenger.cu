@@ -19,8 +19,8 @@ typedef fr_t scalar_t;
 #ifndef __CUDA_ARCH__
 extern "C"
 RustError mult_pippenger(point_t* out, const affine_t points[], size_t npoints,
-                                       const scalar_t scalars[])
+                                       const scalar_t scalars[], uint32_t pidx[])
 {
-    return mult_pippenger<bucket_t>(out, points, npoints, scalars, false);
+    return mult_pippenger<bucket_t>(out, points, npoints, scalars, pidx, false);
 }
 #endif
