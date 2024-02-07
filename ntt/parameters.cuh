@@ -168,8 +168,7 @@ private:
 public:
     fr_t (*partial_twiddles)[WINDOW_SIZE];
 
-    fr_t* radix6_twiddles, * radix7_twiddles, * radix8_twiddles,
-        * radix9_twiddles, * radix10_twiddles;
+    fr_t* twiddles[5];
 
     fr_t (*partial_group_gen_powers)[WINDOW_SIZE]; // for LDE
 
@@ -196,15 +195,19 @@ public:
 
         const size_t blob_sz = 64 + 128 + 256 + 512 + 32;
 
+        fr_t* radix6_twiddles;
         CUDA_OK(cudaGetSymbolAddress((void**)&radix6_twiddles,
                                      inverse ? inverse_radix6_twiddles
                                              : forward_radix6_twiddles));
-        radix7_twiddles = (fr_t*)gpu.Dmalloc(blob_sz * sizeof(fr_t));
-        radix8_twiddles = radix7_twiddles + 64;
-        radix9_twiddles = radix8_twiddles + 128;
-        radix10_twiddles = radix9_twiddles + 256;
+        fr_t* blob = (fr_t*)gpu.Dmalloc(blob_sz * sizeof(fr_t));
 
-        generate_all_twiddles<<<blob_sz/32, 32, 0, gpu>>>(radix7_twiddles,
+        twiddles[0] = radix6_twiddles;
+        twiddles[1] = blob;                 /* radix7_twiddles */
+        twiddles[2] = twiddles[1] + 64;     /* radix8_twiddles */
+        twiddles[3] = twiddles[2] + 128;    /* radix9_twiddles */
+        twiddles[4] = twiddles[3] + 256;    /* radix10_twiddles */
+
+        generate_all_twiddles<<<blob_sz/32, 32, 0, gpu>>>(blob,
                                                           roots[6],
                                                           roots[7],
                                                           roots[8],
@@ -212,7 +215,8 @@ public:
                                                           roots[10]);
         CUDA_OK(cudaGetLastError());
 
-        CUDA_OK(cudaMemcpyAsync(radix6_twiddles, radix10_twiddles + 512,
+        /* copy to the constant segment */
+        CUDA_OK(cudaMemcpyAsync(radix6_twiddles, twiddles[4] + 512,
                                 32 * sizeof(fr_t), cudaMemcpyDeviceToDevice,
                                 gpu));
 
@@ -258,7 +262,7 @@ public:
         gpu.Dfree(radix6_twiddles_6);
 #endif
 
-        gpu.Dfree(radix7_twiddles);
+        gpu.Dfree(twiddles[1]);
 
         cudaSetDevice(current_id);
     }
