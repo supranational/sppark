@@ -171,84 +171,58 @@ public:
                 d_intermediate_twiddles, intermediate_twiddle_shift, \
                 is_intt, domain_size_inverse[lg_domain_size]
 
-        switch (radix) {
+        switch (stage - iterations) {
+        case 0:
+            _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
+            break;
         case 6:
-            switch (stage) {
-            case 6:
-                _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            case 12:
+            if (iterations <= 6) {
                 intermediate_twiddle_shift = 6;
                 d_intermediate_twiddles = ntt_parameters.radix6_twiddles_6;
                 _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            case 18:
-                intermediate_twiddle_shift = 6;
-                d_intermediate_twiddles = ntt_parameters.radix6_twiddles_12;
-                _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            default:
+            } else {
                 _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
             }
             break;
         case 7:
-            switch (stage) {
-            case 7:
-                _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            case 14:
+            if (iterations <= 7) {
                 intermediate_twiddle_shift = 7;
                 d_intermediate_twiddles = ntt_parameters.radix7_twiddles_7;
                 _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            default:
+            } else {
                 _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
             }
             break;
         case 8:
-            switch (stage) {
-            case 8:
-                _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            case 16:
+            if (iterations <= 8) {
                 intermediate_twiddle_shift = 8;
                 d_intermediate_twiddles = ntt_parameters.radix8_twiddles_8;
                 _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            default:
+            } else {
                 _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
             }
             break;
         case 9:
-            switch (stage) {
-            case 9:
-                _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            case 18:
+            if (iterations <= 9) {
                 intermediate_twiddle_shift = 9;
                 d_intermediate_twiddles = ntt_parameters.radix9_twiddles_9;
                 _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            default:
+            } else {
                 _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
             }
             break;
-        case 10:
-            switch (stage) {
-            case 10:
-                _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
-            default:
+        case 12:
+            if (iterations <= 6) {
+                intermediate_twiddle_shift = 6;
+                d_intermediate_twiddles = ntt_parameters.radix6_twiddles_12;
+                _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
+            } else {
                 _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-                break;
             }
             break;
         default:
-            assert(false);
+            _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
+            break;
         }
 
         #undef NTT_CONFIGURATION
