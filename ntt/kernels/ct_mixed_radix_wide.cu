@@ -237,31 +237,3 @@ public:
         stage += iterations;
     }
 };
-
-void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
-            const NTTParameters& ntt_parameters, const stream_t& stream)
-{
-    CT_launcher params{d_inout, lg_domain_size, intt, ntt_parameters, stream};
-
-    if (lg_domain_size <= 10) {
-        params.step(lg_domain_size);
-    } else if (lg_domain_size <= 17) {
-        params.step(lg_domain_size / 2 + lg_domain_size % 2);
-        params.step(lg_domain_size / 2);
-    } else if (lg_domain_size <= 30) {
-        int step = lg_domain_size / 3;
-        int rem = lg_domain_size % 3;
-        params.step(step);
-        params.step(step + (lg_domain_size == 29 ? 1 : 0));
-        params.step(step + (lg_domain_size == 29 ? 1 : rem));
-    } else if (lg_domain_size <= 40) {
-        int step = lg_domain_size / 4;
-        int rem = lg_domain_size % 4;
-        params.step(step);
-        params.step(step + (rem > 2));
-        params.step(step + (rem > 1));
-        params.step(step + (rem > 0));
-    } else {
-        assert(false);
-    }
-}
