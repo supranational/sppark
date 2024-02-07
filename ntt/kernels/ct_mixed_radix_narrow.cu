@@ -227,31 +227,3 @@ public:
         stage += iterations;
     }
 };
-
-void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
-            const NTTParameters& ntt_parameters, const stream_t& stream)
-{
-    CT_launcher params{d_inout, lg_domain_size, intt, ntt_parameters, stream};
-
-    if (lg_domain_size <= std::min(10, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size);
-    } else if (lg_domain_size <= std::min(17, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size / 2 + lg_domain_size % 2);
-        params.step(lg_domain_size / 2);
-    } else if (lg_domain_size <= std::min(30, MAX_LG_DOMAIN_SIZE)) {
-        int step = lg_domain_size / 3;
-        int rem = lg_domain_size % 3;
-        params.step(step);
-        params.step(step + (lg_domain_size == 29 ? 1 : 0));
-        params.step(step + (lg_domain_size == 29 ? 1 : rem));
-    } else if (lg_domain_size <= std::min(32, MAX_LG_DOMAIN_SIZE)) {
-        int step = lg_domain_size / 4;
-        int rem = lg_domain_size % 4;
-        params.step(step);
-        params.step(step);
-        params.step(step);
-        params.step(step + rem);
-    } else {
-        assert(false);
-    }
-}

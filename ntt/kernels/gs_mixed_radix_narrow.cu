@@ -230,34 +230,3 @@ public:
         stage -= iterations;
     }
 };
-
-void GS_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
-            const NTTParameters& ntt_parameters, const stream_t& stream)
-{
-    GS_launcher params{d_inout, lg_domain_size, intt, ntt_parameters, stream};
-
-    if (lg_domain_size <= std::min(10, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size);
-    } else if (lg_domain_size <= std::min(12, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size - 6);
-        params.step(6);
-    } else if (lg_domain_size <= std::min(18, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size / 2 + lg_domain_size % 2);
-        params.step(lg_domain_size / 2);
-    } else if (lg_domain_size <= std::min(30, MAX_LG_DOMAIN_SIZE)) {
-        int step = lg_domain_size / 3;
-        int rem = lg_domain_size % 3;
-        params.step(step + (lg_domain_size == 29 ? 1 : rem));
-        params.step(step + (lg_domain_size == 29 ? 1 : 0));
-        params.step(step);
-    } else if (lg_domain_size <= std::min(32, MAX_LG_DOMAIN_SIZE)) {
-        int step = lg_domain_size / 4;
-        int rem = lg_domain_size % 4;
-        params.step(step + rem);
-        params.step(step);
-        params.step(step);
-        params.step(step);
-    } else {
-        assert(false);
-    }
-}
