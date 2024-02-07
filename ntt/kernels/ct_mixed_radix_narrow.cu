@@ -207,28 +207,12 @@ public:
 
         assert(num_blocks == (unsigned int)num_blocks);
 
-        fr_t* d_radixX_twiddles = nullptr;
-
-        switch (radix) {
-        case 7:
-            d_radixX_twiddles = ntt_parameters.radix7_twiddles;
-            break;
-        case 8:
-            d_radixX_twiddles = ntt_parameters.radix8_twiddles;
-            break;
-        case 9:
-            d_radixX_twiddles = ntt_parameters.radix9_twiddles;
-            break;
-        case 10:
-            d_radixX_twiddles = ntt_parameters.radix10_twiddles;
-            break;
-        }
-
         const int Z_COUNT = 256/8/sizeof(fr_t);
         size_t shared_sz = sizeof(fr_t) << (radix - 1);
+
         #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
                 d_inout, ntt_parameters.partial_twiddles, \
-                ntt_parameters.radix6_twiddles, d_radixX_twiddles, \
+                ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
                 is_intt, domain_size_inverse[lg_domain_size]
 
         if (num_blocks < Z_COUNT)

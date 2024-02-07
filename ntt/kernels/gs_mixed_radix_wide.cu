@@ -159,19 +159,17 @@ public:
 
         assert(num_blocks == (unsigned int)num_blocks);
 
-        fr_t* d_radixX_twiddles = nullptr;
         fr_t* d_intermediate_twiddles = nullptr;
         int intermediate_twiddle_shift = 0;
 
         #define NTT_CONFIGURATION \
             num_blocks, block_size, sizeof(fr_t) * block_size, stream
 
-        #define NTT_ARGUMENTS \
-            radix, lg_domain_size, stage, iterations, d_inout, \
-            ntt_parameters.partial_twiddles, ntt_parameters.radix6_twiddles, \
-            d_radixX_twiddles, d_intermediate_twiddles, \
-            intermediate_twiddle_shift, \
-            is_intt, domain_size_inverse[lg_domain_size]
+        #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
+                d_inout, ntt_parameters.partial_twiddles, \
+                ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
+                d_intermediate_twiddles, intermediate_twiddle_shift, \
+                is_intt, domain_size_inverse[lg_domain_size]
 
         switch (radix) {
         case 6:
@@ -195,7 +193,6 @@ public:
             }
             break;
         case 7:
-            d_radixX_twiddles = ntt_parameters.radix7_twiddles;
             switch (stage) {
             case 7:
                 _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -211,7 +208,6 @@ public:
             }
             break;
         case 8:
-            d_radixX_twiddles = ntt_parameters.radix8_twiddles;
             switch (stage) {
             case 8:
                 _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -227,7 +223,6 @@ public:
             }
             break;
         case 9:
-            d_radixX_twiddles = ntt_parameters.radix9_twiddles;
             switch (stage) {
             case 9:
                 _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -243,7 +238,6 @@ public:
             }
             break;
         case 10:
-            d_radixX_twiddles = ntt_parameters.radix10_twiddles;
             switch (stage) {
             case 10:
                 _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);

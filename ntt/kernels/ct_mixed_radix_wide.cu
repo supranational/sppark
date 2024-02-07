@@ -163,7 +163,6 @@ public:
 
         assert(num_blocks == (unsigned int)num_blocks);
 
-        fr_t* d_radixX_twiddles = nullptr;
         fr_t* d_intermediate_twiddles = nullptr;
         unsigned int intermediate_twiddle_shift = 0;
 
@@ -172,7 +171,7 @@ public:
 
         #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
                 d_inout, ntt_parameters.partial_twiddles, \
-                ntt_parameters.radix6_twiddles, d_radixX_twiddles, \
+                ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
                 d_intermediate_twiddles, intermediate_twiddle_shift, \
                 is_intt, domain_size_inverse[lg_domain_size]
 
@@ -198,7 +197,6 @@ public:
             }
             break;
         case 7:
-            d_radixX_twiddles = ntt_parameters.radix7_twiddles;
             switch (stage) {
             case 0:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -214,7 +212,6 @@ public:
             }
             break;
         case 8:
-            d_radixX_twiddles = ntt_parameters.radix8_twiddles;
             switch (stage) {
             case 0:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -230,7 +227,6 @@ public:
             }
             break;
         case 9:
-            d_radixX_twiddles = ntt_parameters.radix9_twiddles;
             switch (stage) {
             case 0:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -246,7 +242,6 @@ public:
             }
             break;
         case 10:
-            d_radixX_twiddles = ntt_parameters.radix10_twiddles;
             switch (stage) {
             case 0:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
