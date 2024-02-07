@@ -54,13 +54,13 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     } else if (intermediate_mul == 2) {
         unsigned int diff_mask = (1 << (iterations - 1)) - 1;
         unsigned int thread_ntt_idx = (tid & diff_mask) * 2;
-        unsigned int nbits = intermediate_twiddle_shift + iterations;
+        unsigned int nbits = intermediate_twiddle_shift;
 
         index_t root_idx0 = bit_rev(thread_ntt_idx, nbits);
         index_t root_idx1 = bit_rev(thread_ntt_idx + 1, nbits);
 
-        fr_t t0 = d_intermediate_twiddles[(thread_ntt_pos << radix) + root_idx0];
-        fr_t t1 = d_intermediate_twiddles[(thread_ntt_pos << radix) + root_idx1];
+        fr_t t0 = d_intermediate_twiddles[(thread_ntt_pos << nbits) + root_idx0];
+        fr_t t1 = d_intermediate_twiddles[(thread_ntt_pos << nbits) + root_idx1];
 
         r0 *= t0;
         r1 *= t1;
@@ -182,12 +182,12 @@ public:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
             case 6:
-                intermediate_twiddle_shift = std::max(12 - lg_domain_size, 0);
+                intermediate_twiddle_shift = 6;
                 d_intermediate_twiddles = ntt_parameters.radix6_twiddles_6;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
             case 12:
-                intermediate_twiddle_shift = std::max(18 - lg_domain_size, 0);
+                intermediate_twiddle_shift = 6;
                 d_intermediate_twiddles = ntt_parameters.radix6_twiddles_12;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
@@ -202,7 +202,7 @@ public:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
             case 7:
-                intermediate_twiddle_shift = std::max(14 - lg_domain_size, 0);
+                intermediate_twiddle_shift = 7;
                 d_intermediate_twiddles = ntt_parameters.radix7_twiddles_7;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
@@ -217,7 +217,7 @@ public:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
             case 8:
-                intermediate_twiddle_shift = std::max(16 - lg_domain_size, 0);
+                intermediate_twiddle_shift = 8;
                 d_intermediate_twiddles = ntt_parameters.radix8_twiddles_8;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
@@ -232,7 +232,7 @@ public:
                 _CT_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
             case 9:
-                intermediate_twiddle_shift = std::max(18 - lg_domain_size, 0);
+                intermediate_twiddle_shift = 9;
                 d_intermediate_twiddles = ntt_parameters.radix9_twiddles_9;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
                 break;
@@ -260,7 +260,7 @@ public:
 
         CUDA_OK(cudaGetLastError());
 
-        stage += radix;
+        stage += iterations;
     }
 };
 
