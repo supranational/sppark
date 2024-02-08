@@ -371,7 +371,7 @@ class msm_t {
         this->d_total_blob = nullptr;
 
         d_points = reinterpret_cast<decltype(d_points)>(gpu.Dmalloc(npoints * sizeof(d_points[0])));
-        gpu.HtoD(d_points, points, npoints, sizeof(affine_t));
+        gpu.HtoD(d_points, points, npoints, sizeof(affine_h));
         CUDA_OK(cudaGetLastError());
     }
 
@@ -477,7 +477,7 @@ class msm_t {
         batch = 1 << (std::max(lg_n, wbits) - wbits);
         batch >>= 6;
         batch = batch ? batch : 1;
-        stride = (npoints + batch - 1) / batch;
+        stride = (nscalars + batch - 1) / batch;
         stride = (stride + WARP_SZ - 1) & ~(WARP_SZ - 1);
         
         // Allocate the memory required for each batch
