@@ -304,7 +304,7 @@ public:
     }
 
 private:
-    static inline bb31_t sqr_n_mul(bb31_t s, uint32_t n, bb31_t m)
+    static inline bb31_t sqr_n(bb31_t s, uint32_t n)
     {
 #if 0
         #pragma unroll 2
@@ -315,9 +315,9 @@ private:
         while (n--) {
             uint32_t tmp[2], red;
 
-            asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+            asm("mul.lo.u32 %0, %2, %2; mul.hi.u32 %1, %2, %2;"
                 : "=r"(tmp[0]), "=r"(tmp[1])
-                : "r"(s.val), "r"(s.val));
+                : "r"(s.val));
             asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(tmp[0]), "r"(M));
             asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %4;"
                 : "+r"(tmp[0]), "=r"(s.val)
@@ -327,6 +327,12 @@ private:
                 final_sub(s.val);
         }
 #endif
+        return s;
+    }
+
+    static inline bb31_t sqr_n_mul(bb31_t s, uint32_t n, bb31_t m)
+    {
+        s = sqr_n(s, n);
         s.mul(m);
 
         return s;
@@ -353,6 +359,23 @@ public:
     {   return a * b.reciprocal();   }
     inline bb31_t& operator/=(const bb31_t a)
     {   return *this *= a.reciprocal();   }
+
+    inline bb31_t heptaroot() const
+    {
+        bb31_t x03, x18, x1b, ret = *this;
+
+        x03 = sqr_n_mul(ret, 1, ret);   // 0b11
+        x18 = sqr_n(x03, 3);            // 0b11000
+        x1b = x18*x03;                  // 0b11011
+        ret = x18*x1b;                  // 0b110011
+        ret = sqr_n_mul(ret, 6, x1b);   // 0b110011011011
+        ret = sqr_n_mul(ret, 6, x1b);   // 0b110011011011011011
+        ret = sqr_n_mul(ret, 6, x1b);   // 0b110011011011011011011011
+        ret = sqr_n_mul(ret, 6, x1b);   // 0b110011011011011011011011011011
+        ret = sqr_n_mul(ret, 1, *this); // 0b1100110110110110110110110110111
+
+        return ret;
+    }
 
     inline void shfl_bfly(uint32_t laneMask)
     {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
