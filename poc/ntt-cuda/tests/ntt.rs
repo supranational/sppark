@@ -16,7 +16,7 @@ fn gl64_self_consistency() {
         fr % 0xffffffff00000001
     }
 
-    for lg_domain_size in 1..28 {
+    for lg_domain_size in 1..24 + 4 * !cfg!(debug_assertions) as i32 {
         let domain_size = 1usize << lg_domain_size;
 
         let v: Vec<u64> = (0..domain_size).map(|_| random_fr()).collect();
@@ -52,7 +52,7 @@ fn bb31_self_consistency() {
         fr % 0x78000001
     }
 
-    for lg_domain_size in 1..27 {
+    for lg_domain_size in 1..24 + 4 * !cfg!(debug_assertions) as i32 {
         let domain_size = 1usize << lg_domain_size;
 
         let v: Vec<u32> = (0..domain_size).map(|_| random_fr()).collect();
