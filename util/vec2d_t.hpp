@@ -12,19 +12,19 @@
 # define __device__
 #endif
 
-template<typename T> class vec2d_t {
-    uint32_t dim_x;
+template<typename T, typename dim_t = uint32_t> class vec2d_t {
+    dim_t dim_x;
     bool owned;
     T* ptr;
 
 public:
     __host__ __device__
-    vec2d_t(T* data, uint32_t x)  : dim_x(x), owned(false), ptr(data) {}
-    vec2d_t(void* data, uint32_t x)  : dim_x(x), owned(false), ptr((T*)data) {}
-    vec2d_t(uint32_t x, size_t y) : dim_x(x), owned(true),  ptr(new T[x*y]) {}
+    vec2d_t(T* data, dim_t x)  : dim_x(x), owned(false), ptr(data) {}
+    vec2d_t(void* data, dim_t x)  : dim_x(x), owned(false), ptr((T*)data) {}
+    vec2d_t(dim_t x, size_t y) : dim_x(x), owned(true),  ptr(new T[x*y]) {}
     vec2d_t() : dim_x(0), owned(false), ptr(nullptr) {}
 #ifndef __CUDA_ARCH__
-    vec2d_t(const vec2d_t& other) { *this = other; }
+    vec2d_t(const vec2d_t& other) { *this = other; owned = false; }
     ~vec2d_t() { if (owned) delete[] ptr; }
 
     inline vec2d_t& operator=(const vec2d_t& other)
@@ -44,7 +44,7 @@ public:
     inline T* operator[](size_t y) const { return ptr + dim_x*y; }
 
 #ifndef NDEBUG
-    inline uint32_t x() { return dim_x; }
+    inline dim_t x() { return dim_x; }
 #endif
 };
 
