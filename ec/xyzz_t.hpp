@@ -24,7 +24,7 @@ class xyzz_t {
 public:
     static const unsigned int degree = field_t::degree;
 
-#ifdef __NVCC__
+#ifdef __CUDACC__
     class mem_t { friend class xyzz_t;
         field_h X, Y, ZZZ, ZZ;
 
@@ -44,6 +44,7 @@ public:
             Y   = p.Y;
             ZZZ = p.ZZZ;
             ZZ  = p.ZZ;
+            return *this;
         }
         inline __device__ void inf() { ZZZ.zero(); ZZ.zero(); }
     };
@@ -100,7 +101,7 @@ public:
             return p;
         }
 
-#ifdef __NVCC__
+#ifdef __CUDACC__
         class mem_t {
             field_h X, Y;
 
@@ -126,7 +127,7 @@ public:
         {   return inf;   }
 
     public:
-        inline __device__ operator affine_t() const
+        inline __host__ __device__ operator affine_t() const
         {
             bool inf = is_inf();
             affine_t p;
@@ -135,20 +136,14 @@ public:
             return p;
         }
 
-#ifdef __NVCC__
+#ifdef __CUDACC__
         class mem_t {
             field_h X, Y;
-#ifdef __CUDACC__
             int inf[sizeof(field_t)%16 ? 2 : 4];
 
-            inline __host__ __device__ bool is_inf() const
+            inline __device__ bool is_inf() const
             {   return inf[0]&1 != 0;   }
-#else
-            bool inf;
 
-            inline __host__ __device__ bool is_inf() const
-            {   return inf;   }
-#endif
         public:
             inline __device__ operator affine_t() const
             {
