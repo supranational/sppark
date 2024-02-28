@@ -5,8 +5,8 @@
 #ifndef __SPPARK_FF_BLS13_381_HPP__
 #define __SPPARK_FF_BLS13_381_HPP__
 
-#ifdef __NVCC__
 #include <cstdint>
+#ifdef __CUDACC__
 
 namespace device {
 #define TO_CUDA_T(limb64) (uint32_t)(limb64), (uint32_t)(limb64>>32)

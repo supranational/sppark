@@ -5,8 +5,8 @@
 #ifndef __SPPARK_FF_PASTA_HPP__
 #define __SPPARK_FF_PASTA_HPP__
 
-#ifdef __NVCC__
 #include <cstdint>
+#ifdef __CUDACC__
 
 namespace device {
     static __device__ __constant__ __align__(16) const uint32_t Vesta_P[8] = {
