@@ -50,7 +50,9 @@ struct launch_params_t {
     size_t shared;
 
     launch_params_t(dim3 g, dim3 b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
-    launch_params_t(int g, int b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
+    launch_params_t(int g, int b, size_t sz = 0) : gridDim(g>0 ? g : 0), blockDim(b), shared(sz) {}
+    launch_params_t(unsigned int g, unsigned int b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
+
 };
 
 class stream_t {
