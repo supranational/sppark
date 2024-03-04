@@ -8,7 +8,7 @@ sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitive
   * [General notes on implementation](#general-notes-on-implementation)
   * [Platform and Language Compatibility](#platform-and-language-compatibility)
   * [Introductory Integration Tutorial](#introductory-integration-tutorial)
-    + [Multi-scalar Multiplication (MSM)](#multi-scalar-mutliplication-(MSM))
+    + [Multi-scalar Multiplication (MSM)](#multi-scalar-multiplication-(MSM))
   * [Repository Structure](#repository-structure)
   * [Performance](#performance)
   * [License](#license)
