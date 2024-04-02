@@ -211,6 +211,12 @@ public:
         if (p < 2)
             asm("trap;");
 
+        if (p == 7) {
+            bb31_t temp = sqr_n_mul(*this, 1, *this);
+            *this = sqr_n_mul(temp, 1, *this);
+            return *this;
+        }
+
         bb31_t sqr = *this;
         if ((p&1) == 0) {
             do {
