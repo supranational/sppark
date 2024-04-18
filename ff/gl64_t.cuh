@@ -5,19 +5,18 @@
 #ifndef __SPPARK_FF_GL64_T_CUH__
 #define __SPPARK_FF_GL64_T_CUH__
 
+#ifdef __CUDACC__
 # include <cstdint>
-
-namespace gl64_device {
-    static __device__ __constant__ /*const*/ uint32_t W = 0xffffffffU;
-}
-
-#ifdef __CUDA_ARCH__
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
 #  define asm __asm__ __volatile__
 # else
 #  define asm asm volatile
 # endif
+
+namespace gl64_device {
+    static __device__ __constant__ /*const*/ uint32_t W = 0xffffffffU;
+}
 
 #ifdef GL64_PARTIALLY_REDUCED
 //
@@ -51,8 +50,12 @@ public:
     inline size_t len() const                           { return 1;   }
 
     inline gl64_t()                                     {}
-    inline gl64_t(const uint64_t a)                     { val = a;  to(); }
-    inline gl64_t(const uint64_t *p)                    { val = *p; to(); }
+#ifdef __CUDA_ARCH__
+    inline gl64_t(uint64_t a)               : val(a)    { to(); }
+#else
+    __host__ constexpr gl64_t(uint64_t a)   : val(a)    {}
+#endif
+    inline gl64_t(const uint64_t *p)        : val(*p)   { to(); }
 
     inline operator uint64_t() const
     {   auto ret = *this; ret.from(); return ret.val;   }
