@@ -51,7 +51,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         shared_exchange[threadIdx.x] = t;
         __syncthreads();
         t = shared_exchange[threadIdx.x ^ laneMask];
-        r0 = fr_t::csel(t, r0, !pos);
+        r0 = fr_t::csel(r0, t, pos);
         r1 = fr_t::csel(t, r1, pos);
     }
 
@@ -70,7 +70,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
         t = fr_t::csel(r1, r0, pos);
         t.shfl_bfly(laneMask);
-        r0 = fr_t::csel(t, r0, !pos);
+        r0 = fr_t::csel(r0, t, pos);
         r1 = fr_t::csel(t, r1, pos);
     }
 
