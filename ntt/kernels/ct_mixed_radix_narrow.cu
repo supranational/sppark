@@ -101,7 +101,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
             t.shfl_bfly(laneMask);
 
-            r[0][z] = fr_t::csel(t, r[0][z], !pos);
+            r[0][z] = fr_t::csel(r[0][z], t, pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
 
             t = root * r[1][z];
@@ -133,7 +133,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         for (int z = 0; z < z_count; z++) {
             fr_t t = xchg[threadIdx.x ^ laneMask][z];
 
-            r[0][z] = fr_t::csel(t, r[0][z], !pos);
+            r[0][z] = fr_t::csel(r[0][z], t, pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
 
             t = root * r[1][z];

@@ -80,7 +80,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
         fr_t x = fr_t::csel(r1, r0, pos);
         x.shfl_bfly(laneMask);
-        r0 = fr_t::csel(x, r0, !pos);
+        r0 = fr_t::csel(r0, x, pos);
         r1 = fr_t::csel(x, r1, pos);
 
         fr_t t = d_radix6_twiddles[rank << (6 - (s + 1))];
@@ -106,7 +106,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         shared_exchange[threadIdx.x] = x;
         __syncthreads();
         x = shared_exchange[threadIdx.x ^ laneMask];
-        r0 = fr_t::csel(x, r0, !pos);
+        r0 = fr_t::csel(r0, x, pos);
         r1 = fr_t::csel(x, r1, pos);
 
         t *= r1;
