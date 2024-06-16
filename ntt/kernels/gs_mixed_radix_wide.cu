@@ -12,7 +12,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int intermediate_twiddle_shift,
              const bool is_intt, const fr_t d_domain_size_inverse)
 {
-#if (__CUDACC_VER_MAJOR__-0) >= 11
+#if (__CUDACC_VER_MAJOR__-0) >= 11 || defined(__clang__)
     __builtin_assume(lg_domain_size <= MAX_LG_DOMAIN_SIZE);
     __builtin_assume(radix <= lg_domain_size);
     __builtin_assume(stage <= lg_domain_size);

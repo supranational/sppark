@@ -10,7 +10,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const fr_t* d_radix6_twiddles, const fr_t* d_radixX_twiddles,
              bool is_intt, const fr_t d_domain_size_inverse)
 {
-#if (__CUDACC_VER_MAJOR__-0) >= 11
+#if (__CUDACC_VER_MAJOR__-0) >= 11 || defined(__clang__)
     __builtin_assume(lg_domain_size <= MAX_LG_DOMAIN_SIZE);
     __builtin_assume(radix <= 10);
     __builtin_assume(iterations <= radix);

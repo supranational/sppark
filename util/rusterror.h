@@ -11,6 +11,9 @@
 #else
 # include <string.h>
 #endif
+#ifdef _MSC_VER
+# define strdup _strdup
+#endif
 
 struct RustError { /* to be returned exclusively by value */
     int code;
@@ -31,6 +34,9 @@ struct RustError { /* to be returned exclusively by value */
     operator by_value() const { return {code, message}; }
 #endif
 };
+#ifdef _MSC_VER
+# undef strdup
+#endif
 #ifndef __cplusplus
 typedef struct RustError RustError;
 #endif

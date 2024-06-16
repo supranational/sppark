@@ -12,11 +12,11 @@ public:
             cudaDeviceProp prop;
             if (cudaGetDeviceProperties(&prop, id) == cudaSuccess &&
                 prop.major >= 7) {
-                cudaSetDevice(id);
+                (void)cudaSetDevice(id);
                 gpus.push_back(new gpu_t(gpus.size(), id, prop));
             }
         }
-        cudaSetDevice(0);
+        (void)cudaSetDevice(0);
     }
     ~gpus_t()
     {   for (auto* ptr: gpus) delete ptr;   }

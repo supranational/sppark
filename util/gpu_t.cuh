@@ -5,7 +5,7 @@
 #ifndef __SPPARK_UTIL_GPU_T_CUH__
 #define __SPPARK_UTIL_GPU_T_CUH__
 
-#ifndef __CUDACC__
+#if defined(__NVCC__) && !defined(__CUDACC__)
 # include <cuda_runtime.h>
 #endif
 
@@ -27,21 +27,21 @@ class event_t {
     cudaEvent_t event;
 public:
     event_t() : event(nullptr)
-    {   CUDA_OK(cudaEventCreate(&event, cudaEventDisableTiming));   }
+    {   CUDA_OK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));   }
     event_t(cudaStream_t stream) : event(nullptr)
     {
-        CUDA_OK(cudaEventCreate(&event, cudaEventDisableTiming));
+        CUDA_OK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
         CUDA_OK(cudaEventRecord(event, stream));
     }
     ~event_t()
-    {   if (event) cudaEventDestroy(event);   }
+    {   if (event) (void)cudaEventDestroy(event);   }
     inline operator decltype(event)() const
     {   return event;   }
 
     inline void record(cudaStream_t stream)
     {   CUDA_OK(cudaEventRecord(event, stream));   }
     inline void wait(cudaStream_t stream)
-    {   CUDA_OK(cudaStreamWaitEvent(stream, event));   }
+    {   CUDA_OK(cudaStreamWaitEvent(stream, event, 0));   }
 };
 
 struct launch_params_t {
@@ -61,7 +61,7 @@ public:
     stream_t(int id) : gpu_id(id)
     {   CUDA_OK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));   }
     ~stream_t()
-    {   cudaStreamDestroy(stream);   }
+    {   (void)cudaStreamDestroy(stream);   }
     inline operator decltype(stream)() const    { return stream; }
     inline int id() const                       { return gpu_id; }
     inline operator int() const                 { return gpu_id; }
@@ -115,8 +115,10 @@ public:
                                                 size_t shared_sz,
                             Types... args) const
     {
+#ifdef __NVCC__
         if (gpu_props(gpu_id).sharedMemPerBlock < shared_sz)
             CUDA_OK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, shared_sz));
+#endif
         if (gridDim.x == 0 || blockDim.x == 0) {
             cudaFuncAttributes attr;
             CUDA_OK(cudaFuncGetAttributes(&attr, f));
@@ -165,7 +167,7 @@ public:
     inline void record(cudaEvent_t event)
     {   CUDA_OK(cudaEventRecord(event, stream));   }
     inline void wait(cudaEvent_t event)
-    {   CUDA_OK(cudaStreamWaitEvent(stream, event));   }
+    {   CUDA_OK(cudaStreamWaitEvent(stream, event, 0));   }
 };
 
 class gpu_t {
@@ -191,7 +193,7 @@ public:
     inline operator int() const             { return gpu_id; }
     inline const auto& props() const        { return prop; }
     inline int sm_count() const             { return prop.multiProcessorCount; }
-    inline void select() const              { cudaSetDevice(cuda_id); }
+    inline void select() const              { (void)cudaSetDevice(cuda_id); }
     stream_t& operator[](size_t i) const    { return flipflop[i%FLIP_FLOP]; }
     inline operator stream_t&() const       { return zero; }
     inline operator cudaStream_t() const    { return zero; }
@@ -270,7 +272,7 @@ template<typename T> class gpu_ptr_t {
         std::atomic<size_t> ref_cnt;
         int real_id;
         inline inner(T* p) : ptr(p), ref_cnt(1)
-        {   cudaGetDevice(&real_id);   }
+        {   (void)cudaGetDevice(&real_id);   }
     };
     inner *ptr;
 public:
@@ -281,12 +283,12 @@ public:
     {
         if (ptr && ptr->ref_cnt.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             int current_id;
-            cudaGetDevice(&current_id);
+            (void)cudaGetDevice(&current_id);
             if (current_id != ptr->real_id)
-                cudaSetDevice(ptr->real_id);
-            cudaFree(ptr->ptr);
+                (void)cudaSetDevice(ptr->real_id);
+            (void)cudaFree(ptr->ptr);
             if (current_id != ptr->real_id)
-                cudaSetDevice(current_id);
+                (void)cudaSetDevice(current_id);
             delete ptr;
         }
     }
@@ -336,7 +338,7 @@ public:
     }
     dev_ptr_t(const dev_ptr_t& r) = delete;
     dev_ptr_t& operator=(const dev_ptr_t& r) = delete;
-    ~dev_ptr_t() { if (d_ptr) cudaFree((void*)d_ptr); }
+    ~dev_ptr_t() { if (d_ptr) (void)cudaFree((void*)d_ptr); }
 
     inline operator const T*() const            { return d_ptr; }
     inline operator T*() const                  { return d_ptr; }

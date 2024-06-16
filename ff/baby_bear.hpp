@@ -85,9 +85,9 @@ public:
     inline bb31_4_t()           {}
     inline bb31_4_t(bb31_t a)   { c[0] = a; u[1] = u[2] = u[3] = 0; }
     // this is used in constant declaration, e.g. as bb31_4_t{1, 2, 3, 4}
-    __host__ __device__ __forceinline__ bb31_4_t(int a)
+    __host__ inline bb31_4_t(int a)
     {   c[0] = bb31_t{a}; u[1] = u[2] = u[3] = 0;   }
-    __host__ __device__ __forceinline__ bb31_4_t(int d, int f, int g, int h)
+    __host__ inline bb31_4_t(int d, int f, int g, int h)
     {   c[0] = bb31_t{d}; c[1] = bb31_t{f}; c[2] = bb31_t{g}; c[3] = bb31_t{h};   }
 
     static inline bb31_4_t csel(const bb31_4_t& a, const bb31_4_t& b, int sel_a)
@@ -633,9 +633,9 @@ public:
     static inline const bb31_4_t one()
     {   return bb31_4_t{1};   }
     inline bool is_one() const
-    {   return c[0].is_one() & u[1]==0 & u[2]==0 & u[3]==0;   }
+    {   return c[0].is_one() & ((u[1] | u[2] | u[3]) == 0);   }
     inline bool is_zero() const
-    {   return u[0]==0 & u[1]==0 & u[2]==0 & u[3]==0;   }
+    {   return (u[0] | u[1] | u[2] | u[3]) == 0;   }
 
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
@@ -657,9 +657,9 @@ public:
 
 public:
     friend inline bool operator==(const bb31_4_t& a, const bb31_4_t& b)
-    {   return a.u[0]==b.u[0] & a.u[1]==b.u[1] & a.u[2]==b.u[2] & a.u[3]==b.u[3];   }
+    {   return (a.u[0]==b.u[0]) & (a.u[1]==b.u[1]) & (a.u[2]==b.u[2]) & (a.u[3]==b.u[3]);   }
     friend inline bool operator!=(const bb31_4_t& a, const bb31_4_t& b)
-    {   return a.u[0]!=b.u[0] | a.u[1]!=b.u[1] | a.u[2]!=b.u[2] | a.u[3]!=b.u[3];   }
+    {   return (a.u[0]!=b.u[0]) | (a.u[1]!=b.u[1]) | (a.u[2]!=b.u[2]) | (a.u[3]!=b.u[3]);   }
 
 # if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend std::ostream& operator<<(std::ostream& os, const bb31_4_t& a)

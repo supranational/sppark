@@ -262,7 +262,7 @@ public:
 #endif
             (void)cudaFreeAsync(twiddles[1], gpu);
 
-            cudaSetDevice(current_id);
+            (void)cudaSetDevice(current_id);
         }
     }
 
@@ -276,7 +276,7 @@ private:
         all_params()
         {
             int current_id;
-            cudaGetDevice(&current_id);
+            (void)cudaGetDevice(&current_id);
 
             size_t nids = ngpus();
             forward.reserve(nids);
@@ -288,7 +288,7 @@ private:
             for (size_t id = 0; id < nids; id++)
                 inverse[id].sync();
 
-            cudaSetDevice(current_id);
+            (void)cudaSetDevice(current_id);
         }
     };
 
