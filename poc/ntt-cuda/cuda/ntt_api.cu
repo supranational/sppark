@@ -2,8 +2,6 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#include <cuda.h>
-
 #if defined(FEATURE_BLS12_381)
 # include <ff/bls12-381.hpp>
 #elif defined(FEATURE_BLS12_377)

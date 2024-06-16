@@ -54,6 +54,36 @@ fn main() {
         fr = "FEATURE_BABY_BEAR";
     }
 
+    println!("cargo:rerun-if-changed=cuda");
+    println!("cargo:rerun-if-env-changed=CXXFLAGS");
+
+    if env::var("DEP_SPPARK_TARGET").is_ok_and(|v| v.eq("rocm"))
+    {
+        if !cfg!(feature = "gl64") && !cfg!(feature = "bb31") {
+            panic!("only gl64 and bb31 features are supported");
+        }
+        env::set_var("HIP_PLATFORM", "amd");
+        let mut hipcc = cc::Build::new();
+        hipcc.compiler(env::var("HIPCC").unwrap_or("hipcc".to_string()));
+        hipcc.cpp(true);
+        if cfg!(debug_assertions) {
+            hipcc.opt_level(1);
+        }
+        hipcc.flag("--offload-arch=native,gfx1102,gfx1101,gfx1100,gfx1034,gfx1032,gfx1031,gfx1030,gfx942,gfx90a,gfx908");
+        if let Ok(ncpus) = std::thread::available_parallelism() {
+            hipcc.flag_if_supported(format!("-parallel-jobs={}", ncpus));
+        }
+        hipcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
+        hipcc.define(fr, None);
+        if let Some(include) = env::var_os("DEP_SPPARK_ROOT") {
+            hipcc.include(include);
+            hipcc.flag("-include").flag("util/cuda2hip.hpp");
+        }
+        hipcc.file("cuda/ntt_api.cu").compile("ntt_rocm");
+
+        return;
+    }
+
     let mut nvcc = cc::Build::new();
     nvcc.cuda(true);
     nvcc.flag("-arch=sm_70");
@@ -74,7 +104,4 @@ fn main() {
         nvcc.include(include);
     }
     nvcc.file("cuda/ntt_api.cu").compile("ntt_cuda");
-
-    println!("cargo:rerun-if-changed=cuda");
-    println!("cargo:rerun-if-env-changed=CXXFLAGS");
 }
