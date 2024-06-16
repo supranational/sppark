@@ -43,10 +43,10 @@ typedef size_t index_t;
 #define WINDOW_SIZE (1 << LG_WINDOW_SIZE)
 #define WINDOW_NUM ((MAX_LG_DOMAIN_SIZE + LG_WINDOW_SIZE - 1) / LG_WINDOW_SIZE)
 
-__device__ __constant__ fr_t forward_radix6_twiddles[32];
-__device__ __constant__ fr_t inverse_radix6_twiddles[32];
+__device__ __constant__ fr_t forward_radix6_twiddles[32] = {};
+__device__ __constant__ fr_t inverse_radix6_twiddles[32] = {};
 
-#ifndef __CUDA_ARCH__
+#if !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__)
 # if defined(FEATURE_BLS12_377)
 #  include "parameters/bls12_377.h"
 # elif defined(FEATURE_BLS12_381)

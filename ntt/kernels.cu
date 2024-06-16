@@ -5,7 +5,11 @@
 #ifndef __NTT_KERNELS_CU__
 #define __NTT_KERNELS_CU__
 
-#include <cooperative_groups.h>
+#if defined(__NVCC__)
+# include <cooperative_groups.h>
+#elif defined(__HIPCC__)
+# include <hip/hip_cooperative_groups.h>
+#endif
 
 template<typename T>
 __device__ __forceinline__
@@ -78,12 +82,24 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 
         fr_t regs[Z_COUNT];
 
+#ifdef __CUDA_ARCH__
         #pragma unroll
         for (uint32_t i = 0; i < Z_COUNT; i++) {
             xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
             if (group_idx != group_rev)
                 regs[i] = in[i * step + base_rev];
         }
+#else
+        #pragma unroll
+        for (uint32_t i = 0; i < Z_COUNT; i++)
+            xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
+
+        if (group_idx != group_rev) {
+            #pragma unroll
+            for (uint32_t i = 0; i < Z_COUNT; i++)
+                regs[i] = in[i * step + base_rev];
+        }
+#endif
 
         (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
 
@@ -225,15 +241,25 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
             __syncthreads();
 
         for (uint32_t offset = threadIdx.x, i = 0; i < blowup; i += 2) {
+#ifdef __HIP_DEVICE_COMPILE__
+            r = exchange[offset >> lg_blowup];
+            r = czero(r, offset & (blowup-1));
+#else
             r.zero();
             if ((offset & (blowup-1)) == 0)
                 r = exchange[offset >> lg_blowup];
+#endif
             out[(idx0 << lg_blowup) + offset] = r;
             offset += blockDim.x;
 
+#ifdef __HIP_DEVICE_COMPILE__
+            r = exchange[offset >> lg_blowup];
+            r = czero(r, offset & (blowup-1));
+#else
             r.zero();
             if ((offset & (blowup-1)) == 0)
                 r = exchange[offset >> lg_blowup];
+#endif
             out[(idx0 << lg_blowup) + offset] = r;
             offset += blockDim.x;
         }
