@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 # ifdef inline
 #  define slice_t_saved_inline inline
 #  undef inline
@@ -33,7 +33,7 @@ public:
     inline const T& operator[](size_t i) const  { return ptr[i]; }
 };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 # undef inline
 # ifdef slice_t_saved_inline
 #  define inline slice_t_saved_inline

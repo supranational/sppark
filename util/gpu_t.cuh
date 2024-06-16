@@ -347,7 +347,7 @@ public:
     inline T& operator[](size_t i)              { return d_ptr[i]; }
 };
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__HIP_DEVICE_COMPILE__)
 # define SPPARK_FFI extern "C" __declspec(dllexport)
 #else
 # define SPPARK_FFI extern "C" __attribute__((visibility("default")))

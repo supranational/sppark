@@ -1,5 +1,13 @@
 #include "gpu_t.cuh"
 
+#if defined(__NVCC__)
+# define PROP_MAJOR_MIN 7   // Volta and forward
+#elif defined(__HIPCC__)
+# define PROP_MAJOR_MIN 9   // CDNA/RDNA
+#else
+# error "unknown platform"
+#endif
+
 class gpus_t {
     std::vector<const gpu_t*> gpus;
 public:
@@ -11,7 +19,7 @@ public:
         for (int id = 0; id < n; id++) {
             cudaDeviceProp prop;
             if (cudaGetDeviceProperties(&prop, id) == cudaSuccess &&
-                prop.major >= 7) {
+                prop.major >= PROP_MAJOR_MIN && prop.cooperativeLaunch) {
                 (void)cudaSetDevice(id);
                 gpus.push_back(new gpu_t(gpus.size(), id, prop));
             }

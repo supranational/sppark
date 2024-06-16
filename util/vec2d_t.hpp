@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-#ifndef __CUDACC__
+#if !defined(__CUDACC__) && !defined(__HIPCC__)
 # define __host__
 # define __device__
 #endif
@@ -23,7 +23,7 @@ public:
     vec2d_t(void* data, dim_t x)  : dim_x(x), owned(false), ptr((T*)data) {}
     vec2d_t(dim_t x, size_t y) : dim_x(x), owned(true),  ptr(new T[x*y]) {}
     vec2d_t() : dim_x(0), owned(false), ptr(nullptr) {}
-#ifndef __CUDA_ARCH__
+#if !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__)
     vec2d_t(const vec2d_t& other) { *this = other; owned = false; }
     ~vec2d_t() { if (owned) delete[] ptr; }
 
@@ -48,7 +48,7 @@ public:
 #endif
 };
 
-#ifndef __CUDACC__
+#if !defined(__CUDACC__) && !defined(__HIPCC__)
 # undef __device__
 # undef __host__
 #endif
