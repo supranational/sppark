@@ -224,15 +224,18 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
         else
             __syncthreads();
 
-
-        for (uint32_t i = 0; i < blowup; i++) {
-            uint32_t offset = i * blockDim.x + threadIdx.x;
+        for (uint32_t offset = threadIdx.x, i = 0; i < blowup; i += 2) {
+            r.zero();
+            if ((offset & (blowup-1)) == 0)
+                r = exchange[offset >> lg_blowup];
+            out[(idx0 << lg_blowup) + offset] = r;
+            offset += blockDim.x;
 
             r.zero();
             if ((offset & (blowup-1)) == 0)
                 r = exchange[offset >> lg_blowup];
-
             out[(idx0 << lg_blowup) + offset] = r;
+            offset += blockDim.x;
         }
 
         idx0 += stride;
