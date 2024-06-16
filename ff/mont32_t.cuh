@@ -2,10 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __SPPARK_FF_MONT32_T_CUH__
+#if defined(__CUDACC__) && !defined(__SPPARK_FF_MONT32_T_CUH__)
 #define __SPPARK_FF_MONT32_T_CUH__
 
-#ifdef __CUDACC__
 # include <cstdint>
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
@@ -417,8 +416,16 @@ protected:
         return s;
     }
 
-# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
+# undef inline
+# undef asm
+
 public:
+    friend inline bool operator==(mont32_t a, mont32_t b)
+    {   return a.val == b.val;   }
+    friend inline bool operator!=(mont32_t a, mont32_t b)
+    {   return a.val != b.val;   }
+
+# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend std::ostream& operator<<(std::ostream& os, const mont32_t& obj)
     {
         auto f = os.flags();
@@ -431,7 +438,4 @@ public:
 # endif
 };
 
-#  undef inline
-#  undef asm
-# endif
 #endif /* __SPPARK_FF_MONT32_T_CUH__ */

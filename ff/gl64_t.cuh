@@ -2,10 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __SPPARK_FF_GL64_T_CUH__
+#if defined(__CUDACC__) && !defined(__SPPARK_FF_GL64_T_CUH__)
 #define __SPPARK_FF_GL64_T_CUH__
 
-#ifdef __CUDACC__
 # include <cstdint>
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
@@ -597,9 +596,23 @@ public:
 
     inline void shfl_bfly(uint32_t laneMask)
     {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
-};
 
 # undef inline
 # undef asm
-#endif
+
+public:
+    friend inline bool operator==(gl64_t a, gl64_t b)
+    {   return a.val == b.val;   }
+    friend inline bool operator!=(gl64_t a, gl64_t b)
+    {   return a.val != b.val;   }
+# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
+    friend std::ostream& operator<<(std::ostream& os, const gl64_t& obj)
+    {
+        auto f = os.flags();
+        os << "0x" << std::hex << obj.val;
+        os.flags(f);
+        return os;
+    }
+# endif
+};
 #endif
