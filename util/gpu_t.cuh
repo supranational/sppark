@@ -78,6 +78,10 @@ public:
     {   CUDA_OK(cudaFreeAsync(d_ptr, stream));   }
 
     template<typename T>
+    inline void bzero(T* dst, size_t nelems) const
+    {   CUDA_OK(cudaMemsetAsync(dst, 0, nelems * sizeof(T), stream));   }
+
+    template<typename T>
     inline void HtoD(T* dst, const void* src, size_t nelems,
                      size_t sz = sizeof(T)) const
     {   if (sz == sizeof(T))
@@ -211,6 +215,10 @@ public:
     {   zero.Dfree(d_ptr);
         zero.sync();
     }
+
+    template<typename T>
+    inline void bzero(T* dst, size_t nelems) const
+    {   zero.bzero(dst, nelems);   }
 
     template<typename T>
     inline void HtoD(T* dst, const void* src, size_t nelems,
