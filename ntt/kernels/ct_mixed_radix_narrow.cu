@@ -85,6 +85,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r[1][z] = r[0][z] - t;
         r[0][z] = r[0][z] + t;
     }
+    noop();
 
     #pragma unroll 1
     for (unsigned int s = 1; s < min(iterations, 6u); s++) {
@@ -108,6 +109,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[1][z] = r[0][z] - t;
             r[0][z] = r[0][z] + t;
         }
+        noop();
     }
 
     #pragma unroll 1
@@ -140,6 +142,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[1][z] = r[0][z] - t;
             r[0][z] = t + r[0][z];
         }
+        noop();
 
         __syncthreads();
     }

@@ -12,6 +12,15 @@
 #include <util/rusterror.h>
 #include <util/gpu_t.cuh>
 
+#if defined(__NVCC__)
+# define noop()
+#elif defined(__HIPCC__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wunused-function"
+__device__ __noinline__ static void noop() { asm(""); }
+# pragma clang diagnostic push
+#endif
+
 #include "parameters.cuh"
 #include "kernels.cu"
 

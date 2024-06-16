@@ -83,6 +83,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[0][z] = fr_t::csel(r[0][z], t, pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
         }
+        noop();
     }
 
     #pragma unroll 1
@@ -107,6 +108,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
             r[0][z] = fr_t::csel(r[0][z], t, pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
         }
+        noop();
     }
 
     #pragma unroll
@@ -115,6 +117,7 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r[0][z] = r[0][z] + r[1][z];
         r[1][z] = t;
     }
+    noop();
 
     if (stage - iterations != 0) {
         index_t thread_ntt_pos = (tiz & inp_mask) >> (iterations - 1);
