@@ -396,8 +396,13 @@ public:
     }
 # endif
 
-# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
 public:
+    friend inline bool operator==(mrs31_t a, mrs31_t b)
+    {   return a.val == b.val;   }
+    friend inline bool operator!=(mrs31_t a, mrs31_t b)
+    {   return a.val != b.val;   }
+
+# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend std::ostream& operator<<(std::ostream& os, const mrs31_t& obj)
     {
         auto f = os.flags();
