@@ -4,6 +4,7 @@
 
 use std::env;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -41,13 +42,27 @@ fn main() {
     // pass DEP_SPPARK_* variables to dependents
     println!("cargo:ROOT={}", base_dir.to_string_lossy());
 
-    // Detect if there is CUDA compiler and engage "cuda" feature accordingly
+    let all_gpus = base_dir.join("util/all_gpus.cpp");
+
+    println!("cargo:rerun-if-env-changed=NVCC");
     let nvcc = match env::var("NVCC") {
         Ok(var) => which::which(var),
         Err(_) => which::which("nvcc"),
     };
-    if nvcc.is_ok() {
-        let cuda_version = std::process::Command::new(nvcc.unwrap())
+
+    println!("cargo:rerun-if-env-changed=HIPCC");
+    let hipcc = match env::var("HIPCC") {
+        Ok(var) => which::which(var),
+        Err(_) => which::which("hipcc"),
+    };
+
+    // Detect if there is CUDA compiler and engage "cuda" feature accordingly,
+    // even if there is no Nvidia card, but unless there is ROCm compiler.
+    // In other words if you have both Nvidia and AMD cards installed, Nvidia
+    // will be preferred. To suppress it, set the NVCC environment variable
+    // to "off".
+    if let Ok(nvcc) = nvcc {
+        let cuda_version = Command::new(nvcc)
             .arg("--version")
             .output()
             .expect("impossible");
@@ -67,13 +82,111 @@ fn main() {
             panic!("Unsupported CUDA version {} < 11.4", v);
         }
 
-        let util_dir = base_dir.join("util");
+        let cuda_available = env::var_os("OUT_DIR")
+            .map(PathBuf::from)
+            .map(|p| p.join("cuda_available"))
+            .map(|mut p| {
+                p.set_extension(env::consts::EXE_EXTENSION);
+                p
+            })
+            .expect("$OUT_DIR is not set");
+
         let mut nvcc = cc::Build::new();
         nvcc.cuda(true);
-        nvcc.include(base_dir);
-        nvcc.file(util_dir.join("all_gpus.cpp"))
-            .compile("sppark_cuda");
-        println!("cargo:rustc-cfg=feature=\"cuda\"");
+
+        let _ = nvcc
+            .get_compiler()
+            .to_command()
+            .arg("src/cuda_available.cpp")
+            .arg("-o")
+            .arg(&cuda_available)
+            .status()
+            .expect("impossible");
+
+        let cuda_available = Command::new(cuda_available).status().expect("impossible");
+
+        if cuda_available.success() || hipcc.is_err() {
+            nvcc.include(&base_dir);
+            nvcc.file(&all_gpus)
+                .compile("sppark_cuda");
+            println!("cargo:rustc-cfg=feature=\"cuda\"");
+            println!("cargo:TARGET=cuda");
+            return;
+        }
     }
-    println!("cargo:rerun-if-env-changed=NVCC");
+
+    // Detect if there is ROCm compiler and engage "rocm" feature accordingly
+    if let Ok(hipcc) = hipcc {
+        env::set_var("HIP_PLATFORM", "amd");
+
+        let hipcc_version = Command::new(&hipcc)
+            .arg("--version")
+            .output()
+            .expect("impossible");
+        if !hipcc_version.status.success() {
+            panic!("{:?}", hipcc_version);
+        }
+        let hipcc_version = String::from_utf8(hipcc_version.stdout).unwrap();
+
+        let v = hipcc_version
+            .find("HIP version: ")
+            .expect(format!("{:?} is not a HIP compiler", hipcc).as_str())
+            + 13;
+        let mut w = hipcc_version[v..]
+            .find(|c: char| !c.is_digit(10))
+            .expect("can't parse \"HIP version: \" in `hipcc --version`");
+        w = w + 1 + hipcc_version[v + w + 1..]
+            .find(|c: char| !c.is_digit(10))
+            .expect("can't parse \"HIP version: \" in `hipcc --version`");
+        let ver = hipcc_version[v..v + w].parse::<f32>().unwrap();
+        if ver < 5.7 {
+            panic!("Unsupported HIP version {} < 5.7", ver);
+        }
+
+        let x = hipcc_version
+            .find("InstalledDir: ")
+            .expect("can't find \"InstalledDir:\" in `hipcc --version`")
+            + 14;
+        let y = hipcc_version[x..]
+            .find(char::is_control)
+            .expect("can't parse \"InstalledDir:\" in `hipcc --version`");
+
+        let mut libpath: PathBuf = hipcc_version[x..x + y].into();
+
+        while libpath.pop() {
+            if libpath
+                .join("lib")
+                .join(if cfg!(unix) {
+                    "libamdhip64.so"
+                } else {
+                    "amdhip64.lib"
+                })
+                .try_exists()
+                .is_ok_and(|exists| exists)
+            {
+                libpath.push("lib");
+                break;
+            }
+        }
+
+        let mut ccmd = cc::Build::new();
+        ccmd.compiler(hipcc);
+        ccmd.cpp(true);
+        ccmd.include(&base_dir);
+        ccmd.flag("-include").flag("util/cuda2hip.hpp");
+        ccmd.file(&all_gpus)
+            .compile("sppark_rocm");
+        println!("cargo:rustc-cfg=feature=\"rocm\"");
+
+        if libpath.parent().is_some() {
+            // If libpath is invalid, it's on user to specify one by
+            // passing it through RUSTFLAGS environment variable.
+            println!(
+                "cargo:rustc-link-search=native={}",
+                libpath.to_string_lossy()
+            );
+        }
+        println!("cargo:rustc-link-lib=amdhip64");
+        println!("cargo:TARGET=rocm");
+    }
 }
