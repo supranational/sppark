@@ -196,7 +196,6 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
     }
 
     index_t idx0 = blockDim.x * blockIdx.x;
-    uint32_t thread_pos = threadIdx.x & (blowup - 1);
 
 #if 0
     index_t iters = domain_size / stride;
@@ -225,12 +224,12 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
         else
             __syncthreads();
 
-        r.zero();
 
         for (uint32_t i = 0; i < blowup; i++) {
             uint32_t offset = i * blockDim.x + threadIdx.x;
 
-            if (thread_pos == 0)
+            r.zero();
+            if ((offset & (blowup-1)) == 0)
                 r = exchange[offset >> lg_blowup];
 
             out[(idx0 << lg_blowup) + offset] = r;
