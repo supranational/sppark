@@ -6,7 +6,7 @@
 #define __SPPARK_FF_PASTA_HPP__
 
 #include <cstdint>
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 
 namespace device {
     static __device__ __constant__ __align__(16) const uint32_t Vesta_P[8] = {
@@ -45,8 +45,13 @@ namespace device {
     static __device__ __constant__ /*const*/ uint32_t Pasta_M0 = 0xffffffff;
 }
 
-# ifdef __CUDA_ARCH__   // device-side field types
-# include "mont_t.cuh"
+# if defined(__CUDA_ARCH__) || defined(__HIPCC__)   // device-side field types
+#  if defined(__CUDA_ARCH__)
+#   include "mont_t.cuh"
+#  elif defined(__HIPCC__)
+#   include "mont_t.hip"
+typedef uint64_t vec256[4];
+#  endif
 typedef mont_t<255, device::Vesta_P, device::Pasta_M0,
                     device::Vesta_RR, device::Vesta_one,
                     device::Vesta_Px2> vesta_mont;
@@ -54,6 +59,9 @@ struct vesta_t : public vesta_mont {
     using mem_t = vesta_t;
     __device__ __forceinline__ vesta_t() {}
     __device__ __forceinline__ vesta_t(const vesta_mont& a) : vesta_mont(a) {}
+#  ifdef __HIPCC__
+    __host__   __forceinline__ vesta_t(vec256 a)            : vesta_mont(a) {}
+#  endif
 };
 typedef mont_t<255, device::Pallas_P, device::Pasta_M0,
                     device::Pallas_RR, device::Pallas_one,
@@ -62,11 +70,14 @@ struct pallas_t : public pallas_mont {
     using mem_t = pallas_t;
     __device__ __forceinline__ pallas_t() {}
     __device__ __forceinline__ pallas_t(const pallas_mont& a) : pallas_mont(a) {}
+#  ifdef __HIPCC__
+    __host__   __forceinline__ pallas_t(vec256 a)             : pallas_mont(a) {}
+#  endif
 };
 # endif
 #endif
 
-#ifndef __CUDA_ARCH__   // host-side field types
+#if !defined(__CUDA_ARCH__) && !defined(__HIPCC__)  // host-side field types
 # include <pasta_t.hpp>
 #endif
 

@@ -59,15 +59,12 @@ fn main() {
 
     if env::var("DEP_SPPARK_TARGET").is_ok_and(|v| v.eq("rocm"))
     {
-        if !cfg!(feature = "gl64") && !cfg!(feature = "bb31") {
-            panic!("only gl64 and bb31 features are supported");
-        }
         env::set_var("HIP_PLATFORM", "amd");
         let mut hipcc = cc::Build::new();
         hipcc.compiler(env::var("HIPCC").unwrap_or("hipcc".to_string()));
         hipcc.cpp(true);
         if cfg!(debug_assertions) {
-            hipcc.opt_level(1);
+            hipcc.opt_level(2); // no SGPR-s without optimization
         }
         hipcc.flag("--offload-arch=native,gfx1102,gfx1101,gfx1100,gfx1034,gfx1032,gfx1031,gfx1030,gfx942,gfx90a,gfx908");
         if let Ok(ncpus) = std::thread::available_parallelism() {

@@ -6,7 +6,7 @@
 #define __SPPARK_FF_BLS12_377_HPP__
 
 #include <cstdint>
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 
 namespace device {
 #define TO_CUDA_T(limb64) (uint32_t)(limb64), (uint32_t)(limb64>>32)
@@ -50,8 +50,13 @@ namespace device {
     };
     static __device__ __constant__ /*const*/ uint32_t BLS12_377_m0 = 0xffffffff;
 }
-# ifdef __CUDA_ARCH__   // device-side field types
-# include "mont_t.cuh"
+# if defined(__CUDA_ARCH__) || defined(__HIPCC__)   // device-side field types
+#  if defined(__CUDA_ARCH__)
+#   include "mont_t.cuh"
+#  elif defined(__HIPCC__)
+#   include "mont_t.hip"
+typedef uint64_t vec256[4];
+#  endif
 typedef mont_t<377, device::BLS12_377_P, device::BLS12_377_M0,
                     device::BLS12_377_RR, device::BLS12_377_one,
                     device::BLS12_381_Px128> fp_mont;
@@ -67,11 +72,14 @@ struct fr_t : public fr_mont {
     using mem_t = fr_t;
     __device__ __forceinline__ fr_t() {}
     __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
+#  ifdef __HIPCC__
+    __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
+#  endif
 };
 # endif
 #endif
 
-#ifndef __CUDA_ARCH__   // host-side field types
+#if !defined(__CUDA_ARCH__) && !defined(__HIPCC__)  // host-side field types
 # include <blst_t.hpp>
 
 # if defined(__GNUC__) && !defined(__clang__)
