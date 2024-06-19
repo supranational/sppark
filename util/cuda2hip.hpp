@@ -5,6 +5,11 @@
 #ifdef __HIPCC__
 
 #include <hip/hip_runtime.h>
+#ifdef NDEBUG
+# define assert(e) (void)(e)
+#else
+# include <cassert>
+#endif
 
 static const auto cudaGetDeviceCount        = hipGetDeviceCount;
 static const auto cudaGetDevice             = hipGetDevice;
@@ -109,4 +114,160 @@ cudaLaunchCooperativeKernel(const T* func, dim3 gridDim, dim3 blockDim,
 
 static inline __device__ void __syncwarp() { asm volatile(""); }
 
+/*
+ * To match CUDA, the 3-argument polyfills below are designed to produce
+ * a result as if the wavefront size is 32 irregardless of its actual size.
+ * They don't follow the CUDA semantics exactly and rely on indices to be
+ * properly vetted by the caller, all in the name of minimizing the amount
+ * of instructions. If in doubt, add WARP_SZ as the fourth argument to opt
+ * for the more expensive ROCm primitives.
+ *
+ * A note about 'assert(mask == 0xffffffff);'. The mask is customarily
+ * passed as a literal, in which case the assertion is bound to be
+ * optimized away.
+ */
+
+#define WARP_SZ 32
+
+template<typename T> __device__ __forceinline__
+static T __shfl_sync(uint32_t mask, const T& src, uint32_t idx)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    idx += threadIdx.x & (0-WARP_SZ);
+    idx *= sizeof(uint32_t);
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __builtin_amdgcn_ds_bpermute(idx, ret.vec[i]);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_sync(uint32_t mask, const T& src, uint32_t idx, uint32_t warpsz)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __shfl(ret.vec[i], idx, warpsz);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_up_sync(uint32_t mask, const T& src, uint32_t off)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    uint32_t idx = threadIdx.x - off;
+    idx *= sizeof(uint32_t);
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __builtin_amdgcn_ds_bpermute(idx, ret.vec[i]);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_up_sync(uint32_t mask, const T& src, uint32_t off, uint32_t warpsz)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __shfl_up(ret.vec[i], off, warpsz);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_down_sync(uint32_t mask, const T& src, uint32_t off)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    uint32_t idx = threadIdx.x + off;
+    idx *= sizeof(uint32_t);
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __builtin_amdgcn_ds_bpermute(idx, ret.vec[i]);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_down_sync(uint32_t mask, const T& src, uint32_t off, uint32_t warpsz)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __shfl_down(ret.vec[i], off, warpsz);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_xor_sync(uint32_t mask, const T& src, uint32_t laneMask)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    uint32_t idx = threadIdx.x ^ laneMask;
+    idx *= sizeof(uint32_t);
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __builtin_amdgcn_ds_bpermute(idx, ret.vec[i]);
+
+    return ret.val;
+}
+
+template<typename T> __device__ __forceinline__
+static T __shfl_xor_sync(uint32_t mask, const T& src, uint32_t laneMask, uint32_t warpsz)
+{
+    assert(mask == 0xffffffff);
+
+    const size_t len = sizeof(T)/sizeof(uint32_t);
+    union { T val; uint32_t vec[len]; } ret{src};
+
+    for (size_t i = 0; i < len; i++)
+        ret.vec[i] = __shfl_xor(ret.vec[i], laneMask, warpsz);
+
+    return ret.val;
+}
+
+/*
+ * Mimic CUDA __ballot_sync by "splitting" wider wavefronts to halves.
+ */
+__device__ __forceinline__
+static uint32_t __ballot_sync(uint32_t mask, bool predicate)
+{
+    assert(mask == 0xffffffff);
+
+    uint64_t ret = __ballot(predicate);
+
+    if (__AMDGCN_WAVEFRONT_SIZE == 64) {
+        return (uint32_t)((threadIdx.x & WARP_SZ) ? ret>>32 : ret);
+    } else {
+        asm("" : "+v"(ret)); /* work around[?] a compiler bug */
+        return (uint32_t)ret;
+    }
+}
+
+#ifdef NDEBUG
+# undef assert
+#endif
 #endif
