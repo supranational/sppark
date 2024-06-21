@@ -368,7 +368,7 @@ public:
 # if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
     friend std::ostream& operator<<(std::ostream& os, const bb31_4_t& a)
     {
-        os << "[" << a.c[0] << ", " << a.c[1] << ", " a.c[2] << ", " << a.c[3] << "]";
+        os << "[" << a.c[0] << ", " << a.c[1] << ", " << a.c[2] << ", " << a.c[3] << "]";
         return os;
     }
 # endif
