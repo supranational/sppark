@@ -104,7 +104,7 @@ private:
 #   define asm asm volatile
 #  endif
         // +20% in comparison to multiplication by itself even though
-	// the amount of instructions is the same...
+        // the amount of instructions is the same...
         // ret[0] = a[0]*a[0] + BETA*(2*a[1]*a[3] + a[2]*a[2]);
         asm("{ .reg.b32 %lo, %hi, %m; .reg.pred %p;\n\t"
             "mul.lo.u32     %lo, %4, %2;      mul.hi.u32  %hi, %4, %2;\n\t"
@@ -385,6 +385,7 @@ private:
     }
 
 public:
+# ifdef __CUDACC_RDC__
     friend __device__ __noinline__ bb31_4_t operator*(bb31_4_t a, bb31_4_t b)
     {   return a.mul(b);   }
     inline bb31_4_t& operator*=(const bb31_4_t& b)
@@ -403,6 +404,24 @@ public:
     {   return a * b;   }
     inline bb31_4_t& operator*=(bb31_t b)
     {   return *this = *this * b;   }
+# else
+    friend inline bb31_4_t operator*(bb31_4_t a, const bb31_4_t& b)
+    {   return a.mul(b);   }
+    inline bb31_4_t& operator*=(const bb31_4_t& b)
+    {   return mul(b);   }
+
+    inline bb31_4_t& operator*=(bb31_t b)
+    {
+        for (size_t i = 0; i < 4; i++)
+            c[i] *= b;
+
+        return *this;
+    }
+    friend inline bb31_4_t operator*(bb31_4_t a, bb31_t b)
+    {   return a *= b;   }
+    friend inline bb31_4_t operator*(bb31_t b, bb31_4_t a)
+    {   return a *= b;   }
+# endif
 
     friend inline bb31_4_t operator+(const bb31_4_t& a, const bb31_4_t& b)
     {
