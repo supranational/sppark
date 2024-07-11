@@ -71,10 +71,8 @@ fn main() {
         let mut nvcc = cc::Build::new();
         nvcc.cuda(true);
         nvcc.include(base_dir);
-        nvcc.file("src/lib.cpp")
-            .file(util_dir.join("all_gpus.cpp"))
+        nvcc.file(util_dir.join("all_gpus.cpp"))
             .compile("sppark_cuda");
-        println!("cargo:rerun-if-changed=src/lib.cpp");
         println!("cargo:rustc-cfg=feature=\"cuda\"");
     }
     println!("cargo:rerun-if-env-changed=NVCC");
