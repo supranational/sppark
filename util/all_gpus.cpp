@@ -52,5 +52,20 @@ size_t ngpus()
 const std::vector<const gpu_t*>& all_gpus()
 {   return gpus_t::all();   }
 
-extern "C" bool cuda_available()
+SPPARK_FFI bool cuda_available()
 {   return gpus_t::all().size() != 0;   }
+
+SPPARK_FFI void drop_gpu_ptr_t(gpu_ptr_t<void>& ref)
+{   ref.~gpu_ptr_t();   }
+
+#ifdef __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
+SPPARK_FFI gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>& rhs)
+{   return rhs;   }
+
+#ifdef __clang__
+# pragma clang diagnostic pop
+#endif

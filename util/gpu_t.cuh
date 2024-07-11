@@ -347,4 +347,25 @@ public:
     inline T& operator[](size_t i)              { return d_ptr[i]; }
 };
 
+extern "C" {
+void drop_gpu_ptr_t(gpu_ptr_t<void>&);
+
+#ifdef __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
+gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>&);
+
+#ifdef __clang__
+# pragma clang diagnostic pop
+#endif
+}
+
+#ifdef _WIN32
+# define SPPARK_FFI extern "C" __declspec(dllexport)
+#else
+# define SPPARK_FFI extern "C" __attribute__((visibility("default")))
+#endif
+
 #endif
