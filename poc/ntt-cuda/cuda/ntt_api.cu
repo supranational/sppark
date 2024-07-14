@@ -24,7 +24,7 @@
 
 #include <ntt/ntt.cuh>
 
-extern "C"
+SPPARK_FFI
 RustError::by_value compute_ntt(size_t device_id,
                                 fr_t* inout, uint32_t lg_domain_size,
                                 NTT::InputOutputOrder ntt_order,
