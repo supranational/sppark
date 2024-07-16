@@ -103,12 +103,13 @@ private:
 #  else
 #   define asm asm volatile
 #  endif
-        // +20% in comparison to multiplication by itself even though
-        // the amount of instructions is the same...
+        // +25% in comparison to multiplication by itself
+        uint32_t u3x2 = u[3]<<1;
+        uint32_t u1x2 = u[1]<<1;
+
         // ret[0] = a[0]*a[0] + BETA*(2*a[1]*a[3] + a[2]*a[2]);
         asm("{ .reg.b32 %lo, %hi, %m; .reg.pred %p;\n\t"
             "mul.lo.u32     %lo, %4, %2;      mul.hi.u32  %hi, %4, %2;\n\t"
-            "shf.l.wrap.b32 %hi, %lo, %hi, 1; shl.b32     %lo, %lo, 1;\n\t"
             "mad.lo.cc.u32  %lo, %3, %3, %lo; madc.hi.u32 %hi, %3, %3, %hi;\n\t"
             "setp.ge.u32    %p, %hi, %5;\n\t"
             "@%p sub.u32    %hi, %hi, %5;\n\t"
@@ -126,7 +127,7 @@ private:
             "setp.ge.u32    %p, %0, %5;\n\t"
             "@%p sub.u32    %0, %0, %5;\n\t"
             "}" : "=r"(ret.u[0])
-                : "r"(u[0]), "r"(u[1]), "r"(u[2]), "r"(u[3]),
+                : "r"(u[0]), "r"(u[1]), "r"(u[2]), "r"(u3x2),
                   "r"(MOD), "r"(M), "r"(BETA));
 
         // ret[1] = 2*(a[0]*a[1] + BETA*(a[2]*a[3]));
@@ -140,7 +141,6 @@ private:
 
             "mul.lo.u32     %lo, %hi, %7;     mul.hi.u32  %hi, %hi, %7;\n\t"
             "mad.lo.cc.u32  %lo, %2, %1, %lo; madc.hi.u32 %hi, %2, %1, %hi;\n\t"
-            "shf.l.wrap.b32 %hi, %lo, %hi, 1; shl.b32     %lo, %lo, 1;\n\t"
             "setp.ge.u32    %p, %hi, %5;\n\t"
             "@%p sub.u32    %hi, %hi, %5;\n\t"
 
@@ -149,7 +149,7 @@ private:
             "setp.ge.u32    %p, %0, %5;\n\t"
             "@%p sub.u32    %0, %0, %5;\n\t"
             "}" : "=r"(ret.u[1])
-                : "r"(u[0]), "r"(u[1]), "r"(u[2]), "r"(u[3]),
+                : "r"(u[0]), "r"(u1x2), "r"(u[2]), "r"(u3x2),
                   "r"(MOD), "r"(M), "r"(BETA));
 
         // ret[2] = 2*a[0]*a[2] + a[1]*a[1] + BETA*(a[3]*a[3]);
@@ -162,7 +162,6 @@ private:
             //"@%p sub.u32  %m, %m, %5;\n\t"
 
             "mul.lo.u32     %lo, %3, %1;      mul.hi.u32  %hi, %3, %1;\n\t"
-            "shf.l.wrap.b32 %hi, %lo, %hi, 1; shl.b32     %lo, %lo, 1;\n\t"
             "mad.lo.cc.u32  %lo, %2, %2, %lo; madc.hi.u32 %hi, %2, %2, %hi;\n\t"
             "mad.lo.cc.u32  %lo, %m, %7, %lo; madc.hi.u32 %hi, %m, %7, %hi;\n\t"
             "setp.ge.u32    %p, %hi, %5;\n\t"
@@ -173,14 +172,13 @@ private:
             "setp.ge.u32    %p, %0, %5;\n\t"
             "@%p sub.u32    %0, %0, %5;\n\t"
             "}" : "=r"(ret.u[2])
-                : "r"(u[0]), "r"(u[1]), "r"(u[2]), "r"(u[3]),
+                : "r"(u[0]<<1), "r"(u[1]), "r"(u[2]), "r"(u[3]),
                   "r"(MOD), "r"(M), "r"(BETA));
 
         // ret[3] = 2*(a[0]*a[3] + a[1]*a[2]);
         asm("{ .reg.b32 %lo, %hi, %m; .reg.pred %p;\n\t"
             "mul.lo.u32     %lo, %4, %1;      mul.hi.u32  %hi, %4, %1;\n\t"
             "mad.lo.cc.u32  %lo, %3, %2, %lo; madc.hi.u32 %hi, %3, %2, %hi;\n\t"
-            "shf.l.wrap.b32 %hi, %lo, %hi, 1; shl.b32     %lo, %lo, 1;\n\t"
             "setp.ge.u32    %p, %hi, %5;\n\t"
             "@%p sub.u32    %hi, %hi, %5;\n\t"
 
@@ -189,15 +187,16 @@ private:
             "setp.ge.u32    %p, %0, %5;\n\t"
             "@%p sub.u32    %0, %0, %5;\n\t"
             "}" : "=r"(ret.u[3])
-                : "r"(u[0]), "r"(u[1]), "r"(u[2]), "r"(u[3]),
+                : "r"(u[0]), "r"(u1x2), "r"(u[2]), "r"(u3x2),
                   "r"(MOD), "r"(M), "r"(BETA));
 #  undef asm
 # else
         union { uint64_t wl; uint32_t w[2]; };
+        uint32_t u3x2 = u[3]<<1;
+        uint32_t u1x2 = u[1]<<1;
 
         // ret[0] = a[0]*a[0] + BETA*(2*a[1]*a[3] + a[2]*a[2]);
-        wl  = u[1] * (uint64_t)u[3];
-        wl <<= 1;
+        wl  = u[1] * (uint64_t)u3x2;
         wl += u[2] * (uint64_t)u[2];        final_sub(w[1]);
         wl += (w[0] * M) * (uint64_t)MOD;   //final_sub(w[1]);
         wl  = w[1] * (uint64_t)BETA;
@@ -206,11 +205,10 @@ private:
         ret.u[0] = final_sub(w[1]);
 
         // ret[1] = 2*(a[0]*a[1] + BETA*(a[2]*a[3]));
-        wl  = u[2] * (uint64_t)u[3];
+        wl  = u[2] * (uint64_t)u3x2;
         wl += (w[0] * M) * (uint64_t)MOD;   //final_sub(w[1]);
         wl  = w[1] * (uint64_t)BETA;
-        wl += u[0] * (uint64_t)u[1];
-        wl <<= 1;                           final_sub(w[1]);
+        wl += u[0] * (uint64_t)u1x2;        final_sub(w[1]);
         wl += (w[0] * M) * (uint64_t)MOD;
         ret.u[1] = final_sub(w[1]);
 
@@ -218,17 +216,15 @@ private:
         wl  = u[3] * (uint64_t)u[3];
         wl += (w[0] * M) * (uint64_t)MOD;   //final_sub(w[1]);
         auto hi  = w[1];
-        wl  = u[0] * (uint64_t)u[2];
-        wl <<= 1;
+        wl  = u[2] * (uint64_t)(u[0]<<1);
         wl += u[1] * (uint64_t)u[1];
         wl += hi * (uint64_t)BETA;          final_sub(w[1]);
         wl += (w[0] * M) * (uint64_t)MOD;
         ret.u[2] = final_sub(w[1]);
 
         // ret[3] = 2*(a[0]*a[3] + a[1]*a[2]);
-        wl  = u[0] * (uint64_t)u[3];
-        wl += u[1] * (uint64_t)u[2];
-        wl <<= 1;                           final_sub(w[1]);
+        wl  = u[0] * (uint64_t)u3x2;
+        wl += u[2] * (uint64_t)u1x2;        final_sub(w[1]);
         wl += (w[0] * M) * (uint64_t)MOD;
         ret.u[3] = final_sub(w[1]);
 # endif
