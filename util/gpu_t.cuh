@@ -22,7 +22,6 @@ size_t ngpus();
 const gpu_t& select_gpu(int id = 0);
 const cudaDeviceProp& gpu_props(int id = 0);
 const std::vector<const gpu_t*>& all_gpus();
-extern "C" bool cuda_available();
 
 class event_t {
     cudaEvent_t event;
@@ -347,25 +346,24 @@ public:
     inline T& operator[](size_t i)              { return d_ptr[i]; }
 };
 
-extern "C" {
-void drop_gpu_ptr_t(gpu_ptr_t<void>&);
+#ifdef _WIN32
+# define SPPARK_FFI extern "C" __declspec(dllexport)
+#else
+# define SPPARK_FFI extern "C" __attribute__((visibility("default")))
+#endif
+
+SPPARK_FFI bool cuda_available();
+SPPARK_FFI void drop_gpu_ptr_t(gpu_ptr_t<void>&);
 
 #ifdef __clang__
 # pragma clang diagnostic push
 # pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 #endif
 
-gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>&);
+SPPARK_FFI gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>&);
 
 #ifdef __clang__
 # pragma clang diagnostic pop
-#endif
-}
-
-#ifdef _WIN32
-# define SPPARK_FFI extern "C" __declspec(dllexport)
-#else
-# define SPPARK_FFI extern "C" __attribute__((visibility("default")))
 #endif
 
 #endif
