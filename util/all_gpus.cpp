@@ -31,6 +31,8 @@ public:
 const gpu_t& select_gpu(int id)
 {
     auto& gpus = gpus_t::all();
+    if (gpus.size() == 0)
+        CUDA_OK(cudaErrorNoDevice);
     if (id == -1) {
         int cuda_id;
         CUDA_OK(cudaGetDevice(&cuda_id));
