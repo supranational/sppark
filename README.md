@@ -8,7 +8,7 @@ sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitive
   * [General notes on implementation](#general-notes-on-implementation)
   * [Platform and Language Compatibility](#platform-and-language-compatibility)
   * [Introductory Integration Tutorial](#introductory-integration-tutorial)
-    + [Multi-scalar Multiplication (MSM)](#multi-scalar-mutliplication-(MSM))
+    + [Multi-scalar Multiplication (MSM)](#multi-scalar-multiplication-msm)
   * [Repository Structure](#repository-structure)
   * [Performance](#performance)
   * [License](#license)
@@ -25,7 +25,7 @@ The goal of the sppark library is to provide foundational components for applica
 
 This library primarily supports x86_64 with Nvidia's Volta+ GPU hardware platforms on Linux and Windows operating systems. Non-GPU portions can be utilized even on ARM64, and additionally on Mac.
 
-We show how to interface with Rust and are open to discussions on how to interface with Go. Caveat lector. Achieving highest possible GPU performance requires interfacing with target language memory management, possibly its async facilities, and might even require changes to object's data layout. These are hard to generalize and consequently are also a matter of discussion, likely on a case-by-case basis.
+We show how to interface with Rust and Go. Caveat lector. Achieving highest possible GPU performance requires interfacing with target language memory management, possibly its async facilities, and might even require changes to object's data layout. These are hard to generalize and consequently are also a matter of discussion, likely on a case-by-case basis.
 
 ## Introductory Integration Tutorial
 
