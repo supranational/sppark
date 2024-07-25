@@ -71,3 +71,8 @@ SPPARK_FFI gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>& rhs)
 #ifdef __clang__
 # pragma clang diagnostic pop
 #endif
+
+#ifdef TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE
+SPPARK_FFI void drop_error_message(char *ptr)
+{   free(ptr);   }
+#endif

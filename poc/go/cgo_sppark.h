@@ -11,7 +11,9 @@ typedef struct {
     _GoString_ message;
 } GoError;
 
+#ifndef _WIN32
 __attribute__((weak))   // required with go1.18 and earlier
+#endif
 void toGoError(GoError *go_err, Error c_err);
 
 #define WRAP_ERR(ret_t, func, ...) __attribute__((section("_sppark"), used)) \

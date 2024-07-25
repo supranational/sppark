@@ -40,7 +40,7 @@ func NTT(device_id int, inout []uint64,
 
     var err C.GoError
     C.go_compute_ntt(&err, C.size_t(device_id),
-                           (*C.ulong)(&inout[0]), C.uint(lgDomainSz),
+                           (*C.uint64_t)(&inout[0]), C.uint(lgDomainSz),
                            order, direction, kind)
     if err.code != 0 {
         panic(err.message)
