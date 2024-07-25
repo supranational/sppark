@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <string.h>
+#ifdef _MSC_VER
+# define strdup _strdup
+#endif
 
 __global__ void kernel()
 {
