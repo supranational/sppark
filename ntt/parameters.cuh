@@ -249,22 +249,21 @@ public:
     ~NTTParameters()
     {
         int current_id;
-        cudaGetDevice(&current_id);
+        if (cudaGetDevice(&current_id) != cudaSuccess) {
+            gpu.select();
 
-        gpu.select();
-        gpu.Dfree(partial_twiddles);
-
+            (void)cudaFreeAsync(partial_twiddles, gpu);
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-        gpu.Dfree(radix9_twiddles_9);
-        gpu.Dfree(radix8_twiddles_8);
-        gpu.Dfree(radix7_twiddles_7);
-        gpu.Dfree(radix6_twiddles_12);
-        gpu.Dfree(radix6_twiddles_6);
+            (void)cudaFreeAsync(radix9_twiddles_9, gpu);
+            (void)cudaFreeAsync(radix8_twiddles_8, gpu);
+            (void)cudaFreeAsync(radix7_twiddles_7, gpu);
+            (void)cudaFreeAsync(radix6_twiddles_12, gpu);
+            (void)cudaFreeAsync(radix6_twiddles_6, gpu);
 #endif
+            (void)cudaFreeAsync(twiddles[1], gpu);
 
-        gpu.Dfree(twiddles[1]);
-
-        cudaSetDevice(current_id);
+            cudaSetDevice(current_id);
+        }
     }
 
     inline void sync() const    { gpu.sync(); }
