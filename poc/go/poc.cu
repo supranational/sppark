@@ -15,7 +15,7 @@ struct Error {
 };
 
 extern "C"
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__HIP_DEVICE_COMPILE__)
 __declspec(dllexport)
 #else
 __attribute__((visibility("default")))

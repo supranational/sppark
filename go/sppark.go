@@ -145,6 +145,7 @@ import (
     "os/exec"
     "path/filepath"
     "runtime"
+    "strconv"
     "strings"
 )
 
@@ -213,7 +214,36 @@ func Load(baseName string, options ...string) {
 }
 
 func build(dst string, src string, custom_args ...string) bool {
-    var args []string
+    nvcc, ok := os.LookupEnv("NVCC")
+    if !ok {
+        nvcc = "nvcc"
+    }
+    nvcc, _ = exec.LookPath(nvcc)
+
+    hipcc, ok := os.LookupEnv("HIPCC")
+    if !ok {
+        hipcc = "hipcc"
+    }
+    hipcc, _ = exec.LookPath(hipcc)
+
+    if len(nvcc) == 0 && len(hipcc) == 0 {
+        log.Fatal("no CUDA or ROCm compiler found")
+        return false
+    }
+
+    if len(nvcc) != 0 && len(hipcc) != 0 {
+        cmd := exec.Command(nvcc, filepath.Join(SrcRoot, "rust", "src", "cuda_available.cpp"),
+                                  "-o", "cuda_available.exe")
+        if out, err := cmd.CombinedOutput(); err != nil {
+            log.Fatal(cmd.String(), "\n", string(out))
+            return false
+        }
+        cmd = exec.Command("./cuda_available.exe")
+        if err := cmd.Run(); err != nil {
+            nvcc = ""
+        }
+        os.Remove("cuda_available.exe")
+    }
 
     cc, ok := os.LookupEnv("CC")
     if !ok {
@@ -231,30 +261,59 @@ func build(dst string, src string, custom_args ...string) bool {
     defer os.Remove("assembly.o")
     defer os.Remove("cpuid.o")
 
+    var args []string
+
     args = append(args, "-shared", "-o", dst, src)
     args = append(args, "-I" + SrcRoot)
     args = append(args, "-I" + filepath.Join(blst.SrcRoot, "src"))
     args = append(args, "-DTAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE")
     args = append(args, filepath.Join(SrcRoot, "util", "all_gpus.cpp"))
-    args = append(args, "assembly.o", "cpuid.o")
-    if runtime.GOOS != "windows" {
-        if cxx, ok := os.LookupEnv("CXX"); ok {
-            args = append(args, "-ccbin", cxx)
+
+    if len(nvcc) != 0 {
+        if runtime.GOOS != "windows" {
+            if cxx, ok := os.LookupEnv("CXX"); ok {
+                args = append(args, "-ccbin", cxx)
+            }
+            args = append(args, "-Xcompiler", "-fPIC,-fvisibility=hidden")
+            args = append(args, "-Xlinker", "-Bsymbolic")
         }
-        args = append(args, "-Xcompiler", "-fPIC,-fvisibility=hidden")
-        args = append(args, "-Xlinker", "-Bsymbolic")
+        args = append(args, "assembly.o", "cpuid.o")
+        // Application is free to pass own -arch, which will override
+        // this one, with a warning though, but those are not displayed
+        // by default...
+        args = append(args, "-arch=native")
+        args = append(args, "-t0")
+        args = append(args, "-cudart=shared")
+    } else {
+        nvcc = hipcc
+        if runtime.GOOS != "windows" {
+            args = append(args, "-fPIC", "-fvisibility=hidden", "-Wl,-Bsymbolic")
+        }
+        args = append(args, "-include", "util/cuda2hip.hpp")
+        args = append(args, "-x", "none", "assembly.o", "cpuid.o")
+        // Unlike nvcc hipcc accepts multiple --offload-arch, which are
+        // cumulative...
+        args = append(args, "--offload-arch=native")
+        args = append(args, "-parallel-jobs=" + strconv.Itoa(runtime.GOMAXPROCS(0)))
+        if runtime.GOOS == "windows" {
+            args = append(args, "-Wl,-nodefaultlib:libcmt", "-lmsvcrt")
+        }
     }
-    // Application is free to pass own -arch, which will override
-    // this one, with a warning though, but those are not displayed
-    // by default...
-    args = append(args, "-arch=native")
-    args = append(args, "-t0")
-    args = append(args, "-cudart=shared")
 
     src = filepath.Dir(src)
     for _, arg := range custom_args {
         if strings.HasPrefix(arg, "-") {
-            args = append(args, arg)
+            if nvcc != hipcc || !strings.HasPrefix(arg, "-arch=") {
+                args = append(args, arg)
+            }
+        } else if strings.HasPrefix(arg, "?cuda-") {
+            if nvcc != hipcc {
+                args = append(args, arg[5:])
+            }
+        } else if strings.HasPrefix(arg, "?rocm-") {
+            if nvcc == hipcc {
+                args = append(args, arg[5:])
+            }
         } else {
             file := filepath.Join(src, arg)
             if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -265,17 +324,20 @@ func build(dst string, src string, custom_args ...string) bool {
         }
     }
 
-    nvcc := "nvcc"
-
     if sccache, err := exec.LookPath("sccache"); err == nil {
         args = append([]string{nvcc}, args...)
         nvcc = sccache
     }
 
     cmd = exec.Command(nvcc, args...)
+    if nvcc == hipcc {
+        cmd.Env = append(os.Environ(), "HIP_PLATFORM=amd")
+    }
 
     out, err := cmd.CombinedOutput()
     if err != nil {
+        os.Remove("assembly.o")
+        os.Remove("cpuid.o")
         log.Fatal(cmd.String(), "\n", string(out))
         return false
     }
