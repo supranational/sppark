@@ -17,8 +17,6 @@ __device__ __host__ __forceinline__
 #endif
 static void batch_inversion(T out[N], const S inp, bool preloaded = false)
 {
-    static_assert(N <= 32, "too large N");
-
     if (!preloaded)
         out[0] = inp[0];
 
@@ -32,17 +30,22 @@ static void batch_inversion(T out[N], const S inp, bool preloaded = false)
         zero = out[i].is_zero();
         out[i] *= out[i-1];
         out[i] = T::csel(out[i-1], out[i], zero);
-        map = (map << 1) + zero;
+        if (N <= 32)
+            map = (map << 1) + zero;
     }
 
     T tmp, inv = 1/out[N-1];
 
-    for (size_t i = N; --i; map >>= 1) {
+    for (size_t i = N; --i; map >>= (N<=32)) {
         out[i] = inv*out[i-1];
         tmp = inp[i];
         tmp *= inv;
-        inv = T::csel(inv, tmp, map&1);
-        out[i] = czero(out[i], map&1);
+        if (N <= 32)
+            zero = map&1;
+        else
+            zero = tmp.is_zero();
+        inv = T::csel(inv, tmp, zero);
+        out[i] = czero(out[i], zero);
     }
 
     out[0] = czero(inv, map);
