@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(unexpected_cfgs)]
+
 // Declare C/C++ counterpart as following:
 // extern "C" { fn foobar(...) -> sppark::Error; }
 #[repr(C)]
