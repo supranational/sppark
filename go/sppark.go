@@ -236,6 +236,11 @@ func build(dst string, src string, custom_args ...string) bool {
         args = append(args, "-Xcompiler", "-fPIC,-fvisibility=hidden")
         args = append(args, "-Xlinker", "-Bsymbolic")
     }
+    // Application is free to pass own -arch, which will override
+    // this one, with a warning though, but those are not displayed
+    // by default...
+    args = append(args, "-arch=native")
+    args = append(args, "-t0")
     args = append(args, "-cudart=shared")
 
     src = filepath.Dir(src)
