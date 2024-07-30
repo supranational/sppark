@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-    sppark.Load("../cuda/ntt_api.cu", "-arch=native", "-DFEATURE_GOLDILOCKS")
+    sppark.Load("../cuda/ntt_api.cu", "-O2", "-DFEATURE_GOLDILOCKS")
 }
 
 func NTT(device_id int, inout []uint64,
