@@ -1,3 +1,7 @@
+// Copyright Supranational LLC
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
 package sppark
 
 // #cgo linux LDFLAGS: -ldl -Wl,-rpath,"$ORIGIN"
@@ -12,7 +16,6 @@ package sppark
 // }
 // #else
 // # include <dlfcn.h>
-// # include <errno.h>
 // #endif
 // #include <string.h>
 // #include <stdlib.h>
@@ -323,8 +326,13 @@ func Exfiltrate(optional ...string) error {
                 return err
             }
             log.Print("copying ", file)
-            io.Copy(fout, finp)
+            written, err := io.Copy(fout, finp)
             fout.Close()
+            if err != nil {
+                finp.Close()
+                return err
+            }
+            log.Printf("copied %d bytes", written)
         }
         finp.Close()
     }
