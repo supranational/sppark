@@ -6,7 +6,9 @@ import (
 )
 
 func TestInit(t *testing.T) {
-    CudaFunc()
+    if sppark.IsCudaAvailable() {
+        CudaFunc()
+    }
     if err := sppark.Exfiltrate("."); err != nil {
         t.Error(err)
     }
