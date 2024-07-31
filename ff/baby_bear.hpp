@@ -88,10 +88,6 @@ public:
     __host__ __device__ __forceinline__ bb31_4_t(int d, int f, int g, int h)
     {   c[0] = bb31_t{d}; c[1] = bb31_t{f}; c[2] = bb31_t{g}; c[3] = bb31_t{h};   }
 
-private:
-    static inline uint32_t final_sub(uint32_t& u)
-    {   if (u >= MOD) u -= MOD; return u;   }
-
     // Polynomial multiplication/squaring modulo x^4 - BETA
     inline bb31_4_t& sqr()
     {
@@ -231,6 +227,10 @@ private:
 
         return *this = ret;
     }
+
+private:
+    static inline uint32_t final_sub(uint32_t& u)
+    {   if (u >= MOD) u -= MOD; return u;   }
 
     inline bb31_4_t& mul(const bb31_4_t& b)
     {
