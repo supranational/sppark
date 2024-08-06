@@ -112,10 +112,15 @@ package sppark
 //         } else {
 //             static char buf[24] = "WIN32 Error #0x";
 //             msg = buf + 15;
-//             do {
-//                 *msg++ = hex_from_nibble(win_err>>4);
-//                 *msg++ = hex_from_nibble(win_err);
-//             } while (win_err >>= 8);
+//             for (int i = 32; i -= 8;) {
+//                 unsigned int hex;
+//                 if ((hex = win_err>>i)) {
+//                     *msg++ = hex_from_nibble(hex>>4);
+//                     *msg++ = hex_from_nibble(hex);
+//                 }
+//             }
+//             *msg++ = hex_from_nibble(win_err>>4);
+//             *msg++ = hex_from_nibble(win_err);
 //             *msg = '\0';
 //             toGoString(err, buf);
 //         }
