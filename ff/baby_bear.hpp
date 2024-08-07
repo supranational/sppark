@@ -508,8 +508,8 @@ private:
         wl  = u[3] * (uint64_t)u[3];
         wl += (w[0] * M) * (uint64_t)MOD;   final_sub(w[1]);
         wl  = w[1] * (uint64_t)(MOD-BETA);
-        wl += u[1] * (uint64_t)(MOD-u[1]);  final_sub(w[1]);
-        wl += u[0] * (uint64_t)(u[2]<<1);
+        wl += u[1] * (uint64_t)(MOD-u[1]);
+        wl += u[0] * (uint64_t)(u[2]<<1);   final_sub(w[1]);
         wl += (w[0] * M) * (uint64_t)MOD;
 
         return bb31_t{final_sub(w[1])};
