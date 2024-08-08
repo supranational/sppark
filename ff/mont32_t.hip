@@ -9,7 +9,7 @@
 # include <cstdint>
 # include "pow.hpp"
 
-# if defined(__GFX10__) || defined(__GFX11__) //? || defined(__GFX12__)
+# if defined(__GFX10__) || defined(__GFX11__) || defined(__GFX12__)
 #  define v_addc_co_u32 "v_add_co_ci_u32 "
 #  define v_subb_co_u32 "v_sub_co_ci_u32 "
 # elif defined(__GFX9__)
