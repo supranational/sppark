@@ -16,7 +16,7 @@
 template<const size_t N, const uint32_t MOD, const uint32_t M0,
          const uint32_t RR, const uint32_t ONE>
 class mont32_t {
-private:
+protected:
     uint32_t val;
 
 public:
