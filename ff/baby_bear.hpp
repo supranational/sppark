@@ -88,6 +88,14 @@ public:
     __host__ __device__ __forceinline__ bb31_4_t(int d, int f, int g, int h)
     {   c[0] = bb31_t{d}; c[1] = bb31_t{f}; c[2] = bb31_t{g}; c[3] = bb31_t{h};   }
 
+    static inline bb31_4_t csel(const bb31_4_t& a, const bb31_4_t& b, int sel_a)
+    {
+        bb31_4_t ret;
+        for (size_t i = 0; i < 4; i++)
+            ret[i] = bb31_t::csel(a[i], b[i], sel_a);
+        return ret;
+    }
+
     // Polynomial multiplication/squaring modulo x^4 - BETA
     inline bb31_4_t& sqr()
     {
@@ -618,6 +626,10 @@ public:
     {   batch_inversion<N>(inout, inout);   }
 # endif
 
+    inline void zero()
+    {   u[0] = u[1] = u[2] = u[3] = 0;   }
+    static inline const bb31_4_t one()
+    {   return bb31_4_t{1};   }
     inline bool is_one() const
     {   return c[0].is_one() & u[1]==0 & u[2]==0 & u[3]==0;   }
     inline bool is_zero() const
