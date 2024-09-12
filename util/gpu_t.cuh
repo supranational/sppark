@@ -118,11 +118,10 @@ public:
         if (gpu_props(gpu_id).sharedMemPerBlock < shared_sz)
             CUDA_OK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, shared_sz));
         if (gridDim.x == 0 || blockDim.x == 0) {
-            int blockSize, minGridSize;
-
-            CUDA_OK(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, f));
-            if (blockDim.x == 0) blockDim.x = blockSize;
-            if (gridDim.x == 0)  gridDim.x = minGridSize;
+            cudaFuncAttributes attr;
+            CUDA_OK(cudaFuncGetAttributes(&attr, f));
+            if (blockDim.x == 0) blockDim.x = attr.maxThreadsPerBlock;
+            if (gridDim.x == 0)  gridDim.x = sm_count();
         }
         void* va_args[sizeof...(args)] = { &args... };
         CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
