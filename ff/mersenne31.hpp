@@ -54,8 +54,8 @@ struct mrs31_t : public mrs31_base {
     inline mrs31_t& operator/=(const mrs31_t a)
     {   *this *= a.reciprocal(); return *this;   }
 
-    inline mrs31_t sqrt() const
-    {   return sqr_n(*this, 29);   }
+    inline mrs31_t recip_sqrt() const;
+    inline mrs31_t sqrt() const;
     friend inline mrs31_t sqrt(mrs31_t a)
     {   return a.sqrt();   }
 
@@ -289,8 +289,8 @@ private:
     }
 
 public:
-    inline mrs31_t sqrt() const
-    {   return sqr_n(*this, 29);   }
+    inline mrs31_t recip_sqrt() const;
+    inline mrs31_t sqrt() const;
     friend inline mrs31_t sqrt(mrs31_t a)
     {   return a.sqrt();   }
 
@@ -372,6 +372,28 @@ inline mrs31_t mrs31_t::reciprocal() const
     ret = sqr_n_mul(xff, 8, xff);   // 0b1111111111111111
     ret = sqr_n_mul(ret, 8, xff);   // 0b111111111111111111111111
     ret = sqr_n_mul(ret, 7, x7d);   // 0b1111111111111111111111111111101
+
+    return ret;
+}
+
+/*
+ * is-square check is on caller. Note that if the result is invalid for
+ * a specific value, it's correct for its negative.
+ */
+inline mrs31_t mrs31_t::sqrt() const
+{   return sqr_n(*this, 29);   }
+
+inline mrs31_t mrs31_t::recip_sqrt() const
+{
+    mrs31_t x03, x0f, xff, ret = *this;
+
+    x03 = sqr_n_mul(ret, 1, ret);   // 0b11
+    x0f = sqr_n_mul(x03, 2, x03);   // 0b1111
+    xff = sqr_n_mul(x0f, 4, x0f);   // 0b11111111
+    ret = sqr_n_mul(xff, 8, xff);   // 0b1111111111111111
+    ret = sqr_n_mul(ret, 8, xff);   // 0b111111111111111111111111
+    ret = sqr_n_mul(ret, 4, x0f);   // 0b1111111111111111111111111111
+    ret = sqr_n_mul(ret, 1, *this); // 0b11111111111111111111111111111
 
     return ret;
 }
