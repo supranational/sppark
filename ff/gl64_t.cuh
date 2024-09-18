@@ -5,7 +5,10 @@
 #if defined(__CUDACC__) && !defined(__SPPARK_FF_GL64_T_CUH__)
 #define __SPPARK_FF_GL64_T_CUH__
 
+# include <cstddef>
 # include <cstdint>
+# include "pow.hpp"
+
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
 #  define asm __asm__ __volatile__
@@ -308,20 +311,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline gl64_t& operator^=(uint32_t p)
-    {
-        gl64_t sqr = *this;
-        *this = csel(*this, one(), p&1);
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-        to();
-
-        return *this;
-    }
+    {   pow_byref(*this, p); to(); return *this;   }
     friend inline gl64_t operator^(gl64_t a, uint32_t p)
     {   return a ^= p;   }
     inline gl64_t operator()(uint32_t p)
@@ -329,27 +319,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline gl64_t& operator^=(int p)
-    {
-        if (p < 2)
-            asm("trap;");
-
-        gl64_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.mul(sqr);
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-        to();
-
-        return *this;
-    }
+    {   pow_byref(*this, p); to(); return *this;   }
     friend inline gl64_t operator^(gl64_t a, int p)
     {   return a ^= p;   }
     inline gl64_t operator()(int p)

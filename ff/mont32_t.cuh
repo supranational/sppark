@@ -5,7 +5,10 @@
 #if defined(__CUDACC__) && !defined(__SPPARK_FF_MONT32_T_CUH__)
 #define __SPPARK_FF_MONT32_T_CUH__
 
+# include <cstddef>
 # include <cstdint>
+# include "pow.hpp"
+
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
 #  define asm __asm__ __volatile__
@@ -228,19 +231,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline mont32_t& operator^=(uint32_t p)
-    {
-        mont32_t sqr = *this;
-        *this = csel(val, ONE, p&1);
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mont32_t operator^(mont32_t a, uint32_t p)
     {   return a ^= p;   }
     inline mont32_t operator()(uint32_t p)
@@ -248,32 +239,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline mont32_t& operator^=(int p)
-    {
-        if (p < 2)
-            asm("trap;");
-
-        if (p == 7) {
-            mont32_t temp = sqr_n_mul(*this, 1, *this);
-            *this = sqr_n_mul(temp, 1, *this);
-            return *this;
-        }
-
-        mont32_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.mul(sqr);
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mont32_t operator^(mont32_t a, int p)
     {   return a ^= p;   }
     inline mont32_t operator()(int p)

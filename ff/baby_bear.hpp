@@ -5,6 +5,8 @@
 #ifndef __SPPARK_FF_BABY_BEAR_HPP__
 #define __SPPARK_FF_BABY_BEAR_HPP__
 
+#include "pow.hpp"
+
 #ifdef __CUDACC__   // CUDA device-side field types
 # include <cassert>
 # include "mont32_t.cuh"
@@ -638,23 +640,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline bb31_4_t& operator^=(uint32_t p)
-    {
-        bb31_4_t sqr = *this;
-
-        if (!(p&1)) {
-            c[0] = bb31_t{1};
-            c[1] = c[2] = c[3] = 0;
-        }
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.sqr();
-            if (p&1)
-                mul(sqr);
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline bb31_4_t operator^(bb31_4_t a, uint32_t p)
     {   return a ^= p;   }
     inline bb31_4_t operator()(uint32_t p)
@@ -662,25 +648,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline bb31_4_t& operator^=(int p)
-    {
-        assert(p >= 2);
-
-        bb31_4_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.sqr();
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.sqr();
-            if (p&1)
-                mul(sqr);
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline bb31_4_t operator^(bb31_4_t a, int p)
     {   return a ^= p;   }
     inline bb31_4_t operator()(int p)

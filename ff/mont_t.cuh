@@ -7,6 +7,7 @@
 
 # include <cstddef>
 # include <cstdint>
+# include "pow.hpp"
 
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
@@ -425,19 +426,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline mont_t& operator^=(uint32_t p)
-    {
-        mont_t sqr = *this;
-        *this = csel(*this, one(), p&1);
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.sqr();
-            if (p&1)
-                *this *= sqr;
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mont_t operator^(mont_t a, uint32_t p)
     {   return a ^= p;   }
     inline mont_t operator()(uint32_t p)
@@ -445,25 +434,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline mont_t& operator^=(int p)
-    {
-        if (p < 2)
-            asm("trap;");
-
-        mont_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.sqr();
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.sqr();
-            if (p&1)
-                *this *= sqr;
-        }
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mont_t operator^(mont_t a, int p)
     {   return p == 2 ? (mont_t)wide_t{a} : a ^= p;   }
     inline mont_t operator()(int p)

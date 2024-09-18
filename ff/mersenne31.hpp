@@ -5,6 +5,8 @@
 #ifndef __SPPARK_FF_MERSENNE31_HPP__
 #define __SPPARK_FF_MERSENNE31_HPP__
 
+#include "pow.hpp"
+
 #ifdef __CUDACC__   // CUDA device-side field types
 # include "mont32_t.cuh"
 # define inline __device__ __forceinline__
@@ -61,6 +63,7 @@ struct mrs31_t : public mrs31_base {
 };
 # undef inline
 #else
+# include <cstddef>
 # include <cstdint>
 # include <cassert>
 # if defined(__CUDACC__) || defined(__HIPCC__)
@@ -181,19 +184,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline mrs31_t& operator^=(uint32_t p)
-    {
-        mrs31_t sqr = *this;
-        *this = csel(val, 1, p&1);
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mrs31_t operator^(mrs31_t a, uint32_t p)
     {   return a ^= p;   }
     inline mrs31_t operator()(uint32_t p)
@@ -201,25 +192,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline mrs31_t& operator^=(int p)
-    {
-        assert(p >= 2);
-
-        mrs31_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.mul(sqr);
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mrs31_t operator^(mrs31_t a, int p)
     {   return a ^= p;   }
     inline mrs31_t operator()(int p)
