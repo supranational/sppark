@@ -125,7 +125,7 @@ public:
     friend inline mont32_t operator-(mont32_t a, const mont32_t b)
     {   return a -= b;   }
 
-    inline mont32_t cneg(bool flag)
+    inline mont32_t& cneg(bool flag)
     {
         asm("{");
         asm(".reg.pred %flag;");
@@ -325,6 +325,26 @@ public:
                 acc[1] = final_sub(acc[1]);
             }
         }
+
+        uint32_t red;
+        asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(acc[0]), "r"(M0));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
+            : "+r"(acc[0]), "+r"(acc[1]) : "r"(red), "r"(MOD));
+
+        return final_sub(acc[1]);
+    }
+
+    static inline mont32_t dot_product(mont32_t a, mont32_t b,
+                                       mont32_t c, mont32_t d)
+    {
+        uint32_t acc[2];
+
+        asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
+            : "=r"(acc[0]), "=r"(acc[1]) : "r"(*a), "r"(*b));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+            : "+r"(acc[0]), "+r"(acc[1]) : "r"(*c), "r"(*d));
+        if (N == 32)
+            acc[1] = final_sub(acc[1]);
 
         uint32_t red;
         asm("mul.lo.u32 %0, %1, %2;" : "=r"(red) : "r"(acc[0]), "r"(M0));

@@ -140,7 +140,7 @@ public:
     friend inline mrs31_t operator-(mrs31_t a, const mrs31_t b)
     {   return a -= b;   }
 
-    inline mrs31_t cneg(bool flag)
+    inline mrs31_t& cneg(bool flag)
     {
         if (flag && val != 0)
             val = MOD - val;
@@ -258,6 +258,20 @@ public:
 
         if (ret < u[0])
             ret += 2;
+        if (ret >= MOD)
+            ret -= MOD;
+
+        return mrs31_t{ret};
+    }
+
+    static inline mrs31_t dot_product(mrs31_t a, mrs31_t b,
+                                      mrs31_t c, mrs31_t d)
+    {
+        uint64_t tmp = a.val*(uint64_t)b.val + c.val*(uint64_t)d.val;
+        uint32_t ret = (uint32_t)(tmp >> 31);
+        if (ret >= MOD)
+            ret -= MOD;
+        ret += (uint32_t)tmp & MOD;
         if (ret >= MOD)
             ret -= MOD;
 
