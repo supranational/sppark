@@ -34,6 +34,7 @@ template<const size_t N, const uint32_t MOD[(N+31)/32], const uint32_t& M0,
          const uint32_t RR[(N+31)/32], const uint32_t ONE[(N+31)/32],
          const uint32_t MODx[(N+31)/32] = MOD>
 class __align__(((N+63)/64)&1 ? 8 : 16) mont_t {
+    static_assert((N+31)/32 % 2 == 0, "(N+31)/32 must be an even number");
 public:
     static const size_t nbits = N;
     static constexpr size_t __device__ bit_length() { return N; }
