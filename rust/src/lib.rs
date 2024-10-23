@@ -115,3 +115,58 @@ pub enum NTTType {
     Standard = 0,
     Coset = 1,
 }
+
+// Given `slice_t<U>` value argument on the C++ side, one declares
+// corresponding argument as `sppark::Slice<U>` on the Rust side and
+// passes Rust slice as `foo.into()`. Recall that `U` has to be concrete
+// on the FFI boundary. This can be tricky if the Rust side is generic.
+// If the concrete type is not readily available in Rust, use a stand-in
+// such as `sppark::Slice<[u64; N]>` with N chosen to match the size of
+// the object. Note that all below methods use raw pointer casts, yet
+// there are no `unsafe` blocks. Rationale is that one would invoke them
+// as one passes arguments to an FFI interface, which has to be in an
+// unsafe block already.
+
+#[repr(C)]
+pub struct Slice<U> {
+    ptr: *const U,
+    len: usize,
+}
+
+use core::mem::size_of;
+
+impl<T, U> From<&mut [T]> for Slice<U> {
+    #[inline]
+    fn from(slice: &mut [T]) -> Self {
+        // const _: () = // I wish this worked with generics:-(
+        assert!(size_of::<T>() == size_of::<U>());
+        Self {
+            ptr: slice.as_mut_ptr() as *mut _,
+            len: slice.len(),
+        }
+    }
+}
+
+impl<T, U> From<&[T]> for Slice<U> {
+    #[inline]
+    fn from(slice: &[T]) -> Self {
+        // const _: () = // I wish this worked with generics:-(
+        assert!(size_of::<T>() == size_of::<U>());
+        Self {
+            ptr: slice.as_ptr() as *const _,
+            len: slice.len(),
+        }
+    }
+}
+
+impl<U> Slice<U> {
+    #[inline]
+    pub fn new<T>(p: *const T, n: usize) -> Self {
+        // const _: () = // I wish this worked with generics:-(
+        assert!(size_of::<T>() == size_of::<U>());
+        Self {
+            ptr: p as *const _,
+            len: n,
+        }
+    }
+}
