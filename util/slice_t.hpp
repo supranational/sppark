@@ -5,6 +5,7 @@
 #ifndef __SPPARK_UTIL_SLICE_T_HPP__
 #define __SPPARK_UTIL_SLICE_T_HPP__
 
+#include <cstddef>
 #include <vector>
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
@@ -18,6 +19,7 @@
 // A simple way to pack a constant pointer and array's size length,
 // and to "borrow" std::vector<T>&...
 template<typename T> class slice_t {
+protected:
     const T* ptr;
     size_t nelems;
 public:
@@ -31,6 +33,14 @@ public:
     inline const T* data() const                { return ptr; }
     inline size_t size() const                  { return nelems; }
     inline const T& operator[](size_t i) const  { return ptr[i]; }
+};
+
+template<typename T> class slice_mut : public slice_t<T> {
+public:
+    slice_mut(T* p, size_t n)       : slice_t<T>(p, n) {}
+    slice_mut(std::vector<T>& v)    : slice_t<T>(v) {}
+    inline T* data() const          { return const_cast<T*>(this->ptr); }
+    inline T& operator[](size_t i)  { return const_cast<T*>(this->ptr)[i]; }
 };
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
