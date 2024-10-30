@@ -341,7 +341,7 @@ public:
 
         asm("mul.lo.u32 %0, %2, %3; mul.hi.u32 %1, %2, %3;"
             : "=r"(acc[0]), "=r"(acc[1]) : "r"(*a), "r"(*b));
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1;"
             : "+r"(acc[0]), "+r"(acc[1]) : "r"(*c), "r"(*d));
         if (N == 32)
             acc[1] = final_sub(acc[1]);
