@@ -41,6 +41,7 @@ public:
     using mem_t = mont_t;
 protected:
     static const size_t n = (N+31)/32;
+    static_assert((n%2) == 0 && n >= 4, "unsupported bit length");
 private:
     uint32_t even[n];
 
