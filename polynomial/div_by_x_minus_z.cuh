@@ -2,11 +2,16 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#if !defined(__SPPARK_POLYNOMIAL_DIVISION_CUH__) && defined(__CUDACC__)
+#if !defined(__SPPARK_POLYNOMIAL_DIVISION_CUH__) && \
+    (defined(__CUDACC__) || defined(__HIPCC__))
 #define __SPPARK_POLYNOMIAL_DIVISION_CUH__
 
 #include <cassert>
-#include <cooperative_groups.h>
+#ifdef __HIPCC__
+# include <hip/hip_cooperative_groups.h>
+#else
+# include <cooperative_groups.h>
+#endif
 #include <ff/shfl.cuh>
 
 template<class fr_t, bool rotate, int BSZ> __global__ __launch_bounds__(BSZ)

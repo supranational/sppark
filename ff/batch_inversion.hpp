@@ -12,7 +12,7 @@
  * that would address the shared memory and offload the input.
  */
 template<class T, size_t N, typename S = T[N]>
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 __device__ __host__ __forceinline__
 #endif
 static void batch_inversion(T out[N], const S inp, bool preloaded = false)

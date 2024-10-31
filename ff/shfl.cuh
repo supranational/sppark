@@ -2,7 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#if !defined(__SPPARK_FF_SHFL_CUH__) && defined(__CUDACC__)
+#if !defined(__SPPARK_FF_SHFL_CUH__) && \
+    (defined(__CUDACC__) || defined(__HIPCC__))
 #define __SPPARK_FF_SHFL_CUH__
 
 #ifndef WARP_SZ
