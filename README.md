@@ -23,7 +23,7 @@ The goal of the sppark library is to provide foundational components for applica
 
 ## Platform and Language Compatibility
 
-This library primarily supports x86_64 with Nvidia's Volta+ GPU hardware platforms on Linux and Windows operating systems. Non-GPU portions can be utilized even on ARM64, and additionally on Mac.
+This library primarily supports x86_64 with Nvidia's Volta+ GPU hardware platforms on Linux and Windows operating systems. A limited support for AMD's RDNA and CDNA GPUs is provided. Non-GPU portions can be utilized even on ARM64, and additionally on Mac.
 
 We show how to interface with Rust and Go. Caveat lector. Achieving highest possible GPU performance requires interfacing with target language memory management, possibly its async facilities, and might even require changes to object's data layout. These are hard to generalize and consequently are also a matter of discussion, likely on a case-by-case basis.
 
