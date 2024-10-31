@@ -11,6 +11,11 @@ typedef struct {
     _GoString_ message;
 } GoError;
 
+typedef struct {
+    void *ptr;
+    size_t len;
+} slice_t;
+
 #ifndef _WIN32
 __attribute__((weak))   // required with go1.18 and earlier
 #endif
@@ -35,5 +40,23 @@ void toGoError(GoError *go_err, Error c_err);
         panic(err.message)
     }
     ...
+// Caveat. It's not as straightforward if the target function expects
+// slice_t as argument. There are two options.
+//
+// 1. On the Go side:
+    ...
+    func asSlice[T any](s []T) C.slice_t {
+        return C.slice_t{unsafe.Pointer(&s[0]), C.size_t(len(s))}
+    }
+    ...
+// and pass Go slices through asSlice.
+//
+// 2. Instantiate slice_t on the C side:
+//
+// WRAP_ERR(Error, shim_func, type1 *ptr1, size_t len1, type2 arg2)
+// {   typedef Error (*real_proto)(slice_t arg1, type2 arg2);
+//     slice_t arg1 = {ptr1, len1};
+//     toGoError(go_err, (*(real_proto)shim_func.call)(arg1, arg2);
+// }
 #endif
 #endif
