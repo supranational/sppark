@@ -45,22 +45,39 @@ fn main() {
     let all_gpus = base_dir.join("util/all_gpus.cpp");
 
     println!("cargo:rerun-if-env-changed=NVCC");
-    let nvcc = match env::var("NVCC") {
+    let mut nvcc = match env::var("NVCC") {
         Ok(var) => which::which(var),
         Err(_) => which::which("nvcc"),
     };
 
     println!("cargo:rerun-if-env-changed=HIPCC");
-    let hipcc = match env::var("HIPCC") {
+    let mut hipcc = match env::var("HIPCC") {
         Ok(var) => which::which(var),
         Err(_) => which::which("hipcc"),
     };
+
+    match (cfg!(feature = "cuda"), cfg!(feature = "rocm")) {
+        (true, true) => panic!("mutually exclusive features"),
+        (true, false) => {
+            if nvcc.is_err() {
+                panic!("`nvcc` is not available");
+            }
+            hipcc = Err(which::Error::CannotFindBinaryPath);
+        },
+        (false, true) => {
+            if hipcc.is_err() {
+                panic!("`hipcc` is not available");
+            }
+            nvcc = Err(which::Error::CannotFindBinaryPath);
+        },
+        (false, false) => (),
+    }
 
     // Detect if there is CUDA compiler and engage "cuda" feature accordingly,
     // even if there is no Nvidia card, but unless there is ROCm compiler.
     // In other words if you have both Nvidia and AMD cards installed, Nvidia
     // will be preferred. To suppress it, set the NVCC environment variable
-    // to "off".
+    // to "off" [or engage "rocm" feature].
     if let Ok(nvcc) = nvcc {
         let cuda_version = Command::new(nvcc)
             .arg("--version")

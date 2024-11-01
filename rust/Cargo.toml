@@ -24,3 +24,8 @@ include = [
 [build-dependencies]
 cc = "^1.0.70"
 which = "^4.0"
+
+[features]
+# coerse either as an alternative to auto-detection
+cuda = []
+rocm = []
