@@ -1,6 +1,6 @@
 [package]
 name = "sppark"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 description = "Zero-knowledge template library"
 repository = "https://github.com/supranational/sppark"
@@ -16,6 +16,7 @@ include = [
     "/sppark/ff/**",
     "/sppark/msm/**",
     "/sppark/ntt/**",
+    "/sppark/polynomial/**",
     "/sppark/util/**",
 ]
 
