@@ -23,7 +23,7 @@ include = [
 [dependencies]
 
 [build-dependencies]
-cc = "^1.0.70"
+cc = "^1.0.70, <1.1.32"
 which = "^4.0"
 
 [features]
