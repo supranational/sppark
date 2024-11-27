@@ -46,10 +46,8 @@ public:
     inline T* operator[](size_t y) const { return ptr + dim_x*y; }
     __host__ __device__
     inline dim_t y() const { return dim_y_owned >> 1; }
-
-#ifndef NDEBUG
+    __host__ __device__
     inline dim_t x() const { return dim_x; }
-#endif
 };
 
 #if !defined(__CUDACC__) && !defined(__HIPCC__)
