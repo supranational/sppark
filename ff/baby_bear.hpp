@@ -86,8 +86,8 @@ public:
     inline const bb31_t& operator[](size_t i) const { return c[i]; }
     inline size_t len() const                       { return 4; }
 
-    inline bb31_4_t()           {}
-    inline bb31_4_t(bb31_t a)   { c[0] = a; u[1] = u[2] = u[3] = 0; }
+    __host__ inline bb31_4_t()          {}
+    __host__ inline bb31_4_t(bb31_t a)  { c[0] = a; u[1] = u[2] = u[3] = 0; }
     // this is used in constant declaration, e.g. as bb31_4_t{1, 2, 3, 4}
     __host__ inline bb31_4_t(int a)
     {   c[0] = bb31_t{a}; u[1] = u[2] = u[3] = 0;   }
@@ -640,6 +640,14 @@ public:
     {   return c[0].is_one() & ((u[1] | u[2] | u[3]) == 0);   }
     inline bool is_zero() const
     {   return (u[0] | u[1] | u[2] | u[3]) == 0;   }
+
+    friend inline bb31_4_t czero(const bb31_4_t& a, int set_z)
+    {
+        bb31_4_t ret;
+        for (size_t i = 0; i < 4; i++)
+            ret[i] = czero(a[i], set_z);
+        return ret;
+    }
 
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
