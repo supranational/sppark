@@ -59,7 +59,7 @@ static T shfl_up(const T& src, unsigned int off)
 }
 
 template<class T> __device__ __forceinline__
-static T& add_up(T& x_lane, unsigned limit = WARP_SZ)
+static T& add_up(T& x_lane, unsigned limit)
 {
     const unsigned laneid = threadIdx.x % WARP_SZ;
 
@@ -76,7 +76,25 @@ static T& add_up(T& x_lane, unsigned limit = WARP_SZ)
 }
 
 template<class T> __device__ __forceinline__
-static T& mul_up(T& x_lane, unsigned limit = WARP_SZ)
+static T& add_up(T& x_lane)
+{
+    if (sizeof(T) > 16)
+        return add_up(x_lane, WARP_SZ);
+
+    const unsigned laneid = threadIdx.x % WARP_SZ;
+
+    #pragma unroll
+    for (unsigned off = 1; off < WARP_SZ; off <<= 1) {
+        auto temp = shfl_up(x_lane, off);
+        temp += x_lane;
+        x_lane = T::csel(x_lane, temp, laneid < off);
+    }
+
+    return x_lane;
+}
+
+template<class T> __device__ __forceinline__
+static T& mul_up(T& x_lane, unsigned limit)
 {
     const unsigned laneid = threadIdx.x % WARP_SZ;
 
@@ -84,6 +102,24 @@ static T& mul_up(T& x_lane, unsigned limit = WARP_SZ)
 
     #pragma unroll 1
     for (unsigned off = 1; off < limit; off <<= 1) {
+        auto temp = shfl_up(x_lane, off);
+        temp *= x_lane;
+        x_lane = T::csel(x_lane, temp, laneid < off);
+    }
+
+    return x_lane;
+}
+
+template<class T> __device__ __forceinline__
+static T& mul_up(T& x_lane)
+{
+    if (sizeof(T) > 4)
+        return mul_up(x_lane, WARP_SZ);
+
+    const unsigned laneid = threadIdx.x % WARP_SZ;
+
+    #pragma unroll
+    for (unsigned off = 1; off < WARP_SZ; off <<= 1) {
         auto temp = shfl_up(x_lane, off);
         temp *= x_lane;
         x_lane = T::csel(x_lane, temp, laneid < off);
