@@ -55,7 +55,9 @@ void d_div_by_x_minus_z(fr_t d_inout[], size_t len, fr_t z)
         }
     };
 
+#if 0
     assert(blockDim.x%WARP_SZ == 0 && gridDim.x <= blockDim.x);
+#endif
 
     const uint32_t tid    = threadIdx.x + blockDim.x*blockIdx.x;
     const uint32_t laneid = threadIdx.x % WARP_SZ;
@@ -379,6 +381,7 @@ void div_by_x_minus_z(fr_t d_inout[], size_t len, const fr_t& z,
             cudaFuncAttributes attr;
             CUDA_OK(cudaFuncGetAttributes(&attr, d_div_by_x_minus_z<fr_t, rotate, BSZ>));
             saved_blockDim = attr.maxThreadsPerBlock;
+            assert(saved_blockDim%WARP_SZ == 0);
         }
 
         blockDim = saved_blockDim;
