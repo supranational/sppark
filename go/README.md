@@ -1,6 +1,6 @@
 # Go bridge for sppark
 
-The goal is to make it possible to reuse modules targeting Rust with Go. The suggestion is to complement the CUDA source module with a Go bridge that would look something like the following. Assuming that `poc.cu` implements ~`exern "C" __attribute__((visibility("default")))`~ `SPPARK_FFI RustError::by_value cuda_func(void*)`:
+The goal is to make it possible to reuse modules targeting Rust with Go. The suggestion is to complement the CUDA source module with a Go bridge that would look something like the following. Assuming that `poc.cu` implements ~`extern "C" __attribute__((visibility("default")))`~ `SPPARK_FFI RustError::by_value cuda_func(void*)`:
 
 ```go
 package poc_cu
