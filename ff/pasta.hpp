@@ -87,10 +87,17 @@ struct pallas_t : public pallas_mont {
 # endif
 
 #if defined(FEATURE_PALLAS)
+namespace pallas {
 typedef pallas_t fp_t;
 typedef vesta_t fr_t;
+}
+using namespace pallas;
 #elif defined(FEATURE_VESTA)
+namespace vesta {
 typedef vesta_t fp_t;
 typedef pallas_t fr_t;
+}
+using namespace vesta;
 #endif
+
 #endif

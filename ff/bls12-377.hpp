@@ -57,6 +57,9 @@ namespace device {
 #   include "mont_t.hip"
 typedef uint64_t vec256[4];
 #  endif
+
+namespace bls12_377 {
+
 typedef mont_t<377, device::BLS12_377_P, device::BLS12_377_M0,
                     device::BLS12_377_RR, device::BLS12_377_one,
                     device::BLS12_381_Px128> fp_mont;
@@ -76,6 +79,9 @@ struct fr_t : public fr_mont {
     __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
 #  endif
 };
+
+} // namespace bls12_377
+
 # endif
 #endif
 
@@ -86,6 +92,8 @@ struct fr_t : public fr_mont {
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wsubobject-linkage"
 # endif
+
+namespace bls12_377 {
 
 static const vec384 BLS12_377_P = {
     TO_LIMB_T(0x8508c00000000001), TO_LIMB_T(0x170b5d4430000000),
@@ -130,8 +138,15 @@ struct fr_t : public fr_mont {
     inline fr_t(const fr_mont& a) : fr_mont(a) {}
 };
 
+} // namespace bls12_377
+
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif
 #endif
+
+#ifdef FEATURE_BLS12_377
+using namespace bls12_377;
+#endif
+
 #endif

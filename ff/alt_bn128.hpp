@@ -53,6 +53,9 @@ namespace device {
 #   include "mont_t.hip"
 typedef uint64_t vec256[4];
 #  endif
+
+namespace alt_bn128 {
+
 typedef mont_t<254, device::ALT_BN128_P, device::ALT_BN128_M0,
                     device::ALT_BN128_RR, device::ALT_BN128_one,
                     device::ALT_BN128_Px4> fp_mont;
@@ -72,6 +75,9 @@ struct fr_t : public fr_mont {
     __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
 #  endif
 };
+
+} // namespace alt_bn128
+
 # endif
 #endif
 
@@ -82,6 +88,8 @@ struct fr_t : public fr_mont {
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wsubobject-linkage"
 # endif
+
+namespace alt_bn128 {
 
 static const vec256 ALT_BN128_P = {
     TO_LIMB_T(0x3c208c16d87cfd47), TO_LIMB_T(0x97816a916871ca8d),
@@ -123,8 +131,15 @@ struct fr_t : public fr_mont {
     inline fr_t(const fr_mont& a) : fr_mont(a) {}
 };
 
+} // namespace alt_bn128
+
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif
 #endif
+
+#ifdef FEATURE_BN254
+using namespace alt_bn128;
+#endif
+
 #endif

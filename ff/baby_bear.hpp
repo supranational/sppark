@@ -682,7 +682,13 @@ public:
 # endif
 };
 
+namespace baby_bear {
 typedef bb31_t fr_t;
 typedef bb31_4_t fr4_t;
+}
+
+#ifdef FEATURE_BABY_BEAR
+using namespace baby_bear;
+#endif
 
 #endif

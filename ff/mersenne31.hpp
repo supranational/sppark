@@ -69,6 +69,13 @@ struct mrs31_t : public mrs31_base {
 # if defined(__CUDACC__) || defined(__HIPCC__)
 #  define inline __host__ __device__ __forceinline__
 # endif
+# if defined(_MSC_VER)
+#  pragma warning(push)
+#  pragma warning(disable: 4068)
+# elif defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wunknown-pragmas"
+# endif
 
 class mrs31_t {
 private:
@@ -348,9 +355,12 @@ public:
     }
 # endif
 };
+# if defined(_MSC_VER)
+#  pragma warning(pop)
+# elif defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
+# endif
 #endif
-
-typedef mrs31_t fr_t;
 
 #if defined(__CUDACC__) && defined(__SPPARK_FF_MONT32_T_CUH__)
 # define inline __device__ __forceinline__
@@ -429,4 +439,13 @@ inline mrs31_t mrs31_t::pentaroot() const
 #if defined(__CUDACC__) || defined(__HIPCC__)
 # undef inline
 #endif
+
+namespace mersenne31 {
+typedef mrs31_t fr_t;
+}
+
+#ifdef FEATURE_MERSENNE_31
+using namespace mersenne31;
+#endif
+
 #endif /* __SPPARK_FF_MERSENNE31_HPP__ */

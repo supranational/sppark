@@ -20,6 +20,8 @@
 #  define WARP_SZ 32
 # endif
 
+namespace bls12_377 {
+
 class fp2_t : public fp_mont {
 private:
     static inline uint32_t laneid()
@@ -186,10 +188,14 @@ public:
     {   return *this *= a.reciprocal();   }
 };
 
+} // namespace bls12_377
+
 # undef inline
 # undef asm
 
 #else
+
+namespace bls12_377 {
 
 class fp2_t {
     vec384x val;
@@ -485,5 +491,8 @@ public:
 #  endif
 # endif
 };
+
+} // namespace bls12_377
+
 #endif
 #endif
