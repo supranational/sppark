@@ -24,6 +24,10 @@ __device__ __noinline__ static void noop() { asm(""); }
 #include "parameters.cuh"
 #include "kernels.cu"
 
+#ifdef noop
+# undef noop
+#endif
+
 class NTT {
 public:
     enum class InputOutputOrder { NN, NR, RN, RR };
