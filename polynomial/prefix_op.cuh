@@ -46,7 +46,7 @@ public:
     {   return fr_t::one();   }
 };
 
-template <typename Operation, int CHUNK, class fr_t = class Operation::T,
+template <typename Operation, int CHUNK, typename fr_t = typename Operation::T,
           class OutPtr = fr_t*, class InPtr = const fr_t*>
 __global__ __launch_bounds__(sizeof(fr_t)<=16 ? 1024 : 512)
 void d_prefix_op(OutPtr out, InPtr inp, size_t len)
@@ -106,8 +106,7 @@ void d_prefix_op(OutPtr out, InPtr inp, size_t len)
     const uint32_t laneid = threadIdx.x % WARP_SZ;
     const uint32_t nwarps = blockDim.x  / WARP_SZ;
 
-    extern __shared__ int xchg_prefix_op[];
-    fr_t* xchg = reinterpret_cast<decltype(xchg)>(xchg_prefix_op);
+    static __shared__ fr_t xchg[1024/WARP_SZ]; // 1024 is maximum for blockDim
 
     const uint32_t chunk_size = blockDim.x * CHUNK;
     const uint32_t blob_size = gridDim.x * chunk_size;
@@ -186,7 +185,7 @@ void d_prefix_op(OutPtr out, InPtr inp, size_t len)
         for (int i = 1; i < CHUNK; i++)
             chunk[i] = op(chunk[i], shfl_idx(chunk[i-1], WARP_SZ-1));
 
-        if (laneid == WARP_SZ-1 && warpid < WARP_SZ-1)
+        if (laneid == WARP_SZ-1 && warpid < 1024/WARP_SZ-1)
             xchg[warpid] = chunk[CHUNK - 1];
 
         __syncthreads();
@@ -205,11 +204,11 @@ void d_prefix_op(OutPtr out, InPtr inp, size_t len)
 
         if (gridDim.x == 1) {
             if (threadIdx.x == blockDim.x-1)
-                xchg[WARP_SZ - 1] = chunk[CHUNK - 1];
+                xchg[1024/WARP_SZ - 1] = chunk[CHUNK - 1];
 
             __syncthreads();
 
-            grid_carry = xchg[WARP_SZ - 1];
+            grid_carry = xchg[1024/WARP_SZ - 1];
             grid_carry = op(grid_carry, grid_carry_in);
         } else {
             bool tail_sync = !do_prefetch ||
@@ -302,7 +301,7 @@ void d_prefix_op(OutPtr out, InPtr inp, size_t len)
     }
 }
 
-template <typename Operation, class fr_t = class Operation::T,
+template <typename Operation, typename fr_t = typename Operation::T,
           class OutPtr = fr_t*, class InPtr = const fr_t*,
           class stream_t>
 void prefix_op(OutPtr d_out, InPtr d_inp, size_t len, const stream_t& s,
@@ -316,14 +315,16 @@ void prefix_op(OutPtr d_out, InPtr d_inp, size_t len, const stream_t& s,
 
     size_t blocks = (len + chunkSize - 1)/chunkSize;
 
+# define __PREFIX_OP__(N) d_prefix_op<Operation, N, fr_t, OutPtr, InPtr>
+
     if (blocks <= (unsigned)gridDim) {
         if ((Operation::CHUNK/4)*4 == Operation::CHUNK &&
             blocks*4 <= (unsigned)gridDim) {
             // +70-90% improvement depending on field and GPU
             chunkSize = blockDim * Operation::CHUNK/4;
             gridDim = (int)((len + chunkSize - 1)/chunkSize);
-            s.launch_coop(d_prefix_op<Operation, Operation::CHUNK/4>,
-                          {gridDim, blockDim, WARP_SZ*sizeof(fr_t)},
+            s.launch_coop(__PREFIX_OP__(Operation::CHUNK/4),
+                          {gridDim, blockDim},
                           d_out, d_inp, len);
             return;
         } else if ((Operation::CHUNK/2)*2 == Operation::CHUNK &&
@@ -331,8 +332,8 @@ void prefix_op(OutPtr d_out, InPtr d_inp, size_t len, const stream_t& s,
             // +20-40% improvement depending on field and GPU
             chunkSize = blockDim * Operation::CHUNK/2;
             gridDim = (int)((len + chunkSize - 1)/chunkSize);
-            s.launch_coop(d_prefix_op<Operation, Operation::CHUNK/2>,
-                          {gridDim, blockDim, WARP_SZ*sizeof(fr_t)},
+            s.launch_coop(__PREFIX_OP__(Operation::CHUNK/2),
+                          {gridDim, blockDim},
                           d_out, d_inp, len);
             return;
         } else if ((Operation::CHUNK*3/4)*4 == Operation::CHUNK*3 &&
@@ -340,8 +341,8 @@ void prefix_op(OutPtr d_out, InPtr d_inp, size_t len, const stream_t& s,
             // +10-20% improvement depending on field and GPU
             chunkSize = blockDim * Operation::CHUNK*3/4;
             gridDim = (int)((len + chunkSize - 1)/chunkSize);
-            s.launch_coop(d_prefix_op<Operation, Operation::CHUNK*3/4>,
-                          {gridDim, blockDim, WARP_SZ*sizeof(fr_t)},
+            s.launch_coop(__PREFIX_OP__(Operation::CHUNK*3/4),
+                          {gridDim, blockDim},
                           d_out, d_inp, len);
             return;
         }
@@ -353,19 +354,21 @@ void prefix_op(OutPtr d_out, InPtr d_inp, size_t len, const stream_t& s,
 
         if (blocks <= (unsigned)gridDim*2) {
             // +10-20% improvement depending on field and GPU
-            s.launch_coop(d_prefix_op<Operation, Operation::CHUNK*3/4>,
-                          {gridDim, blockDim, WARP_SZ*sizeof(fr_t)},
+            s.launch_coop(__PREFIX_OP__(Operation::CHUNK*3/4),
+                          {gridDim, blockDim},
                           d_out, d_inp, len);
             return;
         }
     }
 
-    s.launch_coop(d_prefix_op<Operation, Operation::CHUNK>,
-                  {gridDim, blockDim, WARP_SZ*sizeof(fr_t)},
+    s.launch_coop(__PREFIX_OP__(Operation::CHUNK),
+                  {gridDim, blockDim},
                   d_out, d_inp, len);
+
+# undef __PREFIX_OP__
 }
 
-template <typename Operation, class stream_t, class fr_t = class Operation::T>
+template <typename Operation, typename fr_t = typename Operation::T, class stream_t>
 void prefix_op(fr_t* d_inout, size_t len, const stream_t& s, int gridDim = 0)
 {
     prefix_op<Operation>(d_inout, reinterpret_cast<const fr_t*>(d_inout), len,
