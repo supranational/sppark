@@ -59,7 +59,7 @@ template<unsigned int Z_COUNT, class fr_t>
 __launch_bounds__(192, 2) __global__
 void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
-    static_assert((Z_COUNT & (Z_COUNT-1)) == 0, "unvalid Z_COUNT");
+    static_assert((Z_COUNT & (Z_COUNT-1)) == 0, "invalid Z_COUNT");
     const uint32_t LG_Z_COUNT = lg2(Z_COUNT);
 
     extern __shared__ int xchg_bit_rev[];
