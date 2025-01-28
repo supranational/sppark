@@ -44,15 +44,21 @@ protected:
         size_t domain_size = (size_t)1 << lg_domain_size;
         // aim to read 4 cache lines of consecutive data per read
         const uint32_t Z_COUNT = 256 / sizeof(fr_t);
-        const uint32_t bsize = Z_COUNT>WARP_SZ ? Z_COUNT : WARP_SZ;
+        const uint32_t warpSize = gpu_props(stream).warpSize;
+        const uint32_t bsize = Z_COUNT>warpSize ? Z_COUNT : warpSize;
+#ifdef __HIPCC__
+        const uint32_t lg_switch = 17;
+#else
+        const uint32_t lg_switch = 32;
+#endif
 
         if (domain_size <= 1024)
             bit_rev_permutation<<<1, domain_size, 0, stream>>>
                                (d_out, d_inp, lg_domain_size);
         else if (domain_size < bsize * Z_COUNT)
-            bit_rev_permutation<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
+            bit_rev_permutation<<<domain_size / bsize, bsize, 0, stream>>>
                                (d_out, d_inp, lg_domain_size);
-        else if (Z_COUNT > WARP_SZ || lg_domain_size <= 32)
+        else if (Z_COUNT > warpSize || lg_domain_size <= lg_switch)
             bit_rev_permutation_z<Z_COUNT><<<domain_size / Z_COUNT / bsize, bsize,
                                              bsize * Z_COUNT * sizeof(fr_t),
                                              stream>>>
@@ -74,14 +80,15 @@ private:
                            stream_t& stream)
     {
         size_t domain_size = (size_t)1 << lg_dsz;
+        const uint32_t warpSize = gpu_props(stream).warpSize;
         const auto gen_powers =
             NTTParameters::all(innt)[stream].partial_group_gen_powers;
 
-        if (domain_size < WARP_SZ)
+        if (domain_size < warpSize)
             LDE_distribute_powers<<<1, domain_size, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else if (lg_dsz < 32)
-            LDE_distribute_powers<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
+            LDE_distribute_powers<<<domain_size / warpSize, warpSize, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else
             LDE_distribute_powers<<<stream.sm_count(), 1024, 0, stream>>>

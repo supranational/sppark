@@ -133,19 +133,20 @@ class GS_launcher {
     int stage;
     const NTTParameters& ntt_parameters;
     const stream_t& stream;
+    int min_radix;
 
 public:
     GS_launcher(fr_t* d_ptr, int lg_dsz, bool innt,
                 const NTTParameters& params, const stream_t& s)
       : d_inout(d_ptr), lg_domain_size(lg_dsz), is_intt(innt), stage(lg_dsz),
         ntt_parameters(params), stream(s)
-    {}
+    {   min_radix = lg2(gpu_props(s).warpSize) + 1;   }
 
     void step(int iterations)
     {
         assert(iterations <= 10);
 
-        const int radix = iterations < 6 ? 6 : iterations;
+        const int radix = iterations < min_radix ? min_radix : iterations;
 
         index_t num_threads = (index_t)1 << (lg_domain_size - 1);
         index_t block_size = 1 << (radix - 1);
