@@ -98,14 +98,11 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     } else if (intermediate_mul == 2) {
         index_t thread_ntt_pos = (tid & inp_mask) >> (iterations - 1);
         unsigned int diff_mask = (1 << (iterations - 1)) - 1;
-        unsigned int thread_ntt_idx = (tid & diff_mask) * 2;
-        unsigned int nbits = intermediate_twiddle_shift;
+        unsigned int root_idx = (tid & diff_mask) * 2;
+        index_t root_pos = thread_ntt_pos << intermediate_twiddle_shift;
 
-        index_t root_idx0 = bit_rev(thread_ntt_idx, nbits);
-        index_t root_idx1 = bit_rev(thread_ntt_idx + 1, nbits);
-
-        fr_t t0 = d_intermediate_twiddles[(thread_ntt_pos << nbits) + root_idx0];
-        fr_t t1 = d_intermediate_twiddles[(thread_ntt_pos << nbits) + root_idx1];
+        fr_t t0 = d_intermediate_twiddles[root_pos + root_idx];
+        fr_t t1 = d_intermediate_twiddles[root_pos + root_idx + 1];
 
         r0 *= t0;
         r1 *= t1;

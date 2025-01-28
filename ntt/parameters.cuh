@@ -69,6 +69,16 @@ extern const fr_t inverse_roots_of_unity[];
 extern const fr_t domain_size_inverse[];
 #endif
 
+template<typename T>
+__device__ __forceinline__
+T bit_rev(T i, unsigned int nbits)
+{
+    if (sizeof(i) == 4 || nbits <= 32)
+        return __brev(i) >> (8*sizeof(unsigned int) - nbits);
+    else
+        return __brevll(i) >> (8*sizeof(unsigned long long) - nbits);
+}
+
 template<class fr_t> __global__
 void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
                                const fr_t root_of_unity)
@@ -125,11 +135,14 @@ template<class fr_t> __launch_bounds__(512) __global__
 void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
                                 const fr_t root_of_unity)
 {
+    unsigned int nbits = 31 - __clz(blockDim.x);
+    unsigned int pow_rev = bit_rev(threadIdx.x, nbits);
+
     if (gridDim.x == 1) {
         d_radixX_twiddles_X[threadIdx.x] = fr_t::one();
         d_radixX_twiddles_X += blockDim.x;
 
-        fr_t root0 = root_of_unity^threadIdx.x;
+        fr_t root0 = root_of_unity^pow_rev;
 
         d_radixX_twiddles_X[threadIdx.x] = root0;
         d_radixX_twiddles_X += blockDim.x;
@@ -142,9 +155,9 @@ void generate_radixX_twiddles_X(fr_t* d_radixX_twiddles_X, int n,
             d_radixX_twiddles_X += blockDim.x;
         }
     } else {
-        fr_t root0 = root_of_unity^(threadIdx.x * gridDim.x);
+        fr_t root0 = root_of_unity^(pow_rev * gridDim.x);
 
-        unsigned int pow = blockIdx.x * threadIdx.x;
+        unsigned int pow = blockIdx.x * pow_rev;
         unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
         fr_t root1 = root_of_unity^pow;
