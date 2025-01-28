@@ -105,7 +105,7 @@ private:
 
         if (lg_domain_size <= 10) {
             params.step(lg_domain_size);
-        } else if (lg_domain_size <= 17) {
+        } else if (lg_domain_size <= 18) {
             int step = lg_domain_size / 2;
             params.step(step + lg_domain_size % 2);
             params.step(step);
@@ -135,7 +135,7 @@ private:
 
         if (lg_domain_size <= 10) {
             params.step(lg_domain_size);
-        } else if (lg_domain_size <= 17) {
+        } else if (lg_domain_size <= 18) {
             int step = lg_domain_size / 2;
             params.step(step);
             params.step(step + lg_domain_size % 2);

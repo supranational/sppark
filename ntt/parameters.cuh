@@ -186,7 +186,7 @@ public:
     fr_t (*partial_group_gen_powers)[WINDOW_SIZE]; // for LDE
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-    fr_t* radix6_twiddles_6, * radix6_twiddles_12, * radix7_twiddles_7,
+    fr_t* radix6_twiddles_6, * radix7_twiddles_7,
         * radix8_twiddles_8, * radix9_twiddles_9;
 
 private:
@@ -235,7 +235,6 @@ public:
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
         radix6_twiddles_6 = twiddles_X(64, 64, roots[12]);
-        radix6_twiddles_12 = twiddles_X(4096, 64, roots[18]);
         radix7_twiddles_7 = twiddles_X(128, 128, roots[14]);
         radix8_twiddles_8 = twiddles_X(256, 256, roots[16]);
         radix9_twiddles_9 = twiddles_X(512, 512, roots[18]);
@@ -270,7 +269,6 @@ public:
             (void)cudaFreeAsync(radix9_twiddles_9, gpu);
             (void)cudaFreeAsync(radix8_twiddles_8, gpu);
             (void)cudaFreeAsync(radix7_twiddles_7, gpu);
-            (void)cudaFreeAsync(radix6_twiddles_12, gpu);
             (void)cudaFreeAsync(radix6_twiddles_6, gpu);
 #endif
             (void)cudaFreeAsync(twiddles[1], gpu);

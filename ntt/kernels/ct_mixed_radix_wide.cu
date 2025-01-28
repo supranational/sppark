@@ -213,15 +213,6 @@ public:
                 _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
             }
             break;
-        case 12:
-            if (iterations <= 6) {
-                intermediate_twiddle_shift = 6;
-                d_intermediate_twiddles = ntt_parameters.radix6_twiddles_12;
-                _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            } else {
-                _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            }
-            break;
         default:
             _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
             break;
