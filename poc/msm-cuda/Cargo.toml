@@ -23,8 +23,8 @@ cuda-mobile = []
 [dependencies]
 blst = "~0.3.11"
 sppark = { path = "../../rust" }
-rand = "^0"
-rand_chacha = "^0"
+rand = "0.8"
+rand_chacha = "0.3"
 ark-std = "0.3.0"
 ark-ff = "0.3.0"
 ark-ec = { version = "0.3.0", features = [ "parallel" ] }
