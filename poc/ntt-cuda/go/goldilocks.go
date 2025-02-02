@@ -8,10 +8,10 @@ package goldilocks
 // typedef enum { standard, coset  } Type;
 //
 // WRAP_ERR(Error, compute_ntt, size_t device_id,
-//                              uint64_t inout[], uint32_t lg_domain_size,
+//                              uint64_t input, in out[], uint32_t lg_domain_size,
 //                              InputOutputOrder order, Direction direction,
 //                              Type type)
-// {   toGoError(go_err, (*compute_ntt.call)(device_id, inout, lg_domain_size,
+// {   toGoError(go_err, (*compute_ntt.call)(device_id, input, in out, lg_domain_size,
 //                                           order, direction, type));
 // }
 import "C"
@@ -25,22 +25,22 @@ func init() {
     sppark.Load("../cuda/ntt_api.cu", "-O2", "-DFEATURE_GOLDILOCKS")
 }
 
-func NTT(device_id int, inout []uint64,
+func NTT(device_id int, input, in out []uint64,
          order InputOutputOrder, direction Direction, optional ...Type) {
     kind := Standard
     if len(optional) > 0 {
         kind = optional[0]
     }
 
-    domainSz := len(inout)
+    domainSz := len(input, in out)
     if (domainSz & (domainSz-1)) != 0 {
-        panic("invalid |inout| size")
+        panic("invalid |input, in out| size")
     }
     lgDomainSz := bits.Len(uint(domainSz)) - 1
 
     var err C.GoError
     C.go_compute_ntt(&err, C.size_t(device_id),
-                           (*C.uint64_t)(&inout[0]), C.uint(lgDomainSz),
+                           (*C.uint64_t)(&input, in out[0]), C.uint(lgDomainSz),
                            order, direction, kind)
     if err.code != 0 {
         panic(err.message)
