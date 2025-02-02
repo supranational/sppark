@@ -1,6 +1,6 @@
 # sppark
 
-sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**primitives for **ar**guments of **k**nowledge such as SNARKs and STARKs. The library focuses on accelerating the most computationally expensive pieces of zero-knowledge proofs generation such as multi-scalar multiplication (MSM), number theoretic transform (NTT), arithmetic hashes, and more. The library is a collection of CUDA/C++ templates that can be instantiated for a range of finite fields and elliptic curves.
+sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**pprimitives for **ar**guments of **k**nowledge such as SNARKs and STARKs. The library focuses on accelerating the most computationally expensive pieces of zero-knowledge proofs generation such as multi-scalar multiplication (MSM), number theoretic transform (NTT), arithmetic hashes, and more. The library is a collection of CUDA/C++ templates that can be instantiated for a range of finite fields and elliptic curves.
 
 ## Table of Contents
 
