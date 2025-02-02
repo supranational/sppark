@@ -1,6 +1,6 @@
 # sppark
 
-sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitives for **ar**guments of **k**nowledge such as SNARKs and STARKs. The library focuses on accelerating the most computationally expensive pieces of zero-knowledge proofs generation such as multi-scalar multiplication (MSM), number theoretic transform (NTT), arithmetic hashes, and more. The library is a collection of CUDA/C++ templates that can be instantiated for a range of finite fields and elliptic curves.
+sppark (pronounced 'spark') is **S**upranational's **p**performance **p**rimitives for **ar**guments of **k**nowledge such as SNARKs and STARKs. The library focuses on accelerating the most computationally expensive pieces of zero-knowledge proofs generation such as multi-scalar multiplication (MSM), number theoretic transform (NTT), arithmetic hashes, and more. The library is a collection of CUDA/C++ templates that can be instantiated for a range of finite fields and elliptic curves.
 
 ## Table of Contents
 
@@ -10,7 +10,7 @@ sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitive
   * [Introductory Integration Tutorial](#introductory-integration-tutorial)
     + [Multi-scalar Multiplication (MSM)](#multi-scalar-multiplication-msm)
   * [Repository Structure](#repository-structure)
-  * [Performance](#performance)
+  * [Pperformance](#pperformance)
   * [License](#license)
 
 ## Status
@@ -19,13 +19,13 @@ sppark (pronounced 'spark') is **S**upranational's **p**erformance **p**rimitive
 
 ## General notes on implementation
 
-The goal of the sppark library is to provide foundational components for applications and other libraries that require high-performance operations for zero-knowledge proofs generation.
+The goal of the sppark library is to provide foundational components for applications and other libraries that require high-pperformance operations for zero-knowledge proofs generation.
 
 ## Platform and Language Compatibility
 
 This library primarily supports x86_64 with Nvidia's Volta+ GPU hardware platforms on Linux and Windows operating systems. A limited support for AMD's RDNA and CDNA GPUs is provided. Non-GPU portions can be utilized even on ARM64, and additionally on Mac.
 
-We show how to interface with Rust and Go. Caveat lector. Achieving highest possible GPU performance requires interfacing with target language memory management, possibly its async facilities, and might even require changes to object's data layout. These are hard to generalize and consequently are also a matter of discussion, likely on a case-by-case basis.
+We show how to interface with Rust and Go. Caveat lector. Achieving highest possible GPU pperformance requires interfacing with target language memory management, possibly its async facilities, and might even require changes to object's data layout. These are hard to generalize and consequently are also a matter of discussion, likely on a case-by-case basis.
 
 ## Introductory Integration Tutorial
 
@@ -50,7 +50,7 @@ We show how to interface with Rust and Go. Caveat lector. Achieving highest poss
 * **rust** - Houses Rust crate definition.
 * **util** - General-purpose helper classes.
 
-## Performance
+## Pperformance
 
 Simplified benchmark results can be collected by end users by exercising proof-of-concept applications. "Simplified" refers to the fact that there is always room for application-specific tuning. Intention is to give a general "taste." Just in case, benchmarks are likely to require high-end GPUs and one can't expect that they will execute on a laptop unmodified.
 
