@@ -38,7 +38,7 @@ package sppark
 // {   return (*clone_gpu_ptr_t.call)(ptr);   }
 //
 // WRAP(void, drop_gpu_ptr_t, gpu_ptr_t *ptr)
-// {   (*drop_gpu_ptr_t.call)(ptr);   }
+// {   (*drop_gpu_ptr_t.call)(ptr); ptr->ptr = NULL;   }
 //
 // WRAP(_Bool, cuda_available, void)
 // {   return (*cuda_available.call)();   }
@@ -407,15 +407,14 @@ func Exfiltrate(optional ...string) error {
     return nil
 }
 
-type GpuPtrT = C.gpu_ptr_t
+type GpuPtrT struct { cgo C.gpu_ptr_t }
 
 func (ptr *GpuPtrT) Clone() GpuPtrT {
-    return C.go_clone_gpu_ptr_t(ptr)
+    return GpuPtrT{C.go_clone_gpu_ptr_t(&ptr.cgo)}
 }
 
 func (ptr *GpuPtrT) Drop() {
-    C.go_drop_gpu_ptr_t(ptr)
-    ptr.ptr = nil
+    C.go_drop_gpu_ptr_t(&ptr.cgo)
 }
 
 func IsCudaAvailable() bool {
