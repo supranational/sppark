@@ -41,10 +41,6 @@ void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
     }
 }
 
-template<typename T>
-static __device__ __host__ constexpr uint32_t lg2(T n)
-{   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
-
 template<unsigned int Z_COUNT, class fr_t>
 __launch_bounds__(192, 2) __global__
 void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)

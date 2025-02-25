@@ -7,6 +7,7 @@ __launch_bounds__(768, 1) __global__
 void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
              fr_t* d_inout, const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
+             const fr_t (*d_plus_one_twiddles)[1024],
              const fr_t* d_radix6_twiddles, const fr_t* d_radixX_twiddles,
              bool is_intt, const fr_t d_domain_size_inverse)
 {
@@ -134,12 +135,13 @@ void _GS_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r[1][0] = r[1][0] * second_root;
 
         if (z_count > 1) {
-            fr_t first_root_z = get_intermediate_root(idx0, d_partial_twiddles);
-            unsigned int off = (nbits - 1) / LG_WINDOW_SIZE;
-            unsigned int win = off * LG_WINDOW_SIZE;
-            fr_t second_root_z = d_partial_twiddles[off][1 << (nbits - 1 - win)];
+            unsigned int off = nbits >= 10 ? (nbits - 10) : 0;
+            unsigned int scale = nbits >= 10 ? 0 : (10 - nbits);
 
-            second_root_z *= first_root_z;
+            thread_ntt_idx <<= scale;
+            fr_t first_root_z = d_plus_one_twiddles[off][thread_ntt_idx];
+            fr_t second_root_z = d_plus_one_twiddles[off][thread_ntt_idx + (1<<scale)];
+
             #pragma unroll
             for (int z = 1; z < z_count; z++) {
                 first_root *= first_root_z;
@@ -218,6 +220,7 @@ public:
 
         #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
                 d_inout, ntt_parameters.partial_twiddles, \
+                ntt_parameters.plus_one_twiddles, \
                 ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
                 is_intt, domain_size_inverse[lg_domain_size]
 
