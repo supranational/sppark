@@ -7,7 +7,7 @@ use ark_bls12_377::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 #[cfg(feature = "bls12_381")]
 use ark_bls12_381::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 #[cfg(feature = "bn254")]
-use ark_bn254::{Fr, G1Affine, G1Projective};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::AffineCurve;
 use ark_ff::PrimeField;
 use ark_std::Zero;
@@ -80,7 +80,7 @@ pub fn multi_scalar_mult_arkworks<G: AffineCurve>(
     ret
 }
 
-#[cfg(any(feature = "bls12_381", feature = "bls12_377"))]
+#[cfg(any(feature = "bls12_381", feature = "bls12_377", feature = "bn254"))]
 pub fn multi_scalar_mult_fp2_arkworks<G: AffineCurve>(
     points: &[G],
     scalars: &[<G::ScalarField as PrimeField>::BigInt],
