@@ -67,7 +67,7 @@ struct fp_t : public fp_mont {
     using mem_t = fp_t;
     __device__ __forceinline__ fp_t() {}
     __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
-    template<typename... Ts> constexpr fp_t(Ts... a)  : fr_mont{a...} {}
+    template<typename... Ts> constexpr fp_t(Ts... a)  : fp_mont{a...} {}
 };
 typedef mont_t<255, device::BLS12_381_r, device::BLS12_381_m0,
                     device::BLS12_381_rRR, device::BLS12_381_rone,
@@ -76,7 +76,7 @@ struct fr_t : public fr_mont {
     using mem_t = fr_t;
     __device__ __forceinline__ fr_t() {}
     __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
-    template<typename... Ts> constexpr fp_t(Ts... a)  : fr_mont{a...} {}
+    template<typename... Ts> constexpr fr_t(Ts... a)  : fr_mont{a...} {}
 #  ifdef __HIPCC__
     __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
 #  endif
@@ -141,7 +141,7 @@ struct fr_t : public fr_mont {
     inline fr_t() {}
     inline fr_t(const fr_mont& a) : fr_mont(a) {}
     template<typename... Ts>
-    constexpr fp_t(Ts... a)  : fp_mont{a...} {}
+    constexpr fr_t(Ts... a)  : fr_mont{a...} {}
 };
 
 } // namespace bls12_381
