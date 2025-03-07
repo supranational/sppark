@@ -76,6 +76,9 @@ public:
             val[i] = p[i];
     }
 
+    template<typename... Ts>
+    constexpr mont_t(uint32_t a0, Ts... arr) : val{a0, arr...} {}
+
     __host__ mont_t(const uint64_t p[n/2])
     {
         for (size_t i=0; i<n/2; i++) {

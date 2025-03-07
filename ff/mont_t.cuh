@@ -209,6 +209,9 @@ public:
             even[i] = p[i];
     }
 
+    template<typename... Ts>
+    constexpr mont_t(uint32_t a0, Ts... arr) : even{a0, arr...} {}
+
     inline void store(uint32_t *p) const
     {
         for (size_t i = 0; i < n; i++)
