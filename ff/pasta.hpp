@@ -59,6 +59,7 @@ struct vesta_t : public vesta_mont {
     using mem_t = vesta_t;
     __device__ __forceinline__ vesta_t() {}
     __device__ __forceinline__ vesta_t(const vesta_mont& a) : vesta_mont(a) {}
+    template<typename... Ts> constexpr fp_t(Ts... a)        : vesta_mont{a...} {}
 #  ifdef __HIPCC__
     __host__   __forceinline__ vesta_t(vec256 a)            : vesta_mont(a) {}
 #  endif
@@ -70,6 +71,7 @@ struct pallas_t : public pallas_mont {
     using mem_t = pallas_t;
     __device__ __forceinline__ pallas_t() {}
     __device__ __forceinline__ pallas_t(const pallas_mont& a) : pallas_mont(a) {}
+    template<typename... Ts> constexpr fp_t(Ts... a)          : pallas_mont{a...} {}
 #  ifdef __HIPCC__
     __host__   __forceinline__ pallas_t(vec256 a)             : pallas_mont(a) {}
 #  endif
