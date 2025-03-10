@@ -725,7 +725,7 @@ public:
 
         #pragma unroll
         for (size_t j = 0; j < len; j++, b_ptr += stride_b) {
-            fr_t b = *b_ptr;
+            mont_t b = *b_ptr;
             tmp = a[j];
             carry = 0;
 
