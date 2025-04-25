@@ -67,7 +67,7 @@ private:
 public:
     inline uint32_t& operator[](size_t i)               { return val[i]; }
     inline const uint32_t& operator[](size_t i) const   { return val[i]; }
-    inline size_t len() const                           { return n;      }
+    inline constexpr size_t len() const                 { return n;      }
 
     inline mont_t() {}
     inline mont_t(const uint32_t p[n])
