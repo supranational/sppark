@@ -523,10 +523,17 @@ public:
 
     inline bool is_one() const
     {
+#if __CUDACC_VER_MAJOR__ == 12 && __CUDACC_VER_MINOR__ > 3
+        uint32_t is_zero = 0;
+
+        for (size_t i = 0; i < n; i++)
+            is_zero |= even[i] ^ ONE[i];
+#else
         uint32_t is_zero = even[0] ^ ONE[0];
 
         for (size_t i = 1; i < n; i++)
             is_zero |= even[i] ^ ONE[i];
+#eendif
 
         return is_zero == 0;
     }
