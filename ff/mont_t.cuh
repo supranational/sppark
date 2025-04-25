@@ -533,7 +533,7 @@ public:
 
         for (size_t i = 1; i < n; i++)
             is_zero |= even[i] ^ ONE[i];
-#eendif
+#endif
 
         return is_zero == 0;
     }
