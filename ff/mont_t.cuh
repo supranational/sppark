@@ -200,7 +200,7 @@ private:
 public:
     inline uint32_t& operator[](size_t i)               { return even[i]; }
     inline const uint32_t& operator[](size_t i) const   { return even[i]; }
-    inline size_t len() const                           { return n;       }
+    inline constexpr size_t len() const                 { return n;       }
 
     inline mont_t() {}
     inline mont_t(const uint32_t *p)
@@ -523,10 +523,17 @@ public:
 
     inline bool is_one() const
     {
+#if __CUDACC_VER_MAJOR__ == 12 && __CUDACC_VER_MINOR__ > 3
+        uint32_t is_zero = 0;
+
+        for (size_t i = 0; i < n; i++)
+            is_zero |= even[i] ^ ONE[i];
+#else
         uint32_t is_zero = even[0] ^ ONE[0];
 
         for (size_t i = 1; i < n; i++)
             is_zero |= even[i] ^ ONE[i];
+#endif
 
         return is_zero == 0;
     }
