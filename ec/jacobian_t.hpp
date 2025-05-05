@@ -5,39 +5,30 @@
 #ifndef __SPPARK_EC_JACOBIAN_T_HPP__
 #define __SPPARK_EC_JACOBIAN_T_HPP__
 
-template<class field_t, const field_t* a4 = nullptr>
+#ifndef __SPPARK_EC_AFFINE_T_HPP__
+# include "affine_t.hpp"
+#endif
+
+template<class field_t, const typename field_t::mem_t* a4>
 class jacobian_t {
+    friend class Affine_t<field_t, typename field_t::mem_t, a4>;
+    friend class Affine_inf_t<field_t, typename field_t::mem_t, a4>;
+
+    typedef Affine_t<field_t, typename field_t::mem_t, a4> Affine;
+    typedef Affine_inf_t<field_t, typename field_t::mem_t, a4> Affine_inf;
+    typedef xyzz_t<field_t, typename field_t::mem_t, a4> xyzz;
+
     field_t X, Y, Z;
 
     inline operator const void*() const { return this; }
     inline operator void*()             { return this; }
 
 public:
-    jacobian_t() {}
+    using affine_t = Affine;
+
+    jacobian_t() { inf(); }
     jacobian_t(const field_t& x, const field_t& y, const field_t& z) :
                             X(x),             Y(y),             Z(z) {}
-
-    class affine_t { friend jacobian_t;
-        field_t X, Y;
-
-    public:
-        affine_t() {}
-        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
-
-        inline bool is_inf() const
-        {   return (bool)(X.is_zero() & Y.is_zero());   }
-
-        inline affine_t& operator=(const jacobian_t& a)
-        {
-            Y = 1/a.Z;
-            X = Y^2;    // 1/Z^2
-            Y *= X;     // 1/Z^3
-            X *= a.X;   // X/Z^2
-            Y *= a.Y;   // Y/Z^3
-            return *this;
-        }
-        inline affine_t(const jacobian_t& a) { *this = a; }
-    };
 
     inline operator affine_t() const      { return affine_t(*this); }
 
@@ -46,6 +37,14 @@ public:
         X = a.X;
         Y = a.Y;
         Z = field_t::one();
+        return *this;
+    }
+
+    inline jacobian_t& operator=(const xyzz& a)
+    {
+        X = a.X * a.ZZ;
+        Y = a.Y * a.ZZZ;
+        Z = a.ZZ;
         return *this;
     }
 
