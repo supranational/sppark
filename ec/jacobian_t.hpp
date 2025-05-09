@@ -50,6 +50,7 @@ public:
 
     inline bool is_inf() const { return (bool)(Z.is_zero()); }
     inline void inf()          { Z.zero(); }
+    inline void cneg(bool neg) { Y.cneg(neg); }
 
     /*
      * Addition that can handle doubling [as well as points at infinity,

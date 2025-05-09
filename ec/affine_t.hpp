@@ -42,6 +42,7 @@ public:
     inline __host__   bool is_inf() const
     {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
 #endif
+    inline void cneg(bool neg) { Y.cneg(neg); }
 
     inline __host__ Affine_t& operator=(const jacobian& a)
     {
