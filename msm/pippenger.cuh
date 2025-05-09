@@ -633,7 +633,7 @@ private:
             for (size_t j = 0; j < lsbits-1-NTHRBITS; j++)
                 raise.dbl();
             res.add(raise);
-            res.add(row[i][0]);
+            res.add((point_t)row[i][0]);
             if (i)
                 acc.add(row[i][1]);
         }
