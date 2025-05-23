@@ -5,7 +5,8 @@
 #ifndef __SPPARK_EC_JACOBIAN_T_HPP__
 #define __SPPARK_EC_JACOBIAN_T_HPP__
 
-template<class field_t, const field_t* a4 = nullptr>
+template<class field_t, class field_h = typename field_t::mem_t,
+         const field_h* a4 = nullptr>
 class jacobian_t {
     field_t X, Y, Z;
 
@@ -13,9 +14,12 @@ class jacobian_t {
     inline operator void*()             { return this; }
 
 public:
-    jacobian_t() {}
+    jacobian_t() = default;
     jacobian_t(const field_t& x, const field_t& y, const field_t& z) :
                             X(x),             Y(y),             Z(z) {}
+    jacobian_t(const field_t& x, const field_t& y, bool is_inf) :
+                            X(x),             Y(y),
+                            Z(field_t::one(is_inf)) {}
 
     class affine_t { friend jacobian_t;
         field_t X, Y;
@@ -27,27 +31,33 @@ public:
         inline bool is_inf() const
         {   return (bool)(X.is_zero() & Y.is_zero());   }
 
-        inline affine_t& operator=(const jacobian_t& a)
-        {
-            Y = 1/a.Z;
-            X = Y^2;    // 1/Z^2
-            Y *= X;     // 1/Z^3
-            X *= a.X;   // X/Z^2
-            Y *= a.Y;   // Y/Z^3
-            return *this;
-        }
-        inline affine_t(const jacobian_t& a) { *this = a; }
+        inline operator jacobian_t() const
+        {   return jacobian_t{X, Y, is_inf()};   }
     };
 
-    inline operator affine_t() const      { return affine_t(*this); }
+    inline operator affine_t() const
+    {
+        field_t ya = 1/Z;
+        field_t xa = ya^2;  // 1/Z^2
+        ya *= xa;           // 1/Z^3
+        xa *= X;            // X/Z^2
+        ya *= Y;            // Y/Z^3
+        return affine_t{xa, ya};
+    }
 
+#ifdef __CUDACC__ // mask a warning
     inline jacobian_t& operator=(const affine_t& a)
     {
         X = a.X;
         Y = a.Y;
-        Z = field_t::one();
+        Z = field_t::one(a.is_inf());
         return *this;
     }
+#endif
+
+    template<class point_t>
+    inline jacobian_t& operator=(const point_t& a)
+    {   return *this = static_cast<jacobian_t>(a);   }
 
     inline bool is_inf() const { return (bool)(Z.is_zero()); }
     inline void inf()          { Z.zero(); }

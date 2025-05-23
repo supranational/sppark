@@ -24,6 +24,12 @@ class xyzz_t {
 public:
     static const unsigned int degree = field_t::degree;
 
+    xyzz_t() = default;
+    inline __host__ __device__ xyzz_t(const field_t& x, const field_t& y, bool is_inf) :
+                                                   X(x),             Y(y),
+                                                   ZZZ(field_t::one(is_inf)),
+                                                   ZZ(ZZZ) {}
+
 #ifdef __CUDACC__
     class mem_t { friend class xyzz_t;
         field_h X, Y, ZZZ, ZZ;
@@ -76,30 +82,13 @@ public:
         {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
 #endif
 
-        inline __host__ affine_t& operator=(const xyzz_t& a)
-        {
-            Y = 1/a.ZZZ;
-            X = Y * a.ZZ;   // 1/Z
-            X = X^2;        // 1/Z^2
-            X *= a.X;       // X/Z^2
-            Y *= a.Y;       // Y/Z^3
-            return *this;
-        }
-        inline __host__ affine_t(const xyzz_t& a)  { *this = a; }
-
 #ifdef __SPPARK_EC_JACOBIAN_T_HPP__
-        inline operator jacobian_t<field_t>() const
-        {   return jacobian_t<field_t>{ X, Y, field_t::one(is_inf()) };   }
+        inline operator jacobian_t<field_t, field_h, a4>() const
+        {   return jacobian_t<field_t, field_h, a4>{ X, Y, is_inf() };   }
 #endif
 
         inline __host__ __device__ operator xyzz_t() const
-        {
-            xyzz_t p;
-            p.X = X;
-            p.Y = Y;
-            p.ZZZ = p.ZZ = field_t::one(is_inf());
-            return p;
-        }
+        {   return xyzz_t{X, Y, is_inf()};   }
 
 #ifdef __CUDACC__
         class mem_t {
@@ -178,11 +167,19 @@ public:
         return *this;
     }
 
-    inline __host__ operator affine_t() const      { return affine_t(*this); }
+    inline __host__ operator affine_t() const
+    {
+        field_t ya = 1/ZZZ;
+        field_t xa = ya * ZZ;   // 1/Z
+        xa = xa^2;              // 1/Z^2
+        xa *= X;                // X/Z^2
+        ya *= Y;                // Y/Z^3
+        return affine_t{xa, ya};
+    }
 
 #ifdef __SPPARK_EC_JACOBIAN_T_HPP__
-    inline operator jacobian_t<field_t>() const
-    {   return jacobian_t<field_t>{ X*ZZ, Y*ZZZ, ZZ };   }
+    inline operator jacobian_t<field_t, field_h, a4>() const
+    {   return jacobian_t<field_t, field_h, a4>{ X*ZZ, Y*ZZZ, ZZ };   }
 #endif
 
 #ifdef __CUDA_ARCH__
