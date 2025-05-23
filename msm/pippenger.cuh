@@ -570,6 +570,7 @@ public:
         return RustError{cudaSuccess};
     }
 
+#if 0
     RustError invoke(point_t& out, const affine_t* points, size_t npoints,
                                    gpu_ptr_t<scalar_t> scalars, bool mont = true,
                                    size_t ffi_affine_sz = sizeof(affine_t))
@@ -577,6 +578,28 @@ public:
         d_scalars = scalars;
         return invoke(out, points, npoints, nullptr, mont, ffi_affine_sz);
     }
+#else
+    template<typename affine_ptr_t = const affine_h*,
+             typename scalar_ptr_t = const scalar_t*>
+    RustError invoke(point_t& out, affine_ptr_t points, size_t npoints,
+                                   scalar_ptr_t scalars, bool mont = true,
+                                   size_t ffi_affine_sz = sizeof(affine_t))
+    {
+        const auto* p_ptr = &points[0];
+        if (is_device_ptr<affine_ptr_t>::value) {
+            d_points = (decltype(d_points))p_ptr;
+            p_ptr = nullptr;
+        }
+
+        const auto* s_ptr = &scalars[0];
+        if (is_device_ptr<scalar_ptr_t>::value) {
+            d_scalars = const_cast<decltype(d_scalars)>(s_ptr);
+            s_ptr = nullptr;
+        }
+
+        return invoke(out, p_ptr, npoints, s_ptr, mont, ffi_affine_sz);
+    }
+#endif
 
     RustError invoke(point_t& out, vec_t<scalar_t> scalars, bool mont = true)
     {   return invoke(out, nullptr, scalars.size(), scalars, mont);   }
@@ -633,7 +656,7 @@ private:
             for (size_t j = 0; j < lsbits-1-NTHRBITS; j++)
                 raise.dbl();
             res.add(raise);
-            res.add(row[i][0]);
+            res.add(point_t{row[i][0]});
             if (i)
                 acc.add(row[i][1]);
         }
