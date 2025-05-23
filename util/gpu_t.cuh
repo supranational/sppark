@@ -286,7 +286,7 @@ public:
             (void)cudaGetDevice(&current_id);
             if (current_id != ptr->real_id)
                 (void)cudaSetDevice(ptr->real_id);
-            (void)cudaFree(ptr->ptr);
+            (void)cudaFreeAsync(ptr->ptr, nullptr);
             if (current_id != ptr->real_id)
                 (void)cudaSetDevice(current_id);
             delete ptr;
