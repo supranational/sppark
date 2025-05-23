@@ -24,6 +24,12 @@ class xyzz_t {
 public:
     static const unsigned int degree = field_t::degree;
 
+    inline __host__ __device__ xyzz_t() {}
+    inline __host__ __device__ xyzz_t(const field_t& x, const field_t& y, bool is_inf) :
+                                                   X(x),             Y(y),
+                                                   ZZZ(field_t::one(is_inf)),
+                                                   ZZ(ZZZ) {}
+
 #ifdef __CUDACC__
     class mem_t { friend class xyzz_t;
         field_h X, Y, ZZZ, ZZ;
@@ -76,30 +82,13 @@ public:
         {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
 #endif
 
-        inline __host__ affine_t& operator=(const xyzz_t& a)
-        {
-            Y = 1/a.ZZZ;
-            X = Y * a.ZZ;   // 1/Z
-            X = X^2;        // 1/Z^2
-            X *= a.X;       // X/Z^2
-            Y *= a.Y;       // Y/Z^3
-            return *this;
-        }
-        inline __host__ affine_t(const xyzz_t& a)  { *this = a; }
-
 #ifdef __SPPARK_EC_JACOBIAN_T_HPP__
         inline operator jacobian_t<field_t>() const
         {   return jacobian_t<field_t>{ X, Y, field_t::one(is_inf()) };   }
 #endif
 
         inline __host__ __device__ operator xyzz_t() const
-        {
-            xyzz_t p;
-            p.X = X;
-            p.Y = Y;
-            p.ZZZ = p.ZZ = field_t::one(is_inf());
-            return p;
-        }
+        {   return xyzz_t{X, Y, is_inf()};   }
 
 #ifdef __CUDACC__
         class mem_t {
@@ -178,7 +167,16 @@ public:
         return *this;
     }
 
-    inline __host__ operator affine_t() const      { return affine_t(*this); }
+    template<class affine_t>
+    inline __host__ operator affine_t() const
+    {
+        field_t y = 1/ZZZ;
+        field_t x = y * ZZ; // 1/Z
+        x = x^2;            // 1/Z^2
+        x *= X;             // X/Z^2
+        y *= Y;             // Y/Z^3
+        return affine_t{x, y};
+    }
 
 #ifdef __SPPARK_EC_JACOBIAN_T_HPP__
     inline operator jacobian_t<field_t>() const
