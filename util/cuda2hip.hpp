@@ -4,6 +4,15 @@
 
 #ifdef __HIPCC__
 
+#pragma clang diagnostic ignored "-Wdeprecated-pragma"
+#ifndef __AMDGCN_WAVEFRONT_SIZE
+# ifdef __GFX9__
+#  define __AMDGCN_WAVEFRONT_SIZE 64
+# else
+#  define __AMDGCN_WAVEFRONT_SIZE 32
+# endif
+#endif
+
 #include <hip/hip_runtime.h>
 #ifdef NDEBUG
 # define assert(e) (void)(e)
