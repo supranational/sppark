@@ -321,13 +321,15 @@ public:
 // care about freeing it.
 template<typename T> class dev_ptr_t {
     T* d_ptr;
+    size_t d_len_owned;
     cudaStream_t stream;
 public:
-    dev_ptr_t(size_t nelems) : d_ptr(nullptr), stream(nullptr)
+    dev_ptr_t(size_t nelems) : d_ptr(nullptr), d_len_owned(0), stream(nullptr)
     {
         if (nelems) {
             size_t n = (nelems+WARP_SZ-1) & ((size_t)0-WARP_SZ);
             CUDA_OK(cudaMalloc(&d_ptr, n * sizeof(T)));
+            d_len_owned = (nelems << 1) | 1;
         }
     }
     dev_ptr_t(size_t nelems, const stream_t& s) : d_ptr(nullptr), stream(s)
@@ -335,13 +337,17 @@ public:
         if (nelems) {
             size_t n = (nelems+WARP_SZ-1) & ((size_t)0-WARP_SZ);
             CUDA_OK(cudaMallocAsync(&d_ptr, n * sizeof(T), s));
+            d_len_owned = (nelems << 1) | 1;
         }
     }
-    dev_ptr_t(const dev_ptr_t& r) = delete;
+    dev_ptr_t(T* ptr, size_t nelems = 0)
+    : d_ptr(ptr), d_len_owned(nelems<<1), stream(nullptr) {}
+    dev_ptr_t(const dev_ptr_t& r)
+    : d_ptr(r.d_ptr), d_len_owned(r.d_len_owned & ((size_t)0-1) << 1), stream(nullptr) {}
     dev_ptr_t& operator=(const dev_ptr_t& r) = delete;
     ~dev_ptr_t()
     {
-        if (d_ptr) {
+        if (d_ptr != nullptr && (d_len_owned&1)) {
             if (stream) (void)cudaFreeAsync((void*)d_ptr, stream);
             else        (void)cudaFree((void*)d_ptr);
         }
@@ -352,6 +358,8 @@ public:
     inline operator void*() const               { return (void*)d_ptr; }
     inline const T& operator[](size_t i) const  { return d_ptr[i]; }
     inline T& operator[](size_t i)              { return d_ptr[i]; }
+    inline size_t size() const                  { return d_len_owned>>1; }
+    inline T* data() const                      { return d_ptr; }
 };
 
 #if defined(_WIN32) && !defined(__HIP_DEVICE_COMPILE__)
