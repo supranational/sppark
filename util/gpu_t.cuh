@@ -382,4 +382,16 @@ SPPARK_FFI gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>&);
 # pragma clang diagnostic pop
 #endif
 
+template<typename T>
+struct is_device_ptr {
+    static const bool value{false};
+};
+
+template<typename T> struct is_device_ptr<gpu_ptr_t<T>> {
+    static const bool value{true};
+};
+template<typename T> struct is_device_ptr<dev_ptr_t<T>> {
+    static const bool value{true};
+};
+
 #endif
