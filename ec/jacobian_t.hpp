@@ -5,6 +5,8 @@
 #ifndef __SPPARK_EC_JACOBIAN_T_HPP__
 #define __SPPARK_EC_JACOBIAN_T_HPP__
 
+#include "affine_t.hpp"
+
 template<class field_t, const field_t* a4 = nullptr>
 class jacobian_t {
     field_t X, Y, Z;
@@ -16,31 +18,24 @@ public:
     jacobian_t() {}
     jacobian_t(const field_t& x, const field_t& y, const field_t& z) :
                             X(x),             Y(y),             Z(z) {}
+    jacobian_t(const field_t& x, const field_t& y, bool is_inf) :
+                            X(x),             Y(y),
+                            Z(field_t::one(is_inf)) {}
 
-    class affine_t { friend jacobian_t;
-        field_t X, Y;
+    using affine_t = Affine_t<field_t>;
 
-    public:
-        affine_t() {}
-        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
+    template<class affine_t>
+    inline operator affine_t() const
+    {
+        field_t y = 1/Z;
+        field_t x = y^2;    // 1/Z^2
+        y *= x;             // 1/Z^3
+        x *= X;             // X/Z^2
+        y *= Y;             // Y/Z^3
+        return affine_t{x, y};
+    }
 
-        inline bool is_inf() const
-        {   return (bool)(X.is_zero() & Y.is_zero());   }
-
-        inline affine_t& operator=(const jacobian_t& a)
-        {
-            Y = 1/a.Z;
-            X = Y^2;    // 1/Z^2
-            Y *= X;     // 1/Z^3
-            X *= a.X;   // X/Z^2
-            Y *= a.Y;   // Y/Z^3
-            return *this;
-        }
-        inline affine_t(const jacobian_t& a) { *this = a; }
-    };
-
-    inline operator affine_t() const      { return affine_t(*this); }
-
+    template<class affine_t>
     inline jacobian_t& operator=(const affine_t& a)
     {
         X = a.X;
@@ -51,6 +46,7 @@ public:
 
     inline bool is_inf() const { return (bool)(Z.is_zero()); }
     inline void inf()          { Z.zero(); }
+    inline void cneg(bool neg) { Y.cneg(neg); }
 
     /*
      * Addition that can handle doubling [as well as points at infinity,
