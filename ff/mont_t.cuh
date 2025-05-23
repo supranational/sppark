@@ -833,9 +833,10 @@ private:
         }
         uint32_t off = __clz(a_hi | b_hi);
         /* |off| can be LIMB_T_BITS if all a[2..]|b[2..] were zeros */
+        off -= off==32 ? a_lo>>31 : 1;
 
-        a_ = approx_t{a[0], lshift_2(a_hi, a_lo, off)};
-        b_ = approx_t{b[0], lshift_2(b_hi, b_lo, off)};
+        a_ = approx_t{a[0], off<=32 ? lshift_2(a_hi, a_lo, off) : a_hi>>1 };
+        b_ = approx_t{b[0], off<=32 ? lshift_2(b_hi, b_lo, off) : b_hi>>1 };
     }
 
     static inline void cswap(uint32_t& a, uint32_t& b, uint32_t mask)
