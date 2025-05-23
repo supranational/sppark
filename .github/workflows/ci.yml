@@ -16,14 +16,14 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Get date
       id: get-date
       run: echo "date=$(date -u +%Y-%m)" >> $GITHUB_OUTPUT
       shell: bash
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -38,21 +38,21 @@ jobs:
         lscpu 2>/dev/null && echo --- || true
         env | sort
 
-    - name: Install cuda-minimal-build-12-3
+    - name: Install cuda-minimal-build-12-9
       shell: bash
       run: |
         # https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_network
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
-        sudo apt-get -y install cuda-minimal-build-12-3
-        [ -d /usr/local/cuda-12.3/bin ]
+        sudo apt-get -y install cuda-minimal-build-12-9
+        [ -d /usr/local/cuda-12.9/bin ]
 
-    - name: Test-build poc/ntt-cuda with cuda-12.3
+    - name: Test-build poc/ntt-cuda with cuda-12.9
       shell: bash
       run: |
         rustc --version --verbose
-        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        export PATH=$PATH:/usr/local/cuda-12.9/bin
         ( cd poc/ntt-cuda
           cargo update
           cargo test --no-run --release --features=bls12_381
@@ -73,11 +73,11 @@ jobs:
           cargo clean -p ntt-cuda --release
         )
 
-    - name: Test-build poc/msm-cuda with cuda-12.3
+    - name: Test-build poc/msm-cuda with cuda-12.9
       shell: bash
       run: |
         rustc --version --verbose
-        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        export PATH=$PATH:/usr/local/cuda-12.9/bin
         ( cd poc/msm-cuda
           sed "s/^crit/#crit/" Cargo.toml > Cargo.$$.toml && \
           mv Cargo.$$.toml Cargo.toml
@@ -98,11 +98,11 @@ jobs:
           cargo clean -p msm-cuda --release
         )
 
-    - name: Test-build Go bridge with cuda-12.3
+    - name: Test-build Go bridge with cuda-12.9
       shell: bash
       run: |
         go version
-        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        export PATH=$PATH:/usr/local/cuda-12.9/bin
         ( cd poc/go
           env CGO_CFLAGS="-O2 -D__SPPARK_CGO_DEBUG__" go test
         )
