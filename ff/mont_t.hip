@@ -278,13 +278,8 @@ private:
         for (size_t i=1; i<n; i++)
             asm( v_subb_co_u32 "%0, %1, %2, %3, %1" : "=v"(tmp[i]), "+s"(borrow)
                                                     : "v"(val[i]), "v"(MOD[i]));
-#if defined(__GFX11__)
-        asm(S_OP(or_not1)  "%0, %0, %1"             : "+s"(carry)
-                                                    : "s"(borrow));
-#else
         asm(S_OP(orn2)     "%0, %0, %1"             : "+s"(carry)
                                                     : "s"(borrow));
-#endif
         for (size_t i=0; i<n; i++)
             asm("v_cndmask_b32  %0, %0, %1, %2"     : "+v"(val[i])
                                                     : "v"(tmp[i]), "s"(carry));

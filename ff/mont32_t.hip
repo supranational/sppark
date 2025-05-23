@@ -171,11 +171,7 @@ private:
 
             asm("v_sub_co_u32  %0, %1, %2, %3" : "=v"(tmp), "=s"(borrow)
                                                : "v"(val), "v"(MOD));
-#if defined(__GFX11__)
-            asm(S_OP(or_not1) "%0, %0, %1"     : "+s"(carry) : "s"(borrow));
-#else
             asm(S_OP(orn2)    "%0, %0, %1"     : "+s"(carry) : "s"(borrow));
-#endif
             asm("v_cndmask_b32 %0, %0, %1, %2" : "+v"(val)
                                                : "v"(tmp), "s"(carry));
         } else {

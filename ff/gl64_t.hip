@@ -78,13 +78,8 @@ public:
                                                 : "v"(u[0]));
         asm( v_subb_co_u32 "%0, %1, %2, -1, %1" : "=v"(hi), "+s"(borrow)
                                                 : "v"(u[1]));
-#if defined(__GFX11__)
-        asm(S_OP(or_not1)  "%0, %0, %1"         : "+s"(carry)
-                                                : "s"(borrow));
-#else
         asm(S_OP(orn2)     "%0, %0, %1"         : "+s"(carry)
                                                 : "s"(borrow));
-#endif
         asm("v_cndmask_b32  %0, %0, %1, %2"     : "+v"(u[0])
                                                 : "v"(lo), "s"(carry));
         asm("v_cndmask_b32  %0, %0, %1, %2"     : "+v"(u[1])
