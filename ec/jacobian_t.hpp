@@ -5,6 +5,8 @@
 #ifndef __SPPARK_EC_JACOBIAN_T_HPP__
 #define __SPPARK_EC_JACOBIAN_T_HPP__
 
+#include "affine_t.hpp"
+
 template<class field_t, class field_h = typename field_t::mem_t,
          const field_h* a4 = nullptr>
 class jacobian_t {
@@ -21,19 +23,7 @@ public:
                             X(x),             Y(y),
                             Z(field_t::one(is_inf)) {}
 
-    class affine_t { friend jacobian_t;
-        field_t X, Y;
-
-    public:
-        affine_t() {}
-        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
-
-        inline bool is_inf() const
-        {   return (bool)(X.is_zero() & Y.is_zero());   }
-
-        inline operator jacobian_t() const
-        {   return jacobian_t{X, Y, is_inf()};   }
-    };
+    using affine_t = Affine_t<field_t, field_h, a4>;
 
     inline operator affine_t() const
     {
