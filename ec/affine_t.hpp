@@ -34,6 +34,7 @@ public:
     inline __host__   bool is_inf() const
     {   return (bool)((int)X.is_zero() & (int)Y.is_zero());   }
 #endif
+    inline __host__ __device__ void cneg(bool neg) { Y.cneg(neg); }
 
     template<class point_t>
     inline __host__ __device__ operator point_t() const
