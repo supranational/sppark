@@ -770,15 +770,6 @@ public:
         return even; // implicit cast to mont_t performs the reduction
     }
 
-    inline mont_t shfl_down(uint32_t off) const
-    {
-        mont_t ret;
-
-        for (size_t i = 0; i < n; i++)
-            ret[i] = __shfl_down_sync(0xffffffff, even[i], off);
-
-        return ret;
-    }
     inline mont_t shfl(uint32_t idx, uint32_t mask = 0xffffffff) const
     {
         mont_t ret;
