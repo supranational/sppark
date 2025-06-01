@@ -545,20 +545,6 @@ public:
     inline void uadd(const affine_t& p2, bool subtract = false)
     {   add(p2, subtract);   }
 #endif
-
-#ifdef __CUDA_ARCH__
-    inline __device__ xyzz_t shfl_down(uint32_t off) const
-    {
-        xyzz_t ret;
-
-        ret.X   = X.shfl_down(off);
-        ret.Y   = Y.shfl_down(off);
-        ret.ZZZ = ZZZ.shfl_down(off);
-        ret.ZZ  = ZZ.shfl_down(off);
-
-        return ret;
-    }
-#endif
 };
 
 #ifdef __CUDACC__
