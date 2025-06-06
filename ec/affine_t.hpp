@@ -40,6 +40,18 @@ public:
     inline __host__ __device__ operator point_t() const
     {   return point_t{ X, Y, is_inf() };   }
 
+    friend inline bool operator==(const Affine_t& p1, const Affine_t& p2)
+    {   return (p1.X == p2.X) & (p1.Y == p2.Y);   }
+    friend inline bool operator!=(const Affine_t& p1, const Affine_t& p2)
+    {   return !(p1 == p2);   }
+
+    template<class point_t>
+    friend inline bool operator==(const Affine_t& p1, const point_t& p2)
+    {   return p2 == p1;   }
+    template<class point_t>
+    friend inline bool operator!=(const Affine_t& p1, const point_t& p2)
+    {   return p2 != p1;   }
+
 #ifdef __CUDACC__
     class mem_t {
         field_h X, Y;
