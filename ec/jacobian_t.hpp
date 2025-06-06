@@ -541,5 +541,30 @@ public:
         }
         *this = p3;
     }
+
+    friend inline bool operator==(const jacobian_t& p1, const jacobian_t& p2)
+    {
+        field_t Z1Z1 = p1.Z^2;
+        field_t Z2Z2 = p2.Z^2;
+        struct { field_t X, Y; } a1{p1.X * Z2Z2, p1.Y * (Z2Z2 *= p2.Z)};
+        struct { field_t X, Y; } a2{p2.X * Z1Z1, p2.Y * (Z1Z1 *= p1.Z)};
+        return (a1.X == a2.X) & (a1.Y == a2.Y) & (p1.is_inf() ^ p2.is_inf() ^ 1);
+    }
+    friend inline bool operator!=(const jacobian_t& p1, const jacobian_t& p2)
+    {   return !(p1 == p2);   }
+
+private:
+    inline bool eq(const affine_t& p2) const
+    {
+        field_t Z1Z1 = Z^2;
+        struct { field_t X, Y; } a2{p2.X * Z1Z1, p2.Y * (Z1Z1 *= Z)};
+        return (X == a2.X) & (Y == a2.Y) & (is_inf() ^ p2.is_inf() ^ 1);
+    }
+
+public:
+    friend inline bool operator==(const jacobian_t& p1, const affine_t& p2)
+    {   return p1.eq(p2);   }
+    friend inline bool operator!=(const jacobian_t& p1, const affine_t& p2)
+    {   return !p1.eq(p2);   }
 };
 #endif
