@@ -462,14 +462,13 @@ public:
     inline fp2_t& operator/=(const fp2_t& a)
     {   return *this *= a.reciprocal();   }
 
-# ifndef NDEBUG
     friend inline bool operator==(const fp2_t& a, const fp2_t& b)
     {   return vec_is_equal(a.val, b.val, sizeof(vec384x));   }
     friend inline bool operator!=(const fp2_t& a, const fp2_t& b)
     {   return !vec_is_equal(a.val, b.val, sizeof(vec384x));   }
 
-#  if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
-    friend std::ostream& operator<<(std::ostream& os, const fp2_t& obj)
+    template<class OStream, typename Traits = typename OStream::traits_type>
+    friend OStream& operator<<(OStream& os, const fp2_t& obj)
     {
         unsigned char be[sizeof(obj)];
         char buf[10+2*sizeof(obj)+2], *str=buf;
@@ -488,8 +487,6 @@ public:
 
         return os << buf;
     }
-#  endif
-# endif
 };
 
 } // namespace bls12_377
