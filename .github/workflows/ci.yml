@@ -16,19 +16,20 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Get date
       id: get-date
       run: echo "date=$(date -u +%Y-%m)" >> $GITHUB_OUTPUT
       shell: bash
 
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
           **/Cargo.lock
           **/target
+          go/pkg
         key: ${{ runner.os }}-cargo-${{ steps.get-date.outputs.date }}
 
     - name: Environment
@@ -37,21 +38,21 @@ jobs:
         lscpu 2>/dev/null && echo --- || true
         env | sort
 
-    - name: Install cuda-minimal-build-12-3
+    - name: Install cuda-minimal-build-12-9
       shell: bash
       run: |
         # https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_network
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
         sudo dpkg -i cuda-keyring_1.1-1_all.deb
         sudo apt-get update
-        sudo apt-get -y install cuda-minimal-build-12-3
-        [ -d /usr/local/cuda-12.3/bin ]
+        sudo apt-get -y install cuda-minimal-build-12-9
+        [ -d /usr/local/cuda-12.9/bin ]
 
-    - name: Test-build poc/ntt-cuda
+    - name: Test-build poc/ntt-cuda with cuda-12.9
       shell: bash
       run: |
         rustc --version --verbose
-        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        export PATH=$PATH:/usr/local/cuda-12.9/bin
         ( cd poc/ntt-cuda
           cargo update
           cargo test --no-run --release --features=bls12_381
@@ -70,17 +71,13 @@ jobs:
           fi
           cargo clean -p ntt-cuda
           cargo clean -p ntt-cuda --release
-          rm -rf target/.rustc_info.json
-          rm -rf target/package
-          rm -rf target/{debug,release}/incremental
-          rm -rf target/*/{debug,release}/incremental
         )
 
-    - name: Test-build poc/msm-cuda
+    - name: Test-build poc/msm-cuda with cuda-12.9
       shell: bash
       run: |
         rustc --version --verbose
-        export PATH=$PATH:/usr/local/cuda-12.3/bin
+        export PATH=$PATH:/usr/local/cuda-12.9/bin
         ( cd poc/msm-cuda
           sed "s/^crit/#crit/" Cargo.toml > Cargo.$$.toml && \
           mv Cargo.$$.toml Cargo.toml
@@ -99,6 +96,62 @@ jobs:
           fi
           cargo clean -p msm-cuda
           cargo clean -p msm-cuda --release
+        )
+
+    - name: Test-build Go bridge with cuda-12.9
+      shell: bash
+      run: |
+        go version
+        export PATH=$PATH:/usr/local/cuda-12.9/bin
+        ( cd poc/go
+          env CGO_CFLAGS="-O2 -D__SPPARK_CGO_DEBUG__" go test
+        )
+
+    - name: Install cuda-minimal-build-11-8
+      shell: bash
+      run: |
+        sudo apt-get -y install cuda-minimal-build-11-8
+        [ -d /usr/local/cuda-11.8/bin ]
+
+    - name: Test-build poc/ntt-cuda with cuda-11.8
+      shell: bash
+      run: |
+        rustc --version --verbose
+        export PATH=$PATH:/usr/local/cuda-11.8/bin
+        ( cd poc/ntt-cuda
+          cargo update
+          cargo test --no-run --release --features=bls12_381
+          cargo test --no-run --release --features=gl64
+          cargo test --no-run --release --features=bb31
+          cargo clean -p ntt-cuda
+          cargo clean -p ntt-cuda --release
+        )
+
+    - name: Test-build poc/msm-cuda with cuda-11.8
+      shell: bash
+      run: |
+        rustc --version --verbose
+        export PATH=$PATH:/usr/local/cuda-11.8/bin
+        ( cd poc/msm-cuda
+          sed "s/^crit/#crit/" Cargo.toml > Cargo.$$.toml && \
+          mv Cargo.$$.toml Cargo.toml
+          cargo update
+          cargo test --no-run --release --features=bls12_381,quiet
+          cargo test --no-run --release --features=bn254,quiet
+          cargo clean -p msm-cuda
+          cargo clean -p msm-cuda --release
+        )
+
+    - name: Clean up
+      shell: bash
+      run: |
+        ( cd poc/ntt-cuda
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
+        )
+        ( cd poc/msm-cuda
           rm -rf target/.rustc_info.json
           rm -rf target/package
           rm -rf target/{debug,release}/incremental

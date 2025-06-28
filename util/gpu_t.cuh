@@ -5,7 +5,7 @@
 #ifndef __SPPARK_UTIL_GPU_T_CUH__
 #define __SPPARK_UTIL_GPU_T_CUH__
 
-#ifndef __CUDACC__
+#if defined(__NVCC__) && !defined(__CUDACC__)
 # include <cuda_runtime.h>
 #endif
 
@@ -22,27 +22,26 @@ size_t ngpus();
 const gpu_t& select_gpu(int id = 0);
 const cudaDeviceProp& gpu_props(int id = 0);
 const std::vector<const gpu_t*>& all_gpus();
-extern "C" bool cuda_available();
 
 class event_t {
     cudaEvent_t event;
 public:
     event_t() : event(nullptr)
-    {   CUDA_OK(cudaEventCreate(&event, cudaEventDisableTiming));   }
+    {   CUDA_OK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));   }
     event_t(cudaStream_t stream) : event(nullptr)
     {
-        CUDA_OK(cudaEventCreate(&event, cudaEventDisableTiming));
+        CUDA_OK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
         CUDA_OK(cudaEventRecord(event, stream));
     }
     ~event_t()
-    {   if (event) cudaEventDestroy(event);   }
+    {   if (event) (void)cudaEventDestroy(event);   }
     inline operator decltype(event)() const
     {   return event;   }
 
     inline void record(cudaStream_t stream)
     {   CUDA_OK(cudaEventRecord(event, stream));   }
     inline void wait(cudaStream_t stream)
-    {   CUDA_OK(cudaStreamWaitEvent(stream, event));   }
+    {   CUDA_OK(cudaStreamWaitEvent(stream, event, 0));   }
 };
 
 struct launch_params_t {
@@ -50,7 +49,9 @@ struct launch_params_t {
     size_t shared;
 
     launch_params_t(dim3 g, dim3 b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
-    launch_params_t(int g, int b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
+    launch_params_t(int g, int b, size_t sz = 0) : gridDim(g>0 ? g : 0), blockDim(b), shared(sz) {}
+    launch_params_t(unsigned int g, unsigned int b, size_t sz = 0) : gridDim(g), blockDim(b), shared(sz) {}
+
 };
 
 class stream_t {
@@ -58,12 +59,14 @@ class stream_t {
     const int gpu_id;
 public:
     stream_t(int id) : gpu_id(id)
-    {   cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);   }
+    {   CUDA_OK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));   }
     ~stream_t()
-    {   cudaStreamDestroy(stream);   }
+    {   (void)cudaStreamDestroy(stream);   }
     inline operator decltype(stream)() const    { return stream; }
     inline int id() const                       { return gpu_id; }
     inline operator int() const                 { return gpu_id; }
+    inline int sm_count() const
+    {   return gpu_props(gpu_id).multiProcessorCount;   }
 
     inline void* Dmalloc(size_t sz) const
     {   void *d_ptr;
@@ -72,6 +75,10 @@ public:
     }
     inline void Dfree(void* d_ptr) const
     {   CUDA_OK(cudaFreeAsync(d_ptr, stream));   }
+
+    template<typename T>
+    inline void bzero(T* dst, size_t nelems) const
+    {   CUDA_OK(cudaMemsetAsync(dst, 0, nelems * sizeof(T), stream));   }
 
     template<typename T>
     inline void HtoD(T* dst, const void* src, size_t nelems,
@@ -108,14 +115,15 @@ public:
                                                 size_t shared_sz,
                             Types... args) const
     {
+#ifdef __NVCC__
         if (gpu_props(gpu_id).sharedMemPerBlock < shared_sz)
             CUDA_OK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, shared_sz));
+#endif
         if (gridDim.x == 0 || blockDim.x == 0) {
-            int blockSize, minGridSize;
-
-            CUDA_OK(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, f));
-            if (blockDim.x == 0) blockDim.x = blockSize;
-            if (gridDim.x == 0)  gridDim.x = minGridSize;
+            cudaFuncAttributes attr;
+            CUDA_OK(cudaFuncGetAttributes(&attr, f));
+            if (blockDim.x == 0) blockDim.x = attr.maxThreadsPerBlock;
+            if (gridDim.x == 0)  gridDim.x = sm_count();
         }
         void* va_args[sizeof...(args)] = { &args... };
         CUDA_OK(cudaLaunchCooperativeKernel((const void*)f, gridDim, blockDim,
@@ -159,7 +167,7 @@ public:
     inline void record(cudaEvent_t event)
     {   CUDA_OK(cudaEventRecord(event, stream));   }
     inline void wait(cudaEvent_t event)
-    {   CUDA_OK(cudaStreamWaitEvent(stream, event));   }
+    {   CUDA_OK(cudaStreamWaitEvent(stream, event, 0));   }
 };
 
 class gpu_t {
@@ -185,7 +193,7 @@ public:
     inline operator int() const             { return gpu_id; }
     inline const auto& props() const        { return prop; }
     inline int sm_count() const             { return prop.multiProcessorCount; }
-    inline void select() const              { cudaSetDevice(cuda_id); }
+    inline void select() const              { (void)cudaSetDevice(cuda_id); }
     stream_t& operator[](size_t i) const    { return flipflop[i%FLIP_FLOP]; }
     inline operator stream_t&() const       { return zero; }
     inline operator cudaStream_t() const    { return zero; }
@@ -207,6 +215,10 @@ public:
     {   zero.Dfree(d_ptr);
         zero.sync();
     }
+
+    template<typename T>
+    inline void bzero(T* dst, size_t nelems) const
+    {   zero.bzero(dst, nelems);   }
 
     template<typename T>
     inline void HtoD(T* dst, const void* src, size_t nelems,
@@ -260,7 +272,7 @@ template<typename T> class gpu_ptr_t {
         std::atomic<size_t> ref_cnt;
         int real_id;
         inline inner(T* p) : ptr(p), ref_cnt(1)
-        {   cudaGetDevice(&real_id);   }
+        {   (void)cudaGetDevice(&real_id);   }
     };
     inner *ptr;
 public:
@@ -271,12 +283,12 @@ public:
     {
         if (ptr && ptr->ref_cnt.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             int current_id;
-            cudaGetDevice(&current_id);
+            (void)cudaGetDevice(&current_id);
             if (current_id != ptr->real_id)
-                cudaSetDevice(ptr->real_id);
-            cudaFree(ptr->ptr);
+                (void)cudaSetDevice(ptr->real_id);
+            (void)cudaFreeAsync(ptr->ptr, nullptr);
             if (current_id != ptr->real_id)
-                cudaSetDevice(current_id);
+                (void)cudaSetDevice(current_id);
             delete ptr;
         }
     }
@@ -299,7 +311,7 @@ public:
     inline operator T*() const                  { return ptr->ptr; }
 
     // facilitate return by value through FFI, as gpu_ptr_t<T>::by_value.
-    struct by_value         { inner *ptr; };
+    using by_value = struct { inner *ptr; };
     operator by_value() const
     {   ptr->ref_cnt.fetch_add(1, std::memory_order_relaxed); return {ptr};   }
     gpu_ptr_t(by_value v)   { ptr = v.ptr; }
@@ -309,30 +321,77 @@ public:
 // care about freeing it.
 template<typename T> class dev_ptr_t {
     T* d_ptr;
+    size_t d_len_owned;
+    cudaStream_t stream;
 public:
-    dev_ptr_t(size_t nelems) : d_ptr(nullptr)
+    dev_ptr_t(size_t nelems) : d_ptr(nullptr), d_len_owned(0), stream(nullptr)
     {
         if (nelems) {
             size_t n = (nelems+WARP_SZ-1) & ((size_t)0-WARP_SZ);
             CUDA_OK(cudaMalloc(&d_ptr, n * sizeof(T)));
+            d_len_owned = (nelems << 1) | 1;
         }
     }
-    dev_ptr_t(size_t nelems, stream_t& s) : d_ptr(nullptr)
+    dev_ptr_t(size_t nelems, const stream_t& s) : d_ptr(nullptr), stream(s)
     {
         if (nelems) {
             size_t n = (nelems+WARP_SZ-1) & ((size_t)0-WARP_SZ);
             CUDA_OK(cudaMallocAsync(&d_ptr, n * sizeof(T), s));
+            d_len_owned = (nelems << 1) | 1;
         }
     }
-    dev_ptr_t(const dev_ptr_t& r) = delete;
+    dev_ptr_t(T* ptr, size_t nelems = 0)
+    : d_ptr(ptr), d_len_owned(nelems<<1), stream(nullptr) {}
+    dev_ptr_t(const dev_ptr_t& r)
+    : d_ptr(r.d_ptr), d_len_owned(r.d_len_owned & ((size_t)0-1) << 1), stream(nullptr) {}
     dev_ptr_t& operator=(const dev_ptr_t& r) = delete;
-    ~dev_ptr_t() { if (d_ptr) cudaFree((void*)d_ptr); }
+    ~dev_ptr_t()
+    {
+        if (d_ptr != nullptr && (d_len_owned&1)) {
+            if (stream) (void)cudaFreeAsync((void*)d_ptr, stream);
+            else        (void)cudaFree((void*)d_ptr);
+        }
+    }
 
     inline operator const T*() const            { return d_ptr; }
     inline operator T*() const                  { return d_ptr; }
     inline operator void*() const               { return (void*)d_ptr; }
     inline const T& operator[](size_t i) const  { return d_ptr[i]; }
     inline T& operator[](size_t i)              { return d_ptr[i]; }
+    inline size_t size() const                  { return d_len_owned>>1; }
+    inline T* data() const                      { return d_ptr; }
+};
+
+#if defined(_WIN32) && !defined(__HIP_DEVICE_COMPILE__)
+# define SPPARK_FFI extern "C" __declspec(dllexport)
+#else
+# define SPPARK_FFI extern "C" __attribute__((visibility("default")))
+#endif
+
+SPPARK_FFI bool cuda_available();
+SPPARK_FFI void drop_gpu_ptr_t(gpu_ptr_t<void>&);
+
+#ifdef __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
+#endif
+
+SPPARK_FFI gpu_ptr_t<void>::by_value clone_gpu_ptr_t(const gpu_ptr_t<void>&);
+
+#ifdef __clang__
+# pragma clang diagnostic pop
+#endif
+
+template<typename T>
+struct is_device_ptr {
+    static const bool value{false};
+};
+
+template<typename T> struct is_device_ptr<gpu_ptr_t<T>> {
+    static const bool value{true};
+};
+template<typename T> struct is_device_ptr<dev_ptr_t<T>> {
+    static const bool value{true};
 };
 
 #endif

@@ -5,51 +5,53 @@
 #ifndef __SPPARK_EC_JACOBIAN_T_HPP__
 #define __SPPARK_EC_JACOBIAN_T_HPP__
 
-template<class field_t> class jacobian_t {
+#include "affine_t.hpp"
+
+template<class field_t, class field_h = typename field_t::mem_t,
+         const field_h* a4 = nullptr>
+class jacobian_t {
     field_t X, Y, Z;
 
     inline operator const void*() const { return this; }
     inline operator void*()             { return this; }
 
 public:
-    jacobian_t() {}
+    jacobian_t() = default;
     jacobian_t(const field_t& x, const field_t& y, const field_t& z) :
                             X(x),             Y(y),             Z(z) {}
+    jacobian_t(const field_t& x, const field_t& y, bool is_inf) :
+                            X(x),             Y(y),
+                            Z(field_t::one(is_inf)) {}
 
-    class affine_t { friend jacobian_t;
-        field_t X, Y;
+    using affine_t = Affine_t<field_t, field_h, a4>;
 
-    public:
-        affine_t() {}
-        affine_t(const field_t& x, const field_t& y) : X(x), Y(y) {}
+    inline operator affine_t() const
+    {
+        field_t ya = 1/Z;
+        field_t xa = ya^2;  // 1/Z^2
+        ya *= xa;           // 1/Z^3
+        xa *= X;            // X/Z^2
+        ya *= Y;            // Y/Z^3
+        return affine_t{xa, ya};
+    }
 
-        inline bool is_inf() const
-        {   return (bool)(X.is_zero() & Y.is_zero());   }
-
-        inline affine_t& operator=(const jacobian_t& a)
-        {
-            Y = 1/a.Z;
-            X = Y^2;    // 1/Z^2
-            Y *= X;     // 1/Z^3
-            X *= a.X;   // X/Z^2
-            Y *= a.Y;   // Y/Z^3
-            return *this;
-        }
-        inline affine_t(const jacobian_t& a) { *this = a; }
-    };
-
-    inline operator affine_t() const      { return affine_t(*this); }
-
+#ifdef __CUDACC__ // mask a warning
     inline jacobian_t& operator=(const affine_t& a)
     {
         X = a.X;
         Y = a.Y;
-        Z = field_t::one();
+        Z = field_t::one(a.is_inf());
         return *this;
     }
+#endif
+
+    template<class point_t>
+    inline jacobian_t& operator=(const point_t& a)
+    {   return *this = static_cast<jacobian_t>(a);   }
 
     inline bool is_inf() const { return (bool)(Z.is_zero()); }
     inline void inf()          { Z.zero(); }
+    inline void cneg(bool neg) { Y.cneg(neg); }
 
     /*
      * Addition that can handle doubling [as well as points at infinity,
@@ -84,8 +86,7 @@ public:
      * infinity by virtue of Z3 = (U2-U1)*zz = H*zz = 0*zz == 0.
      */
     static void dadd(jacobian_t& out, const jacobian_t& p1,
-                                      const jacobian_t& p2,
-                                      const field_t* a4 = nullptr)
+                                      const jacobian_t& p2)
     {
         jacobian_t p3;          /* starts as (U1, S1, zz) from addition side */
         struct { field_t H, R, sx; } add, dbl;
@@ -143,8 +144,8 @@ public:
         vec_select(&p3, &p1, &p3, sizeof(p3), p2inf);
         vec_select(out, &p2, &p3, sizeof(p3), p1inf);
     }
-    inline void dadd(const jacobian_t& p2, const field_t* a4 = nullptr)
-    {   dadd(*this, *this, p2, a4);   }
+    inline void dadd(const jacobian_t& p2)
+    {   dadd(*this, *this, p2);   }
 
     /*
      * Addition with affine point that can handle doubling [as well as
@@ -183,6 +184,8 @@ public:
         dbl.sx = p2.X + p2.X;   /* sx = X2+X2 */
         dbl.R = p2.X^2;         /* X2^2 */
         dbl.R += dbl.R + dbl.R; /* R = 3*X2^2 */
+        if (a4 != nullptr)
+            dbl.R += *a4;
         dbl.H = p2.Y + p2.Y;    /* H = 2*Y2 */
 
         p1inf = p1.is_inf();
@@ -401,7 +404,7 @@ public:
             H = p2.X * Z1Z1;        /* U2 = X2*Z1Z1 */
             H -= U1;                /* H = U2-U1 */
 
-            if (H.is_zero() & p3.Z.is_zero()) {
+            if ((int)H.is_zero() & (int)p3.Z.is_zero()) {
                 field_t A, B, C;    /* double |p1| */
 
                 A = p1.X^2;         /* A = X1^2 */
@@ -538,5 +541,30 @@ public:
         }
         *this = p3;
     }
+
+    friend inline bool operator==(const jacobian_t& p1, const jacobian_t& p2)
+    {
+        field_t Z1Z1 = p1.Z^2;
+        field_t Z2Z2 = p2.Z^2;
+        struct { field_t X, Y; } a1{p1.X * Z2Z2, p1.Y * (Z2Z2 *= p2.Z)};
+        struct { field_t X, Y; } a2{p2.X * Z1Z1, p2.Y * (Z1Z1 *= p1.Z)};
+        return (a1.X == a2.X) & (a1.Y == a2.Y) & (p1.is_inf() ^ p2.is_inf() ^ 1);
+    }
+    friend inline bool operator!=(const jacobian_t& p1, const jacobian_t& p2)
+    {   return !(p1 == p2);   }
+
+private:
+    inline bool eq(const affine_t& p2) const
+    {
+        field_t Z1Z1 = Z^2;
+        struct { field_t X, Y; } a2{p2.X * Z1Z1, p2.Y * (Z1Z1 *= Z)};
+        return (X == a2.X) & (Y == a2.Y) & (is_inf() ^ p2.is_inf() ^ 1);
+    }
+
+public:
+    friend inline bool operator==(const jacobian_t& p1, const affine_t& p2)
+    {   return p1.eq(p2);   }
+    friend inline bool operator!=(const jacobian_t& p1, const affine_t& p2)
+    {   return !p1.eq(p2);   }
 };
 #endif

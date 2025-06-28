@@ -127,6 +127,8 @@ public:
 
             return;
         }
+#else
+        (void)affinity_env;
 #endif
         init(0);
     }

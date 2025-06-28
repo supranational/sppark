@@ -7,7 +7,7 @@ use ark_bls12_377::{G1Affine, G2Affine};
 #[cfg(feature = "bls12_381")]
 use ark_bls12_381::{G1Affine, G2Affine};
 #[cfg(feature = "bn254")]
-use ark_bn254::G1Affine;
+use ark_bn254::{G1Affine, G2Affine};
 use ark_ec::msm::VariableBaseMSM;
 use ark_ec::ProjectiveCurve;
 use ark_ff::BigInteger256;
@@ -38,7 +38,7 @@ fn msm_correctness() {
     assert_eq!(msm_result, arkworks_result);
 }
 
-#[cfg(any(feature = "bls12_381", feature = "bls12_377"))]
+#[cfg(any(feature = "bls12_381", feature = "bls12_377", feature = "bn254"))]
 #[test]
 fn msm_fp2_correctness() {
     let test_npow = std::env::var("TEST_NPOW").unwrap_or("14".to_string());

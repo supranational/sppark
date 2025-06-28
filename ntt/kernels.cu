@@ -5,45 +5,15 @@
 #ifndef __NTT_KERNELS_CU__
 #define __NTT_KERNELS_CU__
 
-#include <cooperative_groups.h>
-
-#ifdef __CUDA_ARCH__
-__device__ __forceinline__
-void shfl_bfly(fr_t& r, int laneMask)
-{
-    #pragma unroll
-    for (int iter = 0; iter < r.len(); iter++)
-        r[iter] = __shfl_xor_sync(0xFFFFFFFF, r[iter], laneMask);
-}
+#if defined(__NVCC__)
+# include <cooperative_groups.h>
+#elif defined(__HIPCC__)
+# include <hip/hip_cooperative_groups.h>
 #endif
-
-__device__ __forceinline__
-void shfl_bfly(index_t& index, int laneMask)
-{
-    index = __shfl_xor_sync(0xFFFFFFFF, index, laneMask);
-}
-
-template<typename T>
-__device__ __forceinline__
-void swap(T& u1, T& u2)
-{
-    T temp = u1;
-    u1 = u2;
-    u2 = temp;
-}
-
-template<typename T>
-__device__ __forceinline__
-T bit_rev(T i, unsigned int nbits)
-{
-    if (sizeof(i) == 4 || nbits <= 32)
-        return __brev(i) >> (8*sizeof(unsigned int) - nbits);
-    else
-        return __brevll(i) >> (8*sizeof(unsigned long long) - nbits);
-}
 
 // Permutes the data in an array such that data[i] = data[bit_reverse(i)]
 // and data[bit_reverse(i)] = data[i]
+template<class fr_t>
 __launch_bounds__(1024) __global__
 void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
 {
@@ -71,18 +41,15 @@ void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
     }
 }
 
-template<typename T>
-static __device__ __host__ constexpr uint32_t lg2(T n)
-{   uint32_t ret=0; while (n>>=1) ret++; return ret;   }
-
+template<unsigned int Z_COUNT, class fr_t>
 __launch_bounds__(192, 2) __global__
 void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
-    const uint32_t Z_COUNT = 256 / sizeof(fr_t);
+    static_assert((Z_COUNT & (Z_COUNT-1)) == 0, "unvalid Z_COUNT");
     const uint32_t LG_Z_COUNT = lg2(Z_COUNT);
 
-    extern __shared__ fr_t exchange[];
-    fr_t (*xchg)[Z_COUNT][Z_COUNT] = reinterpret_cast<decltype(xchg)>(exchange);
+    extern __shared__ int xchg_bit_rev[];
+    fr_t (*xchg)[Z_COUNT][Z_COUNT] = reinterpret_cast<decltype(xchg)>(xchg_bit_rev);
 
     uint32_t gid = threadIdx.x / Z_COUNT;
     uint32_t idx = threadIdx.x % Z_COUNT;
@@ -93,6 +60,8 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 
     #pragma unroll 1
     do {
+        (Z_COUNT > warpSize) ? __syncthreads() : __syncwarp();
+
         index_t group_idx = tid >> LG_Z_COUNT;
         index_t group_rev = bit_rev(group_idx, lg_domain_size - 2*LG_Z_COUNT);
 
@@ -104,14 +73,33 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 
         fr_t regs[Z_COUNT];
 
+#ifdef __CUDA_ARCH__
         #pragma unroll
         for (uint32_t i = 0; i < Z_COUNT; i++) {
             xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
             if (group_idx != group_rev)
                 regs[i] = in[i * step + base_rev];
         }
+#else
+        #pragma unroll
+        for (uint32_t i = 0; i < Z_COUNT; i++)
+            xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
 
-        (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+        if (group_idx != group_rev) {
+            #pragma unroll
+            for (uint32_t i = 0; i < Z_COUNT; i++)
+                regs[i] = in[i * step + base_rev];
+        } else {
+            #pragma unroll
+            for (uint32_t i = 0; i < Z_COUNT; i++)
+                regs[i].zero();
+        }
+
+        asm("" : "+v"(base_idx));
+        asm("" : "+v"(base_rev));
+#endif
+
+        (Z_COUNT > warpSize) ? __syncthreads() : __syncwarp();
 
         #pragma unroll
         for (uint32_t i = 0; i < Z_COUNT; i++)
@@ -120,25 +108,29 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
         if (group_idx == group_rev)
             continue;
 
-        (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+        (Z_COUNT > warpSize) ? __syncthreads() : __syncwarp();
 
         #pragma unroll
         for (uint32_t i = 0; i < Z_COUNT; i++)
             xchg[gid][i][rev] = regs[i];
 
-        (Z_COUNT > WARP_SZ) ? __syncthreads() : __syncwarp();
+        (Z_COUNT > warpSize) ? __syncthreads() : __syncwarp();
 
         #pragma unroll
         for (uint32_t i = 0; i < Z_COUNT; i++)
             out[i * step + base_idx] = xchg[gid][rev][i];
 
+#ifdef __CUDA_ARCH__
     } while (Z_COUNT <= WARP_SZ && (tid += blockDim.x*gridDim.x) < step);
     // without "Z_COUNT <= WARP_SZ" compiler spills 128 bytes to stack :-(
+#else
+    } while ((tid += blockDim.x*gridDim.x) < step);
+#endif
 }
 
+template<class fr_t>
 __device__ __forceinline__
-fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
-                           unsigned int nbits = MAX_LG_DOMAIN_SIZE)
+fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE])
 {
     unsigned int off = 0;
 
@@ -174,6 +166,7 @@ fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE],
     return root;
 }
 
+template<class fr_t>
 __launch_bounds__(1024) __global__
 void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_domain_size,
                            uint32_t lg_blowup, bool bitrev,
@@ -197,6 +190,7 @@ void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_domain_size,
     }
 }
 
+template<class fr_t>
 __launch_bounds__(1024) __global__
 void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
                                   const fr_t (*gen_powers)[WINDOW_SIZE],
@@ -204,7 +198,8 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
                                   bool perform_shift = true,
                                   bool ext_pow = false)
 {
-    extern __shared__ fr_t exchange[]; // block size
+    extern __shared__ int xchg_lde_spread[]; // block size
+    fr_t* exchange = reinterpret_cast<decltype(exchange)>(xchg_lde_spread);
 
     size_t domain_size = (size_t)1 << lg_domain_size;
     uint32_t blowup = 1u << lg_blowup;
@@ -223,7 +218,6 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
     }
 
     index_t idx0 = blockDim.x * blockIdx.x;
-    uint32_t thread_pos = threadIdx.x & (blowup - 1);
 
 #if 0
     index_t iters = domain_size / stride;
@@ -252,21 +246,35 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
         else
             __syncthreads();
 
-        r.zero();
-
-        for (uint32_t i = 0; i < blowup; i++) {
-            uint32_t offset = i * blockDim.x + threadIdx.x;
-
-            if (thread_pos == 0)
+        for (uint32_t offset = threadIdx.x, i = 0; i < blowup; i += 2) {
+#ifdef __HIP_DEVICE_COMPILE__
+            r = exchange[offset >> lg_blowup];
+            r = czero(r, offset & (blowup-1));
+#else
+            r.zero();
+            if ((offset & (blowup-1)) == 0)
                 r = exchange[offset >> lg_blowup];
-
+#endif
             out[(idx0 << lg_blowup) + offset] = r;
+            offset += blockDim.x;
+
+#ifdef __HIP_DEVICE_COMPILE__
+            r = exchange[offset >> lg_blowup];
+            r = czero(r, offset & (blowup-1));
+#else
+            r.zero();
+            if ((offset & (blowup-1)) == 0)
+                r = exchange[offset >> lg_blowup];
+#endif
+            out[(idx0 << lg_blowup) + offset] = r;
+            offset += blockDim.x;
         }
 
         idx0 += stride;
     }
 }
 
+template<class fr_t>
 __device__ __forceinline__
 void get_intermediate_roots(fr_t& root0, fr_t& root1,
                             index_t idx0, index_t idx1,
@@ -289,7 +297,7 @@ void get_intermediate_roots(fr_t& root0, fr_t& root1,
     }
 }
 
-template<unsigned int z_count>
+template<int z_count, class fr_t>
 __device__ __forceinline__
 void coalesced_load(fr_t r[z_count], const fr_t* inout, index_t idx,
                     const unsigned int stage)
@@ -303,12 +311,12 @@ void coalesced_load(fr_t r[z_count], const fr_t* inout, index_t idx,
         r[z] = inout[idx];
 }
 
-template<unsigned int z_count>
+template<int z_count, class fr_t>
 __device__ __forceinline__
 void transpose(fr_t r[z_count])
 {
-    extern __shared__ fr_t shared_exchange[];
-    fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
+    extern __shared__ int xchg_transpose[];
+    fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(xchg_transpose);
 
     const unsigned int x = threadIdx.x & (z_count - 1);
     const unsigned int y = threadIdx.x & ~(z_count - 1);
@@ -324,7 +332,7 @@ void transpose(fr_t r[z_count])
         r[z] = xchg[y + x][z];
 }
 
-template<unsigned int z_count>
+template<int z_count, class fr_t>
 __device__ __forceinline__
 void coalesced_store(fr_t* inout, index_t idx, const fr_t r[z_count],
                      const unsigned int stage)
@@ -339,7 +347,6 @@ void coalesced_store(fr_t* inout, index_t idx, const fr_t r[z_count],
 }
 
 #if defined(FEATURE_BABY_BEAR) || defined(FEATURE_GOLDILOCKS)
-const static int Z_COUNT = 256/8/sizeof(fr_t);
 # include "kernels/gs_mixed_radix_narrow.cu"
 # include "kernels/ct_mixed_radix_narrow.cu"
 #else // 256-bit fields

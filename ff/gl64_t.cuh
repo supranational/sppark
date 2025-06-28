@@ -2,22 +2,23 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef __SPPARK_FF_GL64_T_CUH__
+#if defined(__CUDACC__) && !defined(__SPPARK_FF_GL64_T_CUH__)
 #define __SPPARK_FF_GL64_T_CUH__
 
+# include <cstddef>
 # include <cstdint>
+# include "pow.hpp"
 
-namespace gl64_device {
-    static __device__ __constant__ /*const*/ uint32_t W = 0xffffffffU;
-}
-
-#ifdef __CUDA_ARCH__
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
 #  define asm __asm__ __volatile__
 # else
 #  define asm asm volatile
 # endif
+
+namespace gl64_device {
+    static __device__ __constant__ /*const*/ uint32_t W = 0xffffffffU;
+}
 
 #ifdef GL64_PARTIALLY_REDUCED
 //
@@ -51,8 +52,12 @@ public:
     inline size_t len() const                           { return 1;   }
 
     inline gl64_t()                                     {}
-    inline gl64_t(const uint64_t a)                     { val = a;  to(); }
-    inline gl64_t(const uint64_t *p)                    { val = *p; to(); }
+#ifdef __CUDA_ARCH__
+    inline gl64_t(uint64_t a)               : val(a)    { to(); }
+#else
+    __host__ constexpr gl64_t(uint64_t a)   : val(a)    {}
+#endif
+    inline gl64_t(const uint64_t *p)        : val(*p)   { to(); }
 
     inline operator uint64_t() const
     {   auto ret = *this; ret.from(); return ret.val;   }
@@ -190,10 +195,10 @@ public:
 
         return *this;
     }
-    friend inline gl64_t cneg(gl64_t a, bool flag)
+    static inline gl64_t cneg(gl64_t a, bool flag)
     {   return a.cneg(flag);   }
     inline gl64_t operator-() const
-    {   gl64_t ret = *this; return ret.cneg(true);   }
+    {   return cneg(*this, true);   }
 
     static inline const gl64_t one()
     {   gl64_t ret; ret.val = 1; return ret;   }
@@ -267,45 +272,28 @@ private:
 
     inline void reduce(uint32_t temp[4])
     {
-        uint32_t carry;
 # if __CUDA_ARCH__ >= 700
-        asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, %4; subc.u32 %2, 0, 0;"
-            : "+r"(temp[0]), "+r"(temp[1]), "=r"(carry)
-            : "r"(temp[2]), "r"(temp[3]));
-        asm("add.cc.u32 %0, %0, %2; addc.u32 %1, %1, %3;"
-            : "+r"(temp[1]), "+r"(carry)
-            : "r"(temp[2]), "r"(temp[3]));
-
-        asm("mad.lo.cc.u32 %0, %3, %4, %0; madc.hi.cc.u32 %1, %3, %4, %1; addc.u32 %2, 0, 0;"
-            : "+r"(temp[0]), "+r"(temp[1]), "=r"(temp[2])
-            : "r"(carry), "r"(gl64_device::W));
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(temp[2]), "r"(gl64_device::W));
+        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.cc.u32 %1, %2, %3, %1; addc.u32 %2, 0, 0;"
+            : "+r"(temp[0]), "+r"(temp[1]), "+r"(temp[2])
+            : "r"(gl64_device::W));
 # else
         uint32_t b0, b1;
-        asm("add.cc.u32 %0, %2, %3; addc.u32 %1, 0, 0;"
-            : "=r"(b0), "=r"(b1)
-            : "r"(temp[2]), "r"(temp[3]));
-        asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, %4; subc.u32 %2, 0, 0;"
-            : "+r"(temp[0]), "+r"(temp[1]), "=r"(carry)
-            : "r"(b0), "r"(b1));
-        asm("add.cc.u32 %0, %0, %2; addc.u32 %1, %1, %3;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(-carry), "r"(carry));
-        asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
-            : "+r"(temp[1]), "+r"(temp[2]));
 
-#  if __CUDA_ARCH__ >= 700
-        asm("mad.lo.cc.u32 %0, %2, %3, %0; madc.hi.u32 %1, %2, %3, %1;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(temp[2]), "r"(gl64_device::W));
-#  else
-        asm("add.cc.u32 %0, %0, %2; addc.u32 %1, %1, 0;"
-            : "+r"(temp[0]), "+r"(temp[1])
-            : "r"(-temp[2]));
-#  endif
+        asm("sub.cc.u32 %0, 0, %2; subc.u32 %1, %2, 0;"
+            : "=r"(b0), "=r"(b1)
+            : "r"(temp[2]));
+        asm("add.cc.u32 %0, %0, %3; addc.cc.u32 %1, %1, %4; addc.u32 %2, 0, 0;"
+            : "+r"(temp[0]), "+r"(temp[1]), "=r"(temp[2])
+            : "r"(b0), "r"(b1));
 # endif
+        asm("sub.cc.u32 %0, %0, %3; subc.cc.u32 %1, %1, 0; subc.u32 %2, %2, 0;"
+            : "+r"(temp[0]), "+r"(temp[1]), "+r"(temp[2])
+            : "r"(temp[3]));
+
+        asm("sub.cc.u32 %0, %0, %2; subc.u32 %1, %1, %3;"
+            : "+r"(temp[0]), "+r"(temp[1])
+            : "r"(temp[2]), "r"(-(int)temp[2]>>1));
+
         asm("mov.b64 %0, {%1, %2};" : "=l"(val) : "r"(temp[0]), "r"(temp[1]));
     }
 
@@ -323,20 +311,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline gl64_t& operator^=(uint32_t p)
-    {
-        gl64_t sqr = *this;
-        *this = csel(*this, one(), p&1);
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-        to();
-
-        return *this;
-    }
+    {   pow_byref(*this, p); to(); return *this;   }
     friend inline gl64_t operator^(gl64_t a, uint32_t p)
     {   return a ^= p;   }
     inline gl64_t operator()(uint32_t p)
@@ -344,27 +319,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline gl64_t& operator^=(int p)
-    {
-        if (p < 2)
-            asm("trap;");
-
-        gl64_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.mul(sqr);
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.mul(sqr);
-            if (p&1)
-                mul(sqr);
-        }
-        to();
-
-        return *this;
-    }
+    {   pow_byref(*this, p); to(); return *this;   }
     friend inline gl64_t operator^(gl64_t a, int p)
     {   return a ^= p;   }
     inline gl64_t operator()(int p)
@@ -608,9 +563,26 @@ public:
 
         return t1;
     }
-};
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {   val = __shfl_xor_sync(0xFFFFFFFF, val, laneMask);   }
 
 # undef inline
 # undef asm
-#endif
+
+public:
+    friend inline bool operator==(gl64_t a, gl64_t b)
+    {   return a.val == b.val;   }
+    friend inline bool operator!=(gl64_t a, gl64_t b)
+    {   return a.val != b.val;   }
+# if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
+    friend std::ostream& operator<<(std::ostream& os, const gl64_t& obj)
+    {
+        auto f = os.flags();
+        os << "0x" << std::hex << obj.val;
+        os.flags(f);
+        return os;
+    }
+# endif
+};
 #endif

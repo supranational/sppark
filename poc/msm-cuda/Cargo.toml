@@ -2,6 +2,7 @@
 name = "msm-cuda"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [features]
 # By default, compile with ADX extension if the host supports it.
@@ -22,8 +23,8 @@ cuda-mobile = []
 [dependencies]
 blst = "~0.3.11"
 sppark = { path = "../../rust" }
-rand = "^0"
-rand_chacha = "^0"
+rand = "0.8"
+rand_chacha = "0.3"
 ark-std = "0.3.0"
 ark-ff = "0.3.0"
 ark-ec = { version = "0.3.0", features = [ "parallel" ] }
@@ -37,7 +38,6 @@ which = "^4.0"
 
 [dev-dependencies]
 criterion = { version = "0.3", features = [ "html_reports" ] }
-rayon = "1.5"
 
 [[bench]]
 name = "msm"

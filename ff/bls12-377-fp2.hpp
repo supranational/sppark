@@ -20,6 +20,8 @@
 #  define WARP_SZ 32
 # endif
 
+namespace bls12_377 {
+
 class fp2_t : public fp_mont {
 private:
     static inline uint32_t laneid()
@@ -186,10 +188,14 @@ public:
     {   return *this *= a.reciprocal();   }
 };
 
+} // namespace bls12_377
+
 # undef inline
 # undef asm
 
 #else
+
+namespace bls12_377 {
 
 class fp2_t {
     vec384x val;
@@ -426,7 +432,7 @@ public:
 
     friend inline fp2_t czero(const fp2_t& a, int set_z)
     {   fp2_t ret;
-        const vec384x zero = { 0 };
+        const vec384x zero = {{0}};
         vec_select(ret.val, zero, a.val, sizeof(ret), set_z);
         return ret;
     }
@@ -456,14 +462,13 @@ public:
     inline fp2_t& operator/=(const fp2_t& a)
     {   return *this *= a.reciprocal();   }
 
-# ifndef NDEBUG
     friend inline bool operator==(const fp2_t& a, const fp2_t& b)
     {   return vec_is_equal(a.val, b.val, sizeof(vec384x));   }
     friend inline bool operator!=(const fp2_t& a, const fp2_t& b)
     {   return !vec_is_equal(a.val, b.val, sizeof(vec384x));   }
 
-#  if defined(_GLIBCXX_IOSTREAM) || defined(_IOSTREAM_) // non-standard
-    friend std::ostream& operator<<(std::ostream& os, const fp2_t& obj)
+    template<class OStream, typename Traits = typename OStream::traits_type>
+    friend OStream& operator<<(OStream& os, const fp2_t& obj)
     {
         unsigned char be[sizeof(obj)];
         char buf[10+2*sizeof(obj)+2], *str=buf;
@@ -482,8 +487,9 @@ public:
 
         return os << buf;
     }
-#  endif
-# endif
 };
+
+} // namespace bls12_377
+
 #endif
 #endif

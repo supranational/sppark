@@ -2,10 +2,89 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+const int S = 32;
+
+#ifdef GOLDILOCKS_PLONKY2
+
+const fr_t group_gen = fr_t(0xc65c18b67785d900);
+const fr_t group_gen_inverse = fr_t(0xb1ddc963fcd29ccc);
+
+const fr_t forward_roots_of_unity[S + 1] = {
+    fr_t(0x0000000000000001),
+    fr_t(0xffffffff00000000),
+    fr_t(0x0001000000000000),
+    fr_t(0x0000000001000000),
+    fr_t(0x0000000000001000),
+    fr_t(0x0000000000000040),
+    fr_t(0x0000000000000008),
+    fr_t(0x000001fffdfffe00),
+    fr_t(0x3d212e8cbc8a1ed3),
+    fr_t(0x594c6b9ef1635ca5),
+    fr_t(0x3b0d463d6552a871),
+    fr_t(0x7e785a6e2821983e),
+    fr_t(0x3c713933c4eb986b),
+    fr_t(0x3bcab9c3f9dde835),
+    fr_t(0x62e4b94776c81aaa),
+    fr_t(0x1a0037386d98ca5e),
+    fr_t(0x71578c3fd9199c53),
+    fr_t(0x4f5aafc1370cc51a),
+    fr_t(0x2f57bb2f67816280),
+    fr_t(0x7ca80b47ba4b38bd),
+    fr_t(0x1b5c0ad6b72db3a1),
+    fr_t(0x5af3327dea3a8cb9),
+    fr_t(0x70c12bc56d66855c),
+    fr_t(0x5262aee151c7655e),
+    fr_t(0x259b60f3625bae63),
+    fr_t(0x7b3336e748ac4576),
+    fr_t(0x3425b3e207b557bf),
+    fr_t(0x44f8e4c2e7cbb309),
+    fr_t(0x1dcc93e918decf53),
+    fr_t(0x231e5f6a3f50a6bb),
+    fr_t(0x1a708f62d4c6586b),
+    fr_t(0x30eaa905858b619f),
+    fr_t(0x64fdd1a46201e246),
+};
+
+const fr_t inverse_roots_of_unity[S + 1] = {
+    fr_t(0x0000000000000001),
+    fr_t(0xffffffff00000000),
+    fr_t(0xfffeffff00000001),
+    fr_t(0xfffffeff00000101),
+    fr_t(0xffefffff00100001),
+    fr_t(0xfbffffff04000001),
+    fr_t(0xdfffffff20000001),
+    fr_t(0x0000003fffbfffc0),
+    fr_t(0x7f4949dce07bf05d),
+    fr_t(0x4bd6bb172e15d48c),
+    fr_t(0x38bc97652b54c741),
+    fr_t(0x553a9b711648c890),
+    fr_t(0x055da9bb68958caa),
+    fr_t(0xa0a62f8f0bb8e2b6),
+    fr_t(0x276fd7ae450aee4b),
+    fr_t(0x7b687b64f5de658f),
+    fr_t(0x7de5776cbda187e9),
+    fr_t(0xd2199b156a6f3b06),
+    fr_t(0xd01c8acd8ea0e8c0),
+    fr_t(0x4f38b2439950a4cf),
+    fr_t(0x5987c395dd5dfdcf),
+    fr_t(0x46cf3d56125452b1),
+    fr_t(0x909c4b1a44a69ccb),
+    fr_t(0xc188678a32a54199),
+    fr_t(0xf3650f9ddfcaffa8),
+    fr_t(0xe8ef0e3e40a92655),
+    fr_t(0x7c8abec072bb46a6),
+    fr_t(0xe0bfc17d5c5a7a04),
+    fr_t(0x4c6b8a5a0b79f23a),
+    fr_t(0x6b4d20533ce584fe),
+    fr_t(0xe5cceae468a70ec2),
+    fr_t(0x8958579f296dac7a),
+    fr_t(0x16d265893b5b7e85),
+};
+
+#else   // "canonical" generator, primitive_root(0xffffffff00000001)
+
 const fr_t group_gen = fr_t(0x0000000000000007);
 const fr_t group_gen_inverse = fr_t(0x249249246db6db6e);
-
-const int S = 32;
 
 const fr_t forward_roots_of_unity[S + 1] = {
     fr_t(0x0000000000000001),
@@ -78,6 +157,7 @@ const fr_t inverse_roots_of_unity[S + 1] = {
     fr_t(0x95c0ec9a7ab50701),
     fr_t(0x76b6b635b6fc8719),
 };
+#endif
 
 const fr_t domain_size_inverse[S + 1] = {
     fr_t(0x0000000000000001),

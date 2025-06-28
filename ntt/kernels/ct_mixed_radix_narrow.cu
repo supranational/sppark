@@ -2,15 +2,16 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-template<unsigned int z_count, bool coalesced = false>
+template<int z_count, bool coalesced = false, class fr_t>
 __launch_bounds__(768, 1) __global__
 void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
              fr_t* d_inout, const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
+             const fr_t (*d_plus_one_twiddles)[1024],
              const fr_t* d_radix6_twiddles, const fr_t* d_radixX_twiddles,
              bool is_intt, const fr_t d_domain_size_inverse)
 {
-#if (__CUDACC_VER_MAJOR__-0) >= 11
+#if (__CUDACC_VER_MAJOR__-0) >= 11 || defined(__clang__)
     __builtin_assume(lg_domain_size <= MAX_LG_DOMAIN_SIZE);
     __builtin_assume(radix <= 10);
     __builtin_assume(iterations <= radix);
@@ -63,12 +64,13 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r[1][0] = r[1][0] * second_root;
 
         if (z_count > 1) {
-            fr_t first_root_z = get_intermediate_root(idx0, d_partial_twiddles);
-            unsigned int off = (nbits - 1) / LG_WINDOW_SIZE;
-            unsigned int win = off * LG_WINDOW_SIZE;
-            fr_t second_root_z = d_partial_twiddles[off][1 << (nbits - 1 - win)];
+            unsigned int off = nbits >= 10 ? (nbits - 10) : 0;
+            unsigned int scale = nbits >= 10 ? 0 : (10 - nbits);
 
-            second_root_z *= first_root_z;
+            thread_ntt_idx <<= scale;
+            fr_t first_root_z = d_plus_one_twiddles[off][thread_ntt_idx];
+            fr_t second_root_z = d_plus_one_twiddles[off][thread_ntt_idx + (1<<scale)];
+
             #pragma unroll
             for (int z = 1; z < z_count; z++) {
                 first_root *= first_root_z;
@@ -85,9 +87,10 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r[1][z] = r[0][z] - t;
         r[0][z] = r[0][z] + t;
     }
+    noop();
 
     #pragma unroll 1
-    for (int s = 1; s < min(iterations, 6); s++) {
+    for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -95,25 +98,24 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
 
         fr_t root = d_radix6_twiddles[rank << (6 - (s + 1))];
 
-#ifdef __CUDA_ARCH__
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
 
-            shfl_bfly(t, laneMask);
+            t.shfl_bfly(laneMask);
 
-            r[0][z] = fr_t::csel(t, r[0][z], !pos);
+            r[0][z] = fr_t::csel(r[0][z], t, pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
 
             t = root * r[1][z];
             r[1][z] = r[0][z] - t;
             r[0][z] = r[0][z] + t;
         }
-#endif
+        noop();
     }
 
     #pragma unroll 1
-    for (int s = 6; s < iterations; s++) {
+    for (unsigned int s = 6; s < iterations; s++) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
@@ -122,7 +124,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         fr_t root = d_radixX_twiddles[rank << (radix - (s + 1))];
 
         fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
-#ifdef __CUDA_ARCH__
+
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
             fr_t t = fr_t::csel(r[1][z], r[0][z], pos);
@@ -135,16 +137,16 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         for (int z = 0; z < z_count; z++) {
             fr_t t = xchg[threadIdx.x ^ laneMask][z];
 
-            r[0][z] = fr_t::csel(t, r[0][z], !pos);
+            r[0][z] = fr_t::csel(r[0][z], t, pos);
             r[1][z] = fr_t::csel(t, r[1][z], pos);
 
             t = root * r[1][z];
             r[1][z] = r[0][z] - t;
             r[0][z] = t + r[0][z];
         }
+        noop();
 
         __syncthreads();
-#endif
     }
 
     if (is_intt && (stage + iterations) == lg_domain_size) {
@@ -156,7 +158,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 
     // rotate "iterations" bits in indices
-    index_t mask = ((index_t)1 << (stage + iterations)) - ((index_t)1 << stage);
+    index_t mask = (index_t)((1 << iterations) - 1) << stage;
     index_t rotw = idx0 & mask;
     rotw = (rotw >> 1) | (rotw << (iterations - 1));
     idx0 = (idx0 & ~mask) | (rotw & mask);
@@ -180,34 +182,17 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
 }
 
-template __global__
-void _CT_NTT<1>(unsigned int, unsigned int, unsigned int, unsigned int,
-                fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                bool, const fr_t);
-
-template __global__
-void _CT_NTT<Z_COUNT>(unsigned int, unsigned int, unsigned int, unsigned int,
-                      fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                      bool, const fr_t);
-
-template __global__
-void _CT_NTT<Z_COUNT, true>(unsigned int, unsigned int, unsigned int, unsigned int,
-                            fr_t*, const fr_t (*)[WINDOW_SIZE], const fr_t*, const fr_t*,
-                            bool, const fr_t);
-
-#ifndef __CUDA_ARCH__
-
 class CT_launcher {
     fr_t* d_inout;
     const int lg_domain_size;
     bool is_intt;
     int stage;
     const NTTParameters& ntt_parameters;
-    const cudaStream_t& stream;
+    const stream_t& stream;
 
 public:
     CT_launcher(fr_t* d_ptr, int lg_dsz, bool intt,
-                const NTTParameters& params, const cudaStream_t& s)
+                const NTTParameters& params, const stream_t& s)
       : d_inout(d_ptr), lg_domain_size(lg_dsz), is_intt(intt), stage(0),
         ntt_parameters(params), stream(s)
     {}
@@ -227,27 +212,13 @@ public:
 
         assert(num_blocks == (unsigned int)num_blocks);
 
-        fr_t* d_radixX_twiddles = nullptr;
-
-        switch (radix) {
-        case 7:
-            d_radixX_twiddles = ntt_parameters.radix7_twiddles;
-            break;
-        case 8:
-            d_radixX_twiddles = ntt_parameters.radix8_twiddles;
-            break;
-        case 9:
-            d_radixX_twiddles = ntt_parameters.radix9_twiddles;
-            break;
-        case 10:
-            d_radixX_twiddles = ntt_parameters.radix10_twiddles;
-            break;
-        }
-
+        const int Z_COUNT = 256/8/sizeof(fr_t);
         size_t shared_sz = sizeof(fr_t) << (radix - 1);
+
         #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
                 d_inout, ntt_parameters.partial_twiddles, \
-                ntt_parameters.radix6_twiddles, d_radixX_twiddles, \
+                ntt_parameters.plus_one_twiddles, \
+                ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
                 is_intt, domain_size_inverse[lg_domain_size]
 
         if (num_blocks < Z_COUNT)
@@ -262,33 +233,3 @@ public:
         stage += iterations;
     }
 };
-
-void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
-            const NTTParameters& ntt_parameters, const cudaStream_t& stream)
-{
-    CT_launcher params{d_inout, lg_domain_size, intt, ntt_parameters, stream};
-
-    if (lg_domain_size <= std::min(10, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size);
-    } else if (lg_domain_size <= std::min(17, MAX_LG_DOMAIN_SIZE)) {
-        params.step(lg_domain_size / 2 + lg_domain_size % 2);
-        params.step(lg_domain_size / 2);
-    } else if (lg_domain_size <= std::min(30, MAX_LG_DOMAIN_SIZE)) {
-        int step = lg_domain_size / 3;
-        int rem = lg_domain_size % 3;
-        params.step(step);
-        params.step(step + (lg_domain_size == 29 ? 1 : 0));
-        params.step(step + (lg_domain_size == 29 ? 1 : rem));
-    } else if (lg_domain_size <= std::min(32, MAX_LG_DOMAIN_SIZE)) {
-        int step = lg_domain_size / 4;
-        int rem = lg_domain_size % 4;
-        params.step(step);
-        params.step(step);
-        params.step(step);
-        params.step(step + rem);
-    } else {
-        assert(false);
-    }
-}
-
-#endif

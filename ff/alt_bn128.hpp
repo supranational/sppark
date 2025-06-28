@@ -5,8 +5,8 @@
 #ifndef __SPPARK_FF_ALT_BN128_HPP__
 #define __SPPARK_FF_ALT_BN128_HPP__
 
-#ifdef __NVCC__
 #include <cstdint>
+#if defined(__CUDACC__) || defined(__HIPCC__)
 
 namespace device {
 #define TO_CUDA_T(limb64) (uint32_t)(limb64), (uint32_t)(limb64>>32)
@@ -46,8 +46,16 @@ namespace device {
     };
     static __device__ __constant__ const uint32_t ALT_BN128_m0 = 0xefffffff;
 }
-# ifdef __CUDA_ARCH__   // device-side field types
-# include "mont_t.cuh"
+# if defined(__CUDA_ARCH__) || defined(__HIPCC__)   // device-side field types
+#  if defined(__CUDA_ARCH__)
+#   include "mont_t.cuh"
+#  elif defined(__HIPCC__)
+#   include "mont_t.hip"
+typedef uint64_t vec256[4];
+#  endif
+
+namespace alt_bn128 {
+
 typedef mont_t<254, device::ALT_BN128_P, device::ALT_BN128_M0,
                     device::ALT_BN128_RR, device::ALT_BN128_one,
                     device::ALT_BN128_Px4> fp_mont;
@@ -55,6 +63,7 @@ struct fp_t : public fp_mont {
     using mem_t = fp_t;
     __device__ __forceinline__ fp_t() {}
     __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
+    template<typename... Ts> constexpr fp_t(Ts... a)  : fp_mont{a...} {}
 };
 typedef mont_t<254, device::ALT_BN128_r, device::ALT_BN128_m0,
                     device::ALT_BN128_rRR, device::ALT_BN128_rone,
@@ -63,17 +72,26 @@ struct fr_t : public fr_mont {
     using mem_t = fr_t;
     __device__ __forceinline__ fr_t() {}
     __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
+    template<typename... Ts> constexpr fr_t(Ts... a)  : fr_mont{a...} {}
+#  ifdef __HIPCC__
+    __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
+#  endif
 };
+
+} // namespace alt_bn128
+
 # endif
 #endif
 
-#ifndef __CUDA_ARCH__   // host-side field types
+#if !defined(__CUDA_ARCH__) && !defined(__HIPCC__)  // host-side field types
 # include <blst_t.hpp>
 
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wsubobject-linkage"
 # endif
+
+namespace alt_bn128 {
 
 static const vec256 ALT_BN128_P = {
     TO_LIMB_T(0x3c208c16d87cfd47), TO_LIMB_T(0x97816a916871ca8d),
@@ -93,6 +111,8 @@ struct fp_t : public fp_mont {
     using mem_t = fp_t;
     inline fp_t() {}
     inline fp_t(const fp_mont& a) : fp_mont(a) {}
+    template<typename... Ts>
+    constexpr fp_t(Ts... a) : fp_mont{a...} {}
 };
 
 static const vec256 ALT_BN128_r = {
@@ -113,10 +133,19 @@ struct fr_t : public fr_mont {
     using mem_t = fr_t;
     inline fr_t() {}
     inline fr_t(const fr_mont& a) : fr_mont(a) {}
+    template<typename... Ts>
+    constexpr fr_t(Ts... a) : fr_mont{a...} {}
 };
+
+} // namespace alt_bn128
 
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif
 #endif
+
+#ifdef FEATURE_BN254
+using namespace alt_bn128;
+#endif
+
 #endif

@@ -2,8 +2,6 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-#include <cuda.h>
-
 #if defined(FEATURE_BLS12_381)
 # include <ff/bls12-381.hpp>
 #elif defined(FEATURE_BLS12_377)
@@ -24,9 +22,7 @@
 
 #include <ntt/ntt.cuh>
 
-#ifndef __CUDA_ARCH__
-
-extern "C"
+SPPARK_FFI
 RustError::by_value compute_ntt(size_t device_id,
                                 fr_t* inout, uint32_t lg_domain_size,
                                 NTT::InputOutputOrder ntt_order,
@@ -38,5 +34,3 @@ RustError::by_value compute_ntt(size_t device_id,
     return NTT::Base(gpu, inout, lg_domain_size,
                      ntt_order, ntt_direction, ntt_type);
 }
-
-#endif

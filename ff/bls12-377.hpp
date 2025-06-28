@@ -5,8 +5,8 @@
 #ifndef __SPPARK_FF_BLS12_377_HPP__
 #define __SPPARK_FF_BLS12_377_HPP__
 
-#ifdef __NVCC__
 #include <cstdint>
+#if defined(__CUDACC__) || defined(__HIPCC__)
 
 namespace device {
 #define TO_CUDA_T(limb64) (uint32_t)(limb64), (uint32_t)(limb64>>32)
@@ -50,8 +50,16 @@ namespace device {
     };
     static __device__ __constant__ /*const*/ uint32_t BLS12_377_m0 = 0xffffffff;
 }
-# ifdef __CUDA_ARCH__   // device-side field types
-# include "mont_t.cuh"
+# if defined(__CUDA_ARCH__) || defined(__HIPCC__)   // device-side field types
+#  if defined(__CUDA_ARCH__)
+#   include "mont_t.cuh"
+#  elif defined(__HIPCC__)
+#   include "mont_t.hip"
+typedef uint64_t vec256[4];
+#  endif
+
+namespace bls12_377 {
+
 typedef mont_t<377, device::BLS12_377_P, device::BLS12_377_M0,
                     device::BLS12_377_RR, device::BLS12_377_one,
                     device::BLS12_381_Px128> fp_mont;
@@ -59,6 +67,7 @@ struct fp_t : public fp_mont {
     using mem_t = fp_t;
     __device__ __forceinline__ fp_t() {}
     __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
+    template<typename... Ts> constexpr fp_t(Ts... a)  : fp_mont{a...} {}
 };
 typedef mont_t<253, device::BLS12_377_r, device::BLS12_377_m0,
                     device::BLS12_377_rRR, device::BLS12_377_rone,
@@ -67,17 +76,26 @@ struct fr_t : public fr_mont {
     using mem_t = fr_t;
     __device__ __forceinline__ fr_t() {}
     __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
+    template<typename... Ts> constexpr fr_t(Ts... a)  : fr_mont{a...} {}
+#  ifdef __HIPCC__
+    __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
+#  endif
 };
+
+} // namespace bls12_377
+
 # endif
 #endif
 
-#ifndef __CUDA_ARCH__   // host-side field types
+#if !defined(__CUDA_ARCH__) && !defined(__HIPCC__)  // host-side field types
 # include <blst_t.hpp>
 
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wsubobject-linkage"
 # endif
+
+namespace bls12_377 {
 
 static const vec384 BLS12_377_P = {
     TO_LIMB_T(0x8508c00000000001), TO_LIMB_T(0x170b5d4430000000),
@@ -100,6 +118,8 @@ struct fp_t : public fp_mont {
     using mem_t = fp_t;
     inline fp_t() {}
     inline fp_t(const fp_mont& a) : fp_mont(a) {}
+    template<typename... Ts>
+    constexpr fp_t(Ts... a)  : fp_mont{a...} {}
 };
 
 static const vec256 BLS12_377_r = { 
@@ -120,10 +140,19 @@ struct fr_t : public fr_mont {
     using mem_t = fr_t;
     inline fr_t() {}
     inline fr_t(const fr_mont& a) : fr_mont(a) {}
+    template<typename... Ts>
+    constexpr fr_t(Ts... a)  : fr_mont{a...} {}
 };
+
+} // namespace bls12_377
 
 # if defined(__GNUC__) && !defined(__clang__)
 #  pragma GCC diagnostic pop
 # endif
 #endif
+
+#ifdef FEATURE_BLS12_377
+using namespace bls12_377;
+#endif
+
 #endif

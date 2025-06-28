@@ -12,10 +12,21 @@
 #include <util/rusterror.h>
 #include <util/gpu_t.cuh>
 
+#if defined(__NVCC__)
+# define noop()
+#elif defined(__HIPCC__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wunused-function"
+__device__ __noinline__ static void noop() { asm(""); }
+# pragma clang diagnostic push
+#endif
+
 #include "parameters.cuh"
 #include "kernels.cu"
 
-#ifndef __CUDA_ARCH__
+#ifdef noop
+# undef noop
+#endif
 
 class NTT {
 public:
@@ -33,23 +44,31 @@ protected:
         size_t domain_size = (size_t)1 << lg_domain_size;
         // aim to read 4 cache lines of consecutive data per read
         const uint32_t Z_COUNT = 256 / sizeof(fr_t);
-        const uint32_t bsize = Z_COUNT>WARP_SZ ? Z_COUNT : WARP_SZ;
+        const uint32_t warpSize = gpu_props(stream).warpSize;
+        const uint32_t bsize = Z_COUNT>warpSize ? Z_COUNT : warpSize;
+#ifdef __HIPCC__
+        const uint32_t lg_switch = 17;
+#else
+        const uint32_t lg_switch = 32;
+#endif
 
         if (domain_size <= 1024)
             bit_rev_permutation<<<1, domain_size, 0, stream>>>
                                (d_out, d_inp, lg_domain_size);
         else if (domain_size < bsize * Z_COUNT)
-            bit_rev_permutation<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
+            bit_rev_permutation<<<domain_size / bsize, bsize, 0, stream>>>
                                (d_out, d_inp, lg_domain_size);
-        else if (Z_COUNT > WARP_SZ || lg_domain_size <= 32)
-            bit_rev_permutation_z<<<domain_size / Z_COUNT / bsize, bsize,
-                                    bsize * Z_COUNT * sizeof(fr_t), stream>>>
+        else if (Z_COUNT > warpSize || lg_domain_size <= lg_switch)
+            bit_rev_permutation_z<Z_COUNT><<<domain_size / Z_COUNT / bsize, bsize,
+                                             bsize * Z_COUNT * sizeof(fr_t),
+                                             stream>>>
                                  (d_out, d_inp, lg_domain_size);
         else
             // Those GPUs that can reserve 96KB of shared memory can
             // schedule 2 blocks to each SM...
-            bit_rev_permutation_z<<<gpu_props(stream).multiProcessorCount*2, 192,
-                                    192 * Z_COUNT * sizeof(fr_t), stream>>>
+            bit_rev_permutation_z<Z_COUNT><<<stream.sm_count()*2, 192,
+                                             192 * Z_COUNT * sizeof(fr_t),
+                                             stream>>>
                                  (d_out, d_inp, lg_domain_size);
 
         CUDA_OK(cudaGetLastError());
@@ -61,21 +80,81 @@ private:
                            stream_t& stream)
     {
         size_t domain_size = (size_t)1 << lg_dsz;
+        const uint32_t warpSize = gpu_props(stream).warpSize;
         const auto gen_powers =
-            NTTParameters::all(innt)[stream]->partial_group_gen_powers;
+            NTTParameters::all(innt)[stream].partial_group_gen_powers;
 
-        if (domain_size < WARP_SZ)
+        if (domain_size < warpSize)
             LDE_distribute_powers<<<1, domain_size, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else if (lg_dsz < 32)
-            LDE_distribute_powers<<<domain_size / WARP_SZ, WARP_SZ, 0, stream>>>
+            LDE_distribute_powers<<<domain_size / warpSize, warpSize, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
         else
-            LDE_distribute_powers<<<gpu_props(stream).multiProcessorCount, 1024,
-                                    0, stream>>>
+            LDE_distribute_powers<<<stream.sm_count(), 1024, 0, stream>>>
                                  (inout, lg_dsz, lg_blowup, bitrev, gen_powers);
 
         CUDA_OK(cudaGetLastError());
+    }
+
+    static void CT_NTT(fr_t* d_inout, const int lg_domain_size, bool intt,
+                       const NTTParameters& ntt_parameters,
+                       const stream_t& stream)
+    {
+        CT_launcher params{d_inout, lg_domain_size, intt, ntt_parameters, stream};
+
+        if (lg_domain_size <= 10) {
+            params.step(lg_domain_size);
+        } else if (lg_domain_size <= 18) {
+            int step = lg_domain_size / 2;
+            params.step(step + lg_domain_size % 2);
+            params.step(step);
+        } else if (lg_domain_size <= 30) {
+            int step = lg_domain_size / 3;
+            int rem = lg_domain_size % 3;
+            params.step(step);
+            params.step(step + (lg_domain_size == 29 ? 1 : 0));
+            params.step(step + (lg_domain_size == 29 ? 1 : rem));
+        } else if (lg_domain_size <= 40) {
+            int step = lg_domain_size / 4;
+            int rem = lg_domain_size % 4;
+            params.step(step);
+            params.step(step + (rem > 2));
+            params.step(step + (rem > 1));
+            params.step(step + (rem > 0));
+        } else {
+            assert(false);
+        }
+    }
+
+    static void GS_NTT(fr_t* d_inout, const int lg_domain_size, const bool is_intt,
+                       const NTTParameters& ntt_parameters,
+                       const stream_t& stream)
+    {
+        GS_launcher params{d_inout, lg_domain_size, is_intt, ntt_parameters, stream};
+
+        if (lg_domain_size <= 10) {
+            params.step(lg_domain_size);
+        } else if (lg_domain_size <= 18) {
+            int step = lg_domain_size / 2;
+            params.step(step);
+            params.step(step + lg_domain_size % 2);
+        } else if (lg_domain_size <= 30) {
+            int step = lg_domain_size / 3;
+            int rem = lg_domain_size % 3;
+            params.step(step + (lg_domain_size == 29 ? 1 : rem));
+            params.step(step + (lg_domain_size == 29 ? 1 : 0));
+            params.step(step);
+        } else if (lg_domain_size <= 40) {
+            int step = lg_domain_size / 4;
+            int rem = lg_domain_size % 4;
+            params.step(step + (rem > 0));
+            params.step(step + (rem > 1));
+            params.step(step + (rem > 2));
+            params.step(step);
+        } else {
+            assert(false);
+        }
     }
 
 protected:
@@ -88,7 +167,7 @@ protected:
         // results in a considerable performance gain.
 
         const bool intt = direction == Direction::inverse;
-        const auto& ntt_parameters = *NTTParameters::all(intt)[stream];
+        const auto& ntt_parameters = NTTParameters::all(intt)[stream];
         bool bitrev;
         Algorithm algorithm;
 
@@ -173,12 +252,9 @@ protected:
     {
         assert(lg_domain_size + lg_blowup <= MAX_LG_DOMAIN_SIZE);
         size_t domain_size = (size_t)1 << lg_domain_size;
-        size_t ext_domain_size = domain_size << lg_blowup;
-
-        const cudaDeviceProp& gpu_prop = gpu_props(stream.id());
 
         // Determine the max power of 2 SM count
-        size_t kernel_sms = gpu_prop.multiProcessorCount;
+        size_t kernel_sms = stream.sm_count();
         while (kernel_sms & (kernel_sms - 1))
             kernel_sms -= (kernel_sms & (0 - kernel_sms));
 
@@ -226,7 +302,7 @@ public:
                          Type::standard, gpu);
 
             const auto gen_powers =
-                NTTParameters::all()[gpu.id()]->partial_group_gen_powers;
+                NTTParameters::all()[gpu.id()].partial_group_gen_powers;
 
             event_t sync_event;
 
@@ -269,8 +345,6 @@ public:
                              uint32_t lg_domain_size, InputOutputOrder order,
                              Direction direction, Type type)
     {
-        size_t domain_size = (size_t)1 << lg_domain_size;
-
         NTT_internal(&d_inout[0], lg_domain_size, order, direction, type,
                      stream);
     }
@@ -290,6 +364,4 @@ public:
         LDE_launch(stream, d_out, d_in, NULL, lg_domain_size, lg_blowup, false);
     }
 };
-
-#endif
 #endif

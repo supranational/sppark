@@ -7,6 +7,7 @@
 
 # include <cstddef>
 # include <cstdint>
+# include "pow.hpp"
 
 # define inline __device__ __forceinline__
 # ifdef __GNUC__
@@ -40,6 +41,7 @@ public:
     using mem_t = mont_t;
 protected:
     static const size_t n = (N+31)/32;
+    static_assert((n%2) == 0 && n >= 4, "unsupported bit length");
 private:
     uint32_t even[n];
 
@@ -198,7 +200,7 @@ private:
 public:
     inline uint32_t& operator[](size_t i)               { return even[i]; }
     inline const uint32_t& operator[](size_t i) const   { return even[i]; }
-    inline size_t len() const                           { return n;       }
+    inline constexpr size_t len() const                 { return n;       }
 
     inline mont_t() {}
     inline mont_t(const uint32_t *p)
@@ -206,6 +208,9 @@ public:
         for (size_t i = 0; i < n; i++)
             even[i] = p[i];
     }
+
+    template<typename... Ts>
+    constexpr mont_t(uint32_t a0, Ts... arr) : even{a0, arr...} {}
 
     inline void store(uint32_t *p) const
     {
@@ -311,10 +316,10 @@ public:
         asm("}");
         return *this;
     }
-    friend inline mont_t cneg(mont_t a, bool flag)
+    static inline mont_t cneg(mont_t a, bool flag)
     {   return a.cneg(flag);   }
 #else
-    friend inline mont_t cneg(const mont_t& a, bool flag)
+    static inline mont_t cneg(const mont_t& a, bool flag)
     {
         size_t i;
         uint32_t tmp[n], is_zero = a[0];
@@ -335,9 +340,31 @@ public:
         asm("}");
         return ret;
     }
+    inline mont_t& cneg(bool flag)
+    {   return *this = cneg(*this, flag);   }
 #endif
     inline mont_t operator-() const
     {   return cneg(*this, true);   }
+
+    // make the value "positive" and return the original "sign"
+    inline bool abs()
+    {
+        size_t i;
+        uint32_t tmp[n], sign;
+
+        asm("sub.cc.u32 %0, %1, %2;" : "=r"(tmp[0]) : "r"(MOD[0]), "r"(even[0]));
+        for (i = 1; i < n; i++)
+            asm("subc.cc.u32 %0, %1, %2;" : "=r"(tmp[i]) : "r"(MOD[i]), "r"(even[i]));
+
+        sign = tmp[n-1] < even[n-1];
+
+        asm("{ .reg.pred %flag; setp.ne.u32 %flag, %0, 0;" :: "r"(sign));
+        for (i = 0; i < n; i++)
+            asm("@%flag mov.b32 %0, %1;" : "+r"(even[i]) : "r"(tmp[i]));
+        asm("}");
+
+        return sign;
+    }
 
 private:
     static inline void madc_n_rshift(uint32_t* odd, const uint32_t *a, uint32_t bi)
@@ -403,19 +430,7 @@ public:
     // raise to a variable power, variable in respect to threadIdx,
     // but mind the ^ operator's precedence!
     inline mont_t& operator^=(uint32_t p)
-    {
-        mont_t sqr = *this;
-        *this = csel(*this, one(), p&1);
-
-        #pragma unroll 1
-        while (p >>= 1) {
-            sqr.sqr();
-            if (p&1)
-                *this *= sqr;
-        }
-
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mont_t operator^(mont_t a, uint32_t p)
     {   return a ^= p;   }
     inline mont_t operator()(uint32_t p)
@@ -423,25 +438,7 @@ public:
 
     // raise to a constant power, e.g. x^7, to be unrolled at compile time
     inline mont_t& operator^=(int p)
-    {
-        if (p < 2)
-            asm("trap;");
-
-        mont_t sqr = *this;
-        if ((p&1) == 0) {
-            do {
-                sqr.sqr();
-                p >>= 1;
-            } while ((p&1) == 0);
-            *this = sqr;
-        }
-        for (p >>= 1; p; p >>= 1) {
-            sqr.sqr();
-            if (p&1)
-                *this *= sqr;
-        }
-        return *this;
-    }
+    {   return pow_byref(*this, p);   }
     friend inline mont_t operator^(mont_t a, int p)
     {   return p == 2 ? (mont_t)wide_t{a} : a ^= p;   }
     inline mont_t operator()(int p)
@@ -526,10 +523,17 @@ public:
 
     inline bool is_one() const
     {
+#if __CUDACC_VER_MAJOR__ == 12 && __CUDACC_VER_MINOR__ > 3
+        uint32_t is_zero = 0;
+
+        for (size_t i = 0; i < n; i++)
+            is_zero |= even[i] ^ ONE[i];
+#else
         uint32_t is_zero = even[0] ^ ONE[0];
 
         for (size_t i = 1; i < n; i++)
             is_zero |= even[i] ^ ONE[i];
+#endif
 
         return is_zero == 0;
     }
@@ -714,7 +718,7 @@ public:
         }
     }
 
-    static inline mont_t dot_product(const mont_t a[], const mont_t* b,
+    static inline mont_t dot_product(const mont_t a[], const mont_t* b_ptr,
                                      size_t len, size_t stride_b = 1)
     {
         size_t i;
@@ -727,7 +731,8 @@ public:
         even[i] = even[i+1] = 0;
 
         #pragma unroll
-        for (size_t j = 0; j < len; j++, b += stride_b) {
+        for (size_t j = 0; j < len; j++, b_ptr += stride_b) {
+            mont_t b = *b_ptr;
             tmp = a[j];
             carry = 0;
 
@@ -735,14 +740,14 @@ public:
             for (i = 0; i < n; i += 2) {
                 uint32_t bi;
 
-                cmad_n(&even[i], &tmp[0], bi = (*b)[i]);
+                cmad_n(&even[i], &tmp[0], bi = b[i]);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
                 asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
                     : "+r"(odd[n+i-1]), "+r"(carry));
                 cmad_n(&odd[i], &tmp[1], bi);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
 
-                cmad_n(&odd[i], &tmp[0], bi = (*b)[i+1]);
+                cmad_n(&odd[i], &tmp[0], bi = b[i+1]);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
                 asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
                     : "+r"(even[n+i+1]), "+r"(carry));
@@ -762,18 +767,9 @@ public:
         // reduce |even| modulo |MOD<<(n*32)|
         even.final_sub(carry, &tmp[0]);
 
-        return even; // implict cast to mont_t performs the reduction
+        return even; // implicit cast to mont_t performs the reduction
     }
 
-    inline mont_t shfl_down(uint32_t off) const
-    {
-        mont_t ret;
-
-        for (size_t i = 0; i < n; i++)
-            ret[i] = __shfl_down_sync(0xffffffff, even[i], off);
-
-        return ret;
-    }
     inline mont_t shfl(uint32_t idx, uint32_t mask = 0xffffffff) const
     {
         mont_t ret;
@@ -828,9 +824,10 @@ private:
         }
         uint32_t off = __clz(a_hi | b_hi);
         /* |off| can be LIMB_T_BITS if all a[2..]|b[2..] were zeros */
+        off -= off==32 ? (a_lo | b_lo)>>31 : 1;
 
-        a_ = approx_t{a[0], lshift_2(a_hi, a_lo, off)};
-        b_ = approx_t{b[0], lshift_2(b_hi, b_lo, off)};
+        a_ = approx_t{a[0], off<=32 ? lshift_2(a_hi, a_lo, off) : a_hi>>1 };
+        b_ = approx_t{b[0], off<=32 ? lshift_2(b_hi, b_lo, off) : b_hi>>1 };
     }
 
     static inline void cswap(uint32_t& a, uint32_t& b, uint32_t mask)
@@ -1109,6 +1106,13 @@ public:
     {   return a * b.reciprocal();   }
     inline mont_t& operator/=(const mont_t& a)
     {   return *this *= a.reciprocal();   }
+
+    inline void shfl_bfly(uint32_t laneMask)
+    {
+        #pragma unroll
+        for (size_t i=0; i<n; i++)
+            even[i] = __shfl_xor_sync(0xFFFFFFFF, even[i], laneMask);
+    }
 };
 
 # undef inline
