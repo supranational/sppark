@@ -2,11 +2,17 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
-use std::path::PathBuf;
-use std::process::Command;
 
+#[cfg(feature = "build")]
 fn main() {
+}
+
+#[cfg(not(feature = "build"))]
+fn main() {
+    use std::env;
+    use std::path::PathBuf;
+    use std::process::Command;
+
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let mut base_dir = manifest_dir.join("sppark");
     if !base_dir.exists() {

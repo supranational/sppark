@@ -21,6 +21,7 @@ include = [
 ]
 
 [dependencies]
+cc = { version = "^1.0.70", optional = true }
 
 [build-dependencies]
 # cc 1.1.32 through 1.1.35 are problematic with clang++ as host compiler
@@ -32,3 +33,5 @@ which = "^4.0"
 # coerse either as an alternative to auto-detection
 cuda = []
 rocm = []
+build = [ "cc" ]
+build-poc = [ "build" ]
