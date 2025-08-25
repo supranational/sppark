@@ -97,26 +97,13 @@ fn main() {
     };
 
     if nvcc.is_ok() {
-        let mut nvcc = cc::Build::new();
-        nvcc.cuda(true);
-        nvcc.flag("-arch=sm_80");
-        nvcc.flag("-gencode").flag("arch=compute_70,code=sm_70");
-        nvcc.flag("-t0");
+        let mut nvcc: cc::Build = sppark::build::ccmd();
         if cfg!(feature = "quiet") {
             nvcc.flag("-diag-suppress=177"); // bug in the warning system.
         }
-        #[cfg(not(target_env = "msvc"))]
-        nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
-        nvcc.define("TAKE_RESPONSIBILITY_FOR_ERROR_MESSAGE", None);
         nvcc.define(curve, None);
         if let Some(def) = cc_opt {
             nvcc.define(def, None);
-        }
-        if let Some(include) = env::var_os("DEP_BLST_C_SRC") {
-            nvcc.include(include);
-        }
-        if let Some(include) = env::var_os("DEP_SPPARK_ROOT") {
-            nvcc.include(include);
         }
         nvcc.file("cuda/pippenger_inf.cu").compile("blst_cuda_msm");
 

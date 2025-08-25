@@ -30,6 +30,7 @@ sppark = { path = "../../rust" }
 
 [build-dependencies]
 cc = "^1.0.70"
+sppark = { path = "../../rust", features = [ "build-poc" ] }
 
 [dev-dependencies]
 rand = "^0"
