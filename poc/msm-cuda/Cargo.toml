@@ -35,6 +35,7 @@ ark-bn254 = { version = "0.3.0", optional = true }
 [build-dependencies]
 cc = "^1.0.70"
 which = "^4.0"
+sppark = { path = "../../rust", features = [ "build-poc" ] }
 
 [dev-dependencies]
 criterion = { version = "0.3", features = [ "html_reports" ] }
