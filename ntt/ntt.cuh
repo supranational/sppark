@@ -273,8 +273,8 @@ protected:
         }
 
         stream.launch_coop(LDE_spread_distribute_powers,
-                        {dim3(num_blocks), dim3(block_size),
-                         sizeof(fr_t) * block_size},
+                        launch_params_t{num_blocks, block_size,
+                                        sizeof(fr_t) * block_size},
                         ext_domain_data, domain_data, gen_powers,
                         lg_domain_size, lg_blowup, perform_shift, ext_pow);
     }

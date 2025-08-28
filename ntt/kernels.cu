@@ -73,7 +73,7 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 
         fr_t regs[Z_COUNT];
 
-#ifdef __CUDA_ARCH__
+#ifndef __HIP_DEVICE_COMPILE__
         #pragma unroll
         for (uint32_t i = 0; i < Z_COUNT; i++) {
             xchg[gid][i][rev] = (regs[i] = in[i * step + base_idx]);
