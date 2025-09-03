@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-    sppark.Load("poc.cu", "-O2")
+    sppark.Load("poc.cu", "-O2", "-arch=native")
 }
 
 func CudaFunc() {
