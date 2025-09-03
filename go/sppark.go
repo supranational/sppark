@@ -213,6 +213,28 @@ func Load(baseName string, options ...string) {
     }
 }
 
+func is_cuda_flag_supported(nvcc string, flag string) bool {
+    cmd := exec.Command(nvcc, flag, "--dryrun", "-c", "-x", "cu", os.DevNull)
+    _, err := cmd.Output()
+    return err == nil
+}
+
+func is_rocm_flag_supported(hipcc string, flag string) bool {
+    cmd := exec.Command(hipcc, flag, "-fsyntax-only", "-x", "hip", os.DevNull,
+                               "-Wno-unused-command-line-argument")
+    _, err := cmd.Output()
+    return err == nil
+}
+
+func is_arch_native(custom_args... string) bool {
+    for _, arg := range custom_args {
+        if arg == "-arch=native" {
+            return true
+        }
+    }
+    return false
+}
+
 func build(dst string, src string, custom_args ...string) bool {
     nvcc, ok := os.LookupEnv("NVCC")
     if !ok {
@@ -247,7 +269,12 @@ func build(dst string, src string, custom_args ...string) bool {
 
     cc, ok := os.LookupEnv("CC")
     if !ok {
-        cc = "gcc"  // default for CGO, alternatively examine `go env`...
+        go_env_CC, err := exec.Command("go", "env", "CC").Output()
+        if err != nil {
+            log.Fatal("failed to execute 'go env CC': ", err)
+            return false
+        }
+        cc = strings.TrimSpace(string(go_env_CC))
     }
 
     cmd := exec.Command(cc, "-O2", "-fPIC", "-c",
@@ -281,8 +308,14 @@ func build(dst string, src string, custom_args ...string) bool {
         // Application is free to pass own -arch, which will override
         // this one, with a warning though, but those are not displayed
         // by default...
-        args = append(args, "-arch=native")
-        args = append(args, "-t0")
+        if !is_arch_native(custom_args...) {
+            args = append(args, "-arch=sm_80")
+            if is_cuda_flag_supported(nvcc, "-arch=sm_70") {
+                args = append(args, "-gencode", "arch=compute_70,code=sm_70", "-t0")
+            } else if is_cuda_flag_supported(nvcc, "-arch=sm_75") {
+                args = append(args, "-gencode", "arch=compute_75,code=sm_75", "-t0")
+            }
+        }
         args = append(args, "-cudart=shared")
     } else {
         nvcc = hipcc
@@ -293,8 +326,19 @@ func build(dst string, src string, custom_args ...string) bool {
         args = append(args, "-x", "none", "assembly.o", "cpuid.o")
         // Unlike nvcc hipcc accepts multiple --offload-arch, which are
         // cumulative...
-        args = append(args, "--offload-arch=native")
-        args = append(args, "-parallel-jobs=" + strconv.Itoa(runtime.GOMAXPROCS(0)))
+        if is_arch_native(custom_args...) {
+            args = append(args, "--offload-arch=native")
+        } else {
+            if is_rocm_flag_supported(hipcc, "--offload-arch=gfx1200") {
+                args = append(args, "--offload-arch=gfx1201,gfx1200")
+            }
+            if is_rocm_flag_supported(hipcc, "--offload-arch=gfx1100") {
+                args = append(args, "--offload-arch=gfx1102,gfx1101,gfx1100")
+            }
+            args = append(args, "--offload-arch=gfx1034,gfx1032,gfx1031,gfx1030")
+            args = append(args, "--offload-arch=gfx942,gfx90a,gfx908")
+            args = append(args, "-parallel-jobs=" + strconv.Itoa(runtime.GOMAXPROCS(0)))
+        }
         if runtime.GOOS == "windows" {
             args = append(args, "-Wl,-nodefaultlib:libcmt", "-lmsvcrt")
         }
@@ -303,7 +347,9 @@ func build(dst string, src string, custom_args ...string) bool {
     src = filepath.Dir(src)
     for _, arg := range custom_args {
         if strings.HasPrefix(arg, "-") {
-            if nvcc != hipcc || !strings.HasPrefix(arg, "-arch=") {
+            if nvcc == hipcc && strings.HasPrefix(arg, "--offload-arch=") {
+                args = append(args, arg)
+            } else if nvcc != hipcc || !strings.HasPrefix(arg, "-arch=") {
                 args = append(args, arg)
             }
         } else if strings.HasPrefix(arg, "?cuda-") {
