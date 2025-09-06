@@ -43,13 +43,17 @@ pub fn ccmd() -> cc::Build {
             } else {
                 nvcc.flag("-arch=sm_80");
                 if is_cuda_flag_supported(&nvcc, "-arch=sm_70") {
-                    nvcc.flags(["-gencode", "arch=compute_70,code=sm_70", "-t0"]);
+                    nvcc.flag("-gencode")
+                        .flag("arch=compute_70,code=sm_70")
+                        .flag("-t0");
                 } else if is_cuda_flag_supported(&nvcc, "-arch=sm_75") {
-                    nvcc.flags(["-gencode", "arch=compute_75,code=sm_75", "-t0"]);
+                    nvcc.flag("-gencode")
+                        .flag("arch=compute_75,code=sm_75")
+                        .flag("-t0");
                 }
             }
             #[cfg(not(target_env = "msvc"))]
-            nvcc.flags(["-Xcompiler", "-Wno-unused-function"]);
+            nvcc.flag("-Xcompiler").flag("-Wno-unused-function");
             common_flags(&mut nvcc);
 
             nvcc
@@ -90,7 +94,7 @@ pub fn ccmd() -> cc::Build {
                 hipcc.flag("--offload-arch=gfx1034,gfx1032,gfx1031,gfx1030");
                 hipcc.flag("--offload-arch=gfx942,gfx90a,gfx908");
                 if let Ok(ncpus) = std::thread::available_parallelism() {
-                    hipcc.flag_if_supported(format!("-parallel-jobs={}", ncpus));
+                    hipcc.flag_if_supported(format!("-parallel-jobs={}", ncpus).as_str());
                 }
             }
             common_flags(&mut hipcc);
