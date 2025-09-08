@@ -25,8 +25,10 @@ class sppark_error : public std::runtime_error {
         (void)strerror_s(errmsg, ERRLEN, errnum);
 #elif defined(_GNU_SOURCE)
         auto errstr = strerror_r(errnum, errmsg, ERRLEN);
-        if (errstr != errmsg)
+        if (errstr != errmsg) {
             strncpy(errmsg, errstr, ERRLEN - 1);
+            errmsg[ERRLEN - 1] = '\0';  // Ensure null termination
+        }
 #else
         (void)strerror_r(errnum, errmsg, ERRLEN);
 #endif
