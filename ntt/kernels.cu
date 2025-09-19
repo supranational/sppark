@@ -41,7 +41,7 @@ void bit_rev_permutation(fr_t* d_out, const fr_t *d_in, uint32_t lg_domain_size)
     }
 }
 
-template<unsigned int Z_COUNT, class fr_t>
+template<int Z_COUNT, class fr_t>
 __launch_bounds__(192, 2) __global__
 void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 {
