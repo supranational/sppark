@@ -78,7 +78,7 @@ static inline cudaError_t cudaMallocManaged(T** uniPtr, size_t size)
 
 #define cudaHostAllocDefault                  hipHostMallocDefault
 #define cudaHostAllocPortable                 hipHostMallocPortable
-#define cudaHostAllocaMapped                  hipHostMallocMapped
+#define cudaHostAllocMapped                   hipHostMallocMapped
 #define cudaHostAllocWriteCombined            hipHostMallocWriteCombined
 template<typename T>
 static inline cudaError_t cudaHostAlloc(T** pinnedPtr, size_t size,
