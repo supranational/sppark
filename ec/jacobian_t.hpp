@@ -357,6 +357,11 @@ public:
         B += B;                 /* D = 2*((X1+B)^2-A-C) */
 
         A += A<<1;              /* E = 3*A */
+        if (a4 != nullptr) {
+            field_t Z2 = p1.Z^2;
+            field_t Z4 = Z2^2;
+            A += Z4 * (*a4);    /* E = 3*A + a*Z^4 */
+        }
 
         p3.X = A^2;             /* F = E^2 */
         p3.X -= B;
@@ -418,6 +423,11 @@ public:
                 B += B;             /* D = 2*((X1+B)^2-A-C) */
 
                 A += A<<1;          /* E = 3*A */
+                if (a4 != nullptr) {
+                    field_t Z2 = p1.Z^2;
+                    field_t Z4 = Z2^2;
+                    A += Z4 * (*a4); /* E = 3*A + a*Z^4 */
+                }
 
                 p3.X = A^2;         /* F = E^2 */
                 p3.X -= B;
@@ -500,6 +510,8 @@ public:
                 B += B;             /* D = 2*((X1+B)^2-A-C) */
 
                 A += A<<1;          /* E = 3*A */
+                if (a4 != nullptr)
+                    A += *a4;
 
                 p3.X = A^2;         /* F = E^2 */
                 p3.X -= B;
