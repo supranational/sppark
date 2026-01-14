@@ -88,10 +88,11 @@ pub fn ccmd() -> cc::Build {
                 if is_rocm_flag_supported(&hipcc, "--offload-arch=gfx1200") {
                     hipcc.flag("--offload-arch=gfx1201,gfx1200");
                 }
-                if is_rocm_flag_supported(&hipcc, "--offload-arch=gfx1100") {
-                    hipcc.flag("--offload-arch=gfx1102,gfx1101,gfx1100");
-                }
+                hipcc.flag("--offload-arch=gfx1102,gfx1101,gfx1100");
                 hipcc.flag("--offload-arch=gfx1034,gfx1032,gfx1031,gfx1030");
+                if is_rocm_flag_supported(&hipcc, "--offload-arch=gfx950") {
+                    hipcc.flag("--offload-arch=gfx950");
+                }
                 hipcc.flag("--offload-arch=gfx942,gfx90a,gfx908");
                 if let Ok(ncpus) = std::thread::available_parallelism() {
                     hipcc.flag_if_supported(format!("-parallel-jobs={}", ncpus).as_str());
