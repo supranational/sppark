@@ -732,26 +732,24 @@ public:
 
         #pragma unroll
         for (size_t j = 0; j < len; j++, b_ptr += stride_b) {
-            mont_t b = *b_ptr;
-            tmp = a[j];
+            mont_t bj = *b_ptr;
+            mont_t aj = a[j];
             carry = 0;
 
             #pragma unroll
             for (i = 0; i < n; i += 2) {
-                uint32_t bi;
-
-                cmad_n(&even[i], &tmp[0], bi = b[i]);
+                cmad_n(&even[i], &aj[0], bj[i]);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
                 asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
                     : "+r"(odd[n+i-1]), "+r"(carry));
-                cmad_n(&odd[i], &tmp[1], bi);
+                cmad_n(&odd[i], &aj[1], bj[i]);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
 
-                cmad_n(&odd[i], &tmp[0], bi = b[i+1]);
+                cmad_n(&odd[i], &aj[0], bj[i+1]);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
                 asm("add.cc.u32 %0, %0, %1; addc.u32 %1, 0, 0;"
                     : "+r"(even[n+i+1]), "+r"(carry));
-                cmad_n(&even[i+2], &tmp[1], bi);
+                cmad_n(&even[i+2], &aj[1], bj[i+1]);
                 asm("addc.u32 %0, %0, 0;" : "+r"(carry));
             }
 
