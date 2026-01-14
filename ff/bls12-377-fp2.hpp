@@ -175,7 +175,7 @@ public:
         a += b;
         a += b << 2;
 #endif
-        a = ct_inverse_mod_x(a);    // 1/(x[0]^2 + 5*x[1]^2)
+        a = vt_inverse_mod_x(a);    // 1/(x[0]^2 + 5*x[1]^2)
         a *= (fp_mont)*this;
         a.cneg(threadIdx.x&1);
         return a;

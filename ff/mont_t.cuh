@@ -1197,7 +1197,7 @@ public:
         mont_t a = csel(ONE, even, a_zero);
         mont_t b = shfl_xor(a);
         a *= b;                     // a*b
-        a = ct_inverse_mod_x(a);    // 1/(a*b)
+        a = vt_inverse_mod_x(a);    // 1/(a*b)
         a *= b;                     // b/(a*b) == 1/a
         return czero(a, a_zero);
     }
