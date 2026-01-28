@@ -357,6 +357,12 @@ public:
         B += B;                 /* D = 2*((X1+B)^2-A-C) */
 
         A += A<<1;              /* E = 3*A */
+        if (a4 != nullptr) {
+            p3.X = p1.Z^2;      /* Z1^4 [borrow p3.X] */
+            p3.X = p3.X^2;
+            p3.X *= *a4;
+            A += p3.X;          /* E += a*Z1^4 */
+        }
 
         p3.X = A^2;             /* F = E^2 */
         p3.X -= B;
@@ -418,6 +424,11 @@ public:
                 B += B;             /* D = 2*((X1+B)^2-A-C) */
 
                 A += A<<1;          /* E = 3*A */
+                if (a4 != nullptr) {
+                    p3.X = Z1Z1^2;  /* Z1^4 [borrow p3.X] */
+                    p3.X *= *a4;
+                    A += p3.X;      /* E += Z1^4*a4 */
+                }
 
                 p3.X = A^2;         /* F = E^2 */
                 p3.X -= B;
@@ -500,6 +511,9 @@ public:
                 B += B;             /* D = 2*((X1+B)^2-A-C) */
 
                 A += A<<1;          /* E = 3*A */
+                if (a4 != nullptr) {
+                    A += *a4;       /* E += a4 */
+                }
 
                 p3.X = A^2;         /* F = E^2 */
                 p3.X -= B;
