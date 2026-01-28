@@ -7,6 +7,10 @@
 
 #include "affine_t.hpp"
 
+#ifdef __CUDACC__
+# pragma nv_diag_suppress 284   // NULL reference is not allowed
+#endif
+
 template<class field_t, class field_h = typename field_t::mem_t,
          const field_h* a4 = nullptr>
 class jacobian_t {
