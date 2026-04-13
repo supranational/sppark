@@ -585,4 +585,8 @@ public:
     friend inline bool operator!=(const jacobian_t& p1, const affine_t& p2)
     {   return !p1.eq(p2);   }
 };
+
+#ifdef __CUDACC__
+# pragma nv_diag_default 284
+#endif
 #endif
