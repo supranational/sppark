@@ -16,14 +16,14 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Get date
       id: get-date
       run: echo "date=$(date -u +%Y-%m)" >> $GITHUB_OUTPUT
       shell: bash
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
