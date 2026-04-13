@@ -4,18 +4,15 @@
 
 template <int intermediate_mul, class fr_t>
 __launch_bounds__(768, 1) __global__
-void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
+void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
-             fr_t* d_inout, const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
-             const fr_t* d_radix6_twiddles, const fr_t* d_radixX_twiddles,
-             const fr_t* d_intermediate_twiddles,
-             const unsigned int intermediate_twiddle_shift,
+             const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
+             const fr_t* d_inner_twiddles, const fr_t* d_stage_twiddles,
              const bool is_intt, const fr_t d_domain_size_inverse)
 {
 #if (__CUDACC_VER_MAJOR__-0) >= 11 || defined(__clang__)
     __builtin_assume(lg_domain_size <= MAX_LG_DOMAIN_SIZE);
-    __builtin_assume(radix <= 10);
-    __builtin_assume(iterations <= radix);
+    __builtin_assume(iterations <= 10);
     __builtin_assume(stage <= lg_domain_size - iterations);
 #endif
 
@@ -54,13 +51,17 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     } else if (intermediate_mul == 2) {
         unsigned int diff_mask = (1 << (iterations - 1)) - 1;
         unsigned int root_idx = (tid & diff_mask) * 2;
-        index_t root_pos = thread_ntt_pos << intermediate_twiddle_shift;
+        index_t root_pos = (thread_ntt_pos << stage) + root_idx;
 
-        fr_t t0 = d_intermediate_twiddles[root_pos + root_idx];
-        fr_t t1 = d_intermediate_twiddles[root_pos + root_idx + 1];
+        fr_t t0 = d_stage_twiddles[root_pos];
+        fr_t t1 = d_stage_twiddles[root_pos + 1];
 
         r0 *= t0;
         r1 *= t1;
+    }
+
+    {
+        volatile auto prefetch = d_inner_twiddles[threadIdx.x][0];
     }
 
     {
@@ -69,18 +70,21 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         r0 = r0 + t;
     }
 
+    unsigned int rev_idx = bit_rev(threadIdx.x, iterations);
+
     for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);
         unsigned int thrdMask = (1 << s) - 1;
         unsigned int rank = threadIdx.x & thrdMask;
         bool pos = rank < laneMask;
 
+        fr_t t = d_inner_twiddles[rev_idx >> (iterations-s)];
+
         fr_t x = fr_t::csel(r1, r0, pos);
         x.shfl_bfly(laneMask);
         r0 = fr_t::csel(r0, x, pos);
         r1 = fr_t::csel(x, r1, pos);
 
-        fr_t t = d_radix6_twiddles[rank << (6 - (s + 1))];
         t *= r1;
 
         r1 = r0 - t;
@@ -93,7 +97,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         unsigned int rank = threadIdx.x & thrdMask;
         bool pos = rank < laneMask;
 
-        fr_t t = d_radixX_twiddles[rank << (radix - (s + 1))];
+        fr_t t = d_inner_twiddles[rev_idx >> (iterations-s)];
 
         // shfl_bfly through the shared memory
         extern __shared__ fr_t shared_exchange[];
@@ -161,16 +165,14 @@ public:
 
         assert(num_blocks == (unsigned int)num_blocks);
 
-        fr_t* d_intermediate_twiddles = nullptr;
-        unsigned int intermediate_twiddle_shift = 0;
+        const fr_t* d_stage_twiddles = nullptr;
 
         #define NTT_CONFIGURATION \
                 num_blocks, block_size, sizeof(fr_t) * block_size, stream
 
-        #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
-                d_inout, ntt_parameters.partial_twiddles, \
-                ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
-                d_intermediate_twiddles, intermediate_twiddle_shift, \
+        #define NTT_ARGUMENTS d_inout, lg_domain_size, stage, iterations, \
+                ntt_parameters.partial_twiddles, \
+                ntt_parameters.inner_twiddles, d_stage_twiddles, \
                 is_intt, domain_size_inverse[lg_domain_size]
 
         switch (stage) {
@@ -179,8 +181,7 @@ public:
             break;
         case 6:
             if (iterations <= 6) {
-                intermediate_twiddle_shift = 6;
-                d_intermediate_twiddles = ntt_parameters.radix6_twiddles_6;
+                d_stage_twiddles = ntt_parameters.stage6_twiddles;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
             } else {
                 _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -188,8 +189,7 @@ public:
             break;
         case 7:
             if (iterations <= 7) {
-                intermediate_twiddle_shift = 7;
-                d_intermediate_twiddles = ntt_parameters.radix7_twiddles_7;
+                d_stage_twiddles = ntt_parameters.stage7_twiddles;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
             } else {
                 _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -197,8 +197,7 @@ public:
             break;
         case 8:
             if (iterations <= 8) {
-                intermediate_twiddle_shift = 8;
-                d_intermediate_twiddles = ntt_parameters.radix8_twiddles_8;
+                d_stage_twiddles = ntt_parameters.stage8_twiddles;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
             } else {
                 _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
@@ -206,8 +205,7 @@ public:
             break;
         case 9:
             if (iterations <= 9) {
-                intermediate_twiddle_shift = 9;
-                d_intermediate_twiddles = ntt_parameters.radix9_twiddles_9;
+                d_stage_twiddles = ntt_parameters.stage9_twiddles;
                 _CT_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
             } else {
                 _CT_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);

@@ -4,17 +4,16 @@
 
 template<int z_count, bool coalesced = false, class fr_t>
 __launch_bounds__(768, 1) __global__
-void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
+void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
-             fr_t* d_inout, const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
+             const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
              const fr_t (*d_plus_one_twiddles)[1024],
-             const fr_t* d_radix6_twiddles, const fr_t* d_radixX_twiddles,
+             const fr_t* d_inner_twiddles,
              bool is_intt, const fr_t d_domain_size_inverse)
 {
 #if (__CUDACC_VER_MAJOR__-0) >= 11 || defined(__clang__)
     __builtin_assume(lg_domain_size <= MAX_LG_DOMAIN_SIZE);
-    __builtin_assume(radix <= 10);
-    __builtin_assume(iterations <= radix);
+    __builtin_assume(iterations <= 10);
     __builtin_assume(stage <= lg_domain_size - iterations);
 #endif
     extern __shared__ fr_t shared_exchange[];
@@ -81,6 +80,10 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         }
     }
 
+    {
+        volatile auto prefetch = d_inner_twiddles[threadIdx.x];
+    }
+
     #pragma unroll
     for (int z = 0; z < z_count; z++) {
         fr_t t = r[1][z];
@@ -89,6 +92,8 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
     }
     noop();
 
+    unsigned int rev_idx = bit_rev(threadIdx.x, iterations);
+
     #pragma unroll 1
     for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);
@@ -96,7 +101,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         unsigned int rank = threadIdx.x & thrdMask;
         bool pos = rank < laneMask;
 
-        fr_t root = d_radix6_twiddles[rank << (6 - (s + 1))];
+        fr_t root = d_inner_twiddles[rev_idx >> (iterations - s)];
 
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
@@ -121,7 +126,7 @@ void _CT_NTT(const unsigned int radix, const unsigned int lg_domain_size,
         unsigned int rank = threadIdx.x & thrdMask;
         bool pos = rank < laneMask;
 
-        fr_t root = d_radixX_twiddles[rank << (radix - (s + 1))];
+        fr_t root = d_inner_twiddles[rev_idx >> (iterations - s)];
 
         fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
 
@@ -215,10 +220,10 @@ public:
         const int Z_COUNT = 256/8/sizeof(fr_t);
         size_t shared_sz = sizeof(fr_t) << (radix - 1);
 
-        #define NTT_ARGUMENTS radix, lg_domain_size, stage, iterations, \
-                d_inout, ntt_parameters.partial_twiddles, \
+        #define NTT_ARGUMENTS d_inout, lg_domain_size, stage, iterations, \
+                ntt_parameters.partial_twiddles, \
                 ntt_parameters.plus_one_twiddles, \
-                ntt_parameters.twiddles[0], ntt_parameters.twiddles[radix-6], \
+                ntt_parameters.inner_twiddles, \
                 is_intt, domain_size_inverse[lg_domain_size]
 
         if (num_blocks < Z_COUNT)
