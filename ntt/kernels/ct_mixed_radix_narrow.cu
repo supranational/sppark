@@ -97,11 +97,10 @@ void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
     #pragma unroll 1
     for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
-        bool pos = rank < laneMask;
+        unsigned int rev_rank = rev_idx >> (iterations - s);
+        bool pos = (rev_rank & 1) == 0;
 
-        fr_t root = d_inner_twiddles[rev_idx >> (iterations - s)];
+        fr_t root = d_inner_twiddles[rev_rank];
 
         #pragma unroll
         for (int z = 0; z < z_count; z++) {
@@ -122,11 +121,10 @@ void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
     #pragma unroll 1
     for (unsigned int s = 6; s < iterations; s++) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
-        bool pos = rank < laneMask;
+        unsigned int rev_rank = rev_idx >> (iterations - s);
+        bool pos = (rev_rank & 1) == 0;
 
-        fr_t root = d_inner_twiddles[rev_idx >> (iterations - s)];
+        fr_t root = d_inner_twiddles[rev_rank];
 
         fr_t (*xchg)[z_count] = reinterpret_cast<decltype(xchg)>(shared_exchange);
 

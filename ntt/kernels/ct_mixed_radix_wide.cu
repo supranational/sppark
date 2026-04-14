@@ -74,11 +74,10 @@ void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
 
     for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
-        bool pos = rank < laneMask;
+        unsigned int rev_rank = rev_idx >> (iterations-s);
+        bool pos = (rev_rank & 1) == 0;
 
-        fr_t t = d_inner_twiddles[rev_idx >> (iterations-s)];
+        fr_t t = d_inner_twiddles[rev_rank];
 
         fr_t x = fr_t::csel(r1, r0, pos);
         x.shfl_bfly(laneMask);
@@ -93,11 +92,10 @@ void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
 
     for (unsigned int s = 6; s < iterations; s++) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
-        bool pos = rank < laneMask;
+        unsigned int rev_rank = rev_idx >> (iterations-s);
+        bool pos = (rev_rank & 1) == 0;
 
-        fr_t t = d_inner_twiddles[rev_idx >> (iterations-s)];
+        fr_t t = d_inner_twiddles[rev_rank];
 
         // shfl_bfly through the shared memory
         extern __shared__ fr_t shared_exchange[];

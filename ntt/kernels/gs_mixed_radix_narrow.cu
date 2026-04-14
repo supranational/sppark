@@ -54,9 +54,6 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
     #pragma unroll 1
     for (unsigned int s = iterations; --s >= 6;) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
-        bool pos = rank < laneMask;
 
         fr_t root = d_inner_twiddles[rev_idx >>= 1];
 
@@ -66,6 +63,8 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
             r[0][z] = r[0][z] + r[1][z];
             r[1][z] = t;
         }
+
+        bool pos = (rev_idx & 1) == 0;
 
         __syncthreads();
 
@@ -91,11 +90,10 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
     #pragma unroll 1
     for (unsigned int s = min(iterations, 6u); --s >= 1;) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
-        bool pos = rank < laneMask;
 
         fr_t root = d_inner_twiddles[rev_idx >>= 1];
+
+        bool pos = (rev_idx & 1) == 0;
 
         #pragma unroll
         for (int z = 0; z < z_count; z++) {

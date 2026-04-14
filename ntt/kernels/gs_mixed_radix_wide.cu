@@ -33,8 +33,6 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
 
     for (unsigned int s = iterations; --s >= 6;) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
 
         fr_t t = d_inner_twiddles[rev_idx >>= 1];
 
@@ -44,7 +42,7 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
 
         extern __shared__ fr_t shared_exchange[];
 
-        bool pos = rank < laneMask;
+        bool pos = (rev_idx & 1) == 0;
 
         t = fr_t::csel(r1, r0, pos);
         __syncthreads();
@@ -57,8 +55,6 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
 
     for (unsigned int s = min(iterations, 6u); --s >= 1;) {
         unsigned int laneMask = 1 << (s - 1);
-        unsigned int thrdMask = (1 << s) - 1;
-        unsigned int rank = threadIdx.x & thrdMask;
 
         fr_t t = d_inner_twiddles[rev_idx >>= 1];
 
@@ -66,7 +62,7 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
         r0 = r0 + r1;
         r1 = t;
 
-        bool pos = rank < laneMask;
+        bool pos = (rev_idx & 1) == 0;
 
         t = fr_t::csel(r1, r0, pos);
         t.shfl_bfly(laneMask);
