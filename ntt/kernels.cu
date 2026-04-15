@@ -129,44 +129,6 @@ void bit_rev_permutation_z(fr_t* out, const fr_t* in, uint32_t lg_domain_size)
 }
 
 template<class fr_t>
-__device__ __forceinline__
-fr_t get_intermediate_root(index_t pow, const fr_t (*roots)[WINDOW_SIZE])
-{
-    unsigned int off = 0;
-
-    fr_t t, root;
-
-    if (sizeof(fr_t) <= 8) {
-        root = fr_t::one();
-        bool root_set = false;
-
-        #pragma unroll
-        for (unsigned int pow_win, i = 0; i < WINDOW_NUM; i++) {
-            if (!root_set && (pow_win = pow % WINDOW_SIZE)) {
-                root = roots[i][pow_win];
-                root_set = true;
-            }
-            if (!root_set) {
-                pow >>= LG_WINDOW_SIZE;
-                off++;
-            }
-        }
-    } else {
-        if ((pow % WINDOW_SIZE) == 0) {
-            pow >>= LG_WINDOW_SIZE;
-            off++;
-        }
-        root = roots[off][pow % WINDOW_SIZE];
-    }
-
-    #pragma unroll 1
-    while (pow >>= LG_WINDOW_SIZE)
-        root *= (t = roots[++off][pow % WINDOW_SIZE]);
-
-    return root;
-}
-
-template<class fr_t>
 __launch_bounds__(1024) __global__
 void LDE_distribute_powers(fr_t* d_inout, uint32_t lg_domain_size,
                            uint32_t lg_blowup, bool bitrev,
@@ -271,29 +233,6 @@ void LDE_spread_distribute_powers(fr_t* out, fr_t* in,
         }
 
         idx0 += stride;
-    }
-}
-
-template<class fr_t>
-__device__ __forceinline__
-void get_intermediate_roots(fr_t& root0, fr_t& root1,
-                            index_t idx0, index_t idx1,
-                            const fr_t (*roots)[WINDOW_SIZE])
-{
-    int win = (WINDOW_NUM - 1) * LG_WINDOW_SIZE;
-    int off = (WINDOW_NUM - 1);
-    index_t idxo = idx0 | idx1;
-    index_t mask = ((index_t)1 << win) - 1;
-
-    root0 = roots[off][idx0 >> win];
-    root1 = roots[off][idx1 >> win];
-    #pragma unroll 1
-    while (off-- && (idxo & mask)) {
-        fr_t t;
-        win -= LG_WINDOW_SIZE;
-        mask >>= LG_WINDOW_SIZE;
-        root0 *= (t = roots[off][(idx0 >> win) % WINDOW_SIZE]);
-        root1 *= (t = roots[off][(idx1 >> win) % WINDOW_SIZE]);
     }
 }
 
