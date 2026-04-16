@@ -82,6 +82,7 @@ void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
 
     {
         volatile auto prefetch = d_inner_twiddles[threadIdx.x];
+        (void)prefetch;
     }
 
     #pragma unroll
