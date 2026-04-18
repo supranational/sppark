@@ -165,7 +165,7 @@ void generate_partial_twiddles(fr_t (*roots)[WINDOW_SIZE],
 template<class fr_t> __launch_bounds__(512) __global__
 void generate_inner_twiddles(fr_t* d_inner_twiddles, const fr_t root10)
 {
-    fr_t root = root10^bit_rev(threadIdx.x, 9);
+    fr_t root = root10^bit_rev((unsigned int)threadIdx.x, 9);
 
     d_inner_twiddles[threadIdx.x] = root;
 }
@@ -175,7 +175,7 @@ void generate_stage_twiddles(fr_t* d_radixX_twiddles_X, int n,
                              const fr_t root_of_unity)
 {
     unsigned int nbits = 31 - __clz(blockDim.x);
-    unsigned int pow_rev = bit_rev(threadIdx.x, nbits);
+    unsigned int pow_rev = bit_rev((unsigned int)threadIdx.x, nbits);
 
     if (gridDim.x == 1) {
         d_radixX_twiddles_X[threadIdx.x] = fr_t::one();

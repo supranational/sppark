@@ -49,7 +49,7 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
         }
     }
 
-    unsigned int rev_idx = bit_rev(threadIdx.x, iterations);
+    unsigned int rev_idx = bit_rev((unsigned int)threadIdx.x, iterations);
 
     #pragma unroll 1
     for (unsigned int s = iterations; --s >= 6;) {

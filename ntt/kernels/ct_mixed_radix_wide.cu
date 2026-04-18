@@ -71,7 +71,7 @@ void _CT_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
         r0 = r0 + t;
     }
 
-    unsigned int rev_idx = bit_rev(threadIdx.x, iterations);
+    unsigned int rev_idx = bit_rev((unsigned int)threadIdx.x, iterations);
 
     for (unsigned int s = 1; s < min(iterations, 6u); s++) {
         unsigned int laneMask = 1 << (s - 1);

@@ -29,7 +29,7 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
     fr_t r0 = d_inout[idx0];
     fr_t r1 = d_inout[idx1];
 
-    unsigned int rev_idx = bit_rev(threadIdx.x, iterations);
+    unsigned int rev_idx = bit_rev((unsigned int)threadIdx.x, iterations);
 
     for (unsigned int s = iterations; --s >= 6;) {
         unsigned int laneMask = 1 << (s - 1);
