@@ -41,15 +41,23 @@ pub fn ccmd() -> cc::Build {
             if cfg!(feature = "build-poc") {
                 nvcc.flag("-arch=native");
             } else {
-                nvcc.flag("-arch=sm_80");
+                nvcc.flag("-gencode")
+                    .flag("arch=compute_80,code=\"compute_80,sm_80\"")
+                    .flag("-t0");
                 if is_cuda_flag_supported(&nvcc, "-arch=sm_70") {
                     nvcc.flag("-gencode")
-                        .flag("arch=compute_70,code=sm_70")
-                        .flag("-t0");
+                        .flag("arch=compute_70,code=sm_70");
                 } else if is_cuda_flag_supported(&nvcc, "-arch=sm_75") {
                     nvcc.flag("-gencode")
-                        .flag("arch=compute_75,code=sm_75")
-                        .flag("-t0");
+                        .flag("arch=compute_75,code=sm_75");
+                }
+                if is_cuda_flag_supported(&nvcc, "-arch=sm_100") {
+                    nvcc.flag("-gencode")
+                        .flag("arch=compute_100,code=compute_100");
+                }
+                if is_cuda_flag_supported(&nvcc, "-arch=sm_120") {
+                    nvcc.flag("-gencode")
+                        .flag("arch=compute_120,code=sm_120");
                 }
             }
             #[cfg(not(target_env = "msvc"))]
