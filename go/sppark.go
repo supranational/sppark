@@ -309,11 +309,17 @@ func build(dst string, src string, custom_args ...string) bool {
         // this one, with a warning though, but those are not displayed
         // by default...
         if !is_arch_native(custom_args...) {
-            args = append(args, "-arch=sm_80")
+            args = append(args, "-gencode", "arch=compute_80,code=\"compute_80,sm_80\"", "-t0")
             if is_cuda_flag_supported(nvcc, "-arch=sm_70") {
-                args = append(args, "-gencode", "arch=compute_70,code=sm_70", "-t0")
+                args = append(args, "-gencode", "arch=compute_70,code=sm_70")
             } else if is_cuda_flag_supported(nvcc, "-arch=sm_75") {
-                args = append(args, "-gencode", "arch=compute_75,code=sm_75", "-t0")
+                args = append(args, "-gencode", "arch=compute_75,code=sm_75")
+            }
+            if is_cuda_flag_supported(nvcc, "-arch=sm_100") {
+                args = append(args, "-gencode", "arch=compute_100,code=compute_100")
+            }
+            if is_cuda_flag_supported(nvcc, "-arch=sm_120") {
+                args = append(args, "-gencode", "arch=compute_120,code=sm_120")
             }
         }
         args = append(args, "-cudart=shared")
@@ -336,6 +342,9 @@ func build(dst string, src string, custom_args ...string) bool {
                 args = append(args, "--offload-arch=gfx1102,gfx1101,gfx1100")
             }
             args = append(args, "--offload-arch=gfx1034,gfx1032,gfx1031,gfx1030")
+            if is_rocm_flag_supported(hipcc, "--offload-arch=gfx950") {
+                args = append(args, "--offload-arch=gfx950")
+            }
             args = append(args, "--offload-arch=gfx942,gfx90a,gfx908")
             args = append(args, "-parallel-jobs=" + strconv.Itoa(runtime.GOMAXPROCS(0)))
         }
