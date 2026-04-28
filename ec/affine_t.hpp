@@ -94,7 +94,7 @@ public:
 #ifdef __CUDACC__
     class mem_t {
         field_h X, Y;
-        int inf[sizeof(field_t)%16 ? 2 : 4];
+        int inf[sizeof(field_t)%32 ? (sizeof(field_t)%16 ? 2 : 4) : 8];
 
         inline __device__ bool is_inf() const
         {   return inf[0]&1 != 0;   }
