@@ -7,7 +7,8 @@ __launch_bounds__(768, 1) __global__
 void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
              const unsigned int stage, const unsigned int iterations,
              const fr_t (*d_partial_twiddles)[WINDOW_SIZE],
-             const fr_t* d_inner_twiddles, const fr_t* d_stage_twiddles,
+             const fr_t d_inner_twiddles[512],
+             const fr_t d_stageX_twiddles[512][512],
              const bool is_intt, const fr_t d_domain_size_inverse)
 {
 #if (__CUDACC_VER_MAJOR__-0) >= 11 || defined(__clang__)
@@ -92,13 +93,13 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
         r0 *= first_root;
         r1 *= second_root;
     } else if (intermediate_mul == 2) {
-        index_t thread_ntt_pos = (tid & inp_mask) >> (iterations - 1);
+        unsigned int thread_ntt_pos = (tid & inp_mask) >> (iterations - 1);
         unsigned int diff_mask = (1 << (iterations - 1)) - 1;
         unsigned int root_idx = (tid & diff_mask) * 2;
-        index_t root_pos = (thread_ntt_pos << (stage - iterations)) + root_idx;
+        unsigned int root_pos = thread_ntt_pos << (9 - (stage - iterations));
 
-        fr_t t0 = d_stage_twiddles[root_pos];
-        fr_t t1 = d_stage_twiddles[root_pos + 1];
+        fr_t t0 = d_stageX_twiddles[root_pos][root_idx];
+        fr_t t1 = d_stageX_twiddles[root_pos][root_idx + 1];
 
         r0 *= t0;
         r1 *= t1;
@@ -153,56 +154,22 @@ public:
 
         assert(num_blocks == (unsigned int)num_blocks);
 
-        const fr_t* d_stage_twiddles = nullptr;
-
         #define NTT_CONFIGURATION \
             num_blocks, block_size, sizeof(fr_t) * block_size, stream
 
         #define NTT_ARGUMENTS d_inout, lg_domain_size, stage, iterations, \
                 ntt_parameters.partial_twiddles, \
-                ntt_parameters.inner_twiddles, d_stage_twiddles, \
+                ntt_parameters.inner_twiddles, \
+                ntt_parameters.stageX_twiddles, \
                 is_intt, domain_size_inverse[lg_domain_size]
 
-        switch (stage - iterations) {
-        case 0:
+        int out_stage = stage - iterations;
+        if (out_stage == 0)
             _GS_NTT<0><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            break;
-        case 6:
-            if (iterations <= 6) {
-                d_stage_twiddles = ntt_parameters.stage6_twiddles;
-                _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            } else {
-                _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            }
-            break;
-        case 7:
-            if (iterations <= 7) {
-                d_stage_twiddles = ntt_parameters.stage7_twiddles;
-                _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            } else {
-                _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            }
-            break;
-        case 8:
-            if (iterations <= 8) {
-                d_stage_twiddles = ntt_parameters.stage8_twiddles;
-                _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            } else {
-                _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            }
-            break;
-        case 9:
-            if (iterations <= 9) {
-                d_stage_twiddles = ntt_parameters.stage9_twiddles;
-                _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            } else {
-                _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            }
-            break;
-        default:
+        else if (out_stage <= 9 && iterations <= 9)
+            _GS_NTT<2><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
+        else
             _GS_NTT<1><<<NTT_CONFIGURATION>>>(NTT_ARGUMENTS);
-            break;
-        }
 
         #undef NTT_CONFIGURATION
         #undef NTT_ARGUMENTS

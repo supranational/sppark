@@ -171,40 +171,34 @@ void generate_inner_twiddles(fr_t* d_inner_twiddles, const fr_t root10)
 }
 
 template<class fr_t> __launch_bounds__(512) __global__
-void generate_stage_twiddles(fr_t* d_radixX_twiddles_X, int n,
+void generate_stage_twiddles(fr_t d_stageX_twiddles[/*nrows*/][512], int nrows,
                              const fr_t root_of_unity)
 {
     unsigned int nbits = 31 - __clz(blockDim.x);
     unsigned int pow_rev = bit_rev((unsigned int)threadIdx.x, nbits);
 
-    if (gridDim.x == 1) {
-        d_radixX_twiddles_X[threadIdx.x] = fr_t::one();
-        d_radixX_twiddles_X += blockDim.x;
+    if (false && gridDim.x == 1) {  // kept for reference
+        d_stageX_twiddles[0][threadIdx.x] = fr_t::one();
 
         fr_t root0 = root_of_unity^pow_rev;
 
-        d_radixX_twiddles_X[threadIdx.x] = root0;
-        d_radixX_twiddles_X += blockDim.x;
+        d_stageX_twiddles[1][threadIdx.x] = root0;
 
         fr_t root1 = root0;
 
-        for (int i = 2; i < n; i++) {
+        for (int i = 2; i < nrows; i++) {
             root1 *= root0;
-            d_radixX_twiddles_X[threadIdx.x] = root1;
-            d_radixX_twiddles_X += blockDim.x;
+            d_stageX_twiddles[i][threadIdx.x] = root1;
         }
     } else {
         fr_t root0 = root_of_unity^(pow_rev * gridDim.x);
         fr_t root1 = root_of_unity^(pow_rev * blockIdx.x);
-        unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-        d_radixX_twiddles_X[tid] = root1;
-        d_radixX_twiddles_X += gridDim.x * blockDim.x;
+        d_stageX_twiddles[blockIdx.x][threadIdx.x] = root1;
 
-        for (int i = gridDim.x; i < n; i += gridDim.x) {
+        for (int i = gridDim.x + blockIdx.x; i < nrows; i += gridDim.x) {
             root1 *= root0;
-            d_radixX_twiddles_X[tid] = root1;
-            d_radixX_twiddles_X += gridDim.x * blockDim.x;
+            d_stageX_twiddles[i][threadIdx.x] = root1;
         }
     }
 }
@@ -238,18 +232,7 @@ public:
     fr_t (*partial_group_gen_powers)[WINDOW_SIZE]; // for LDE
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-    fr_t* stage6_twiddles, * stage7_twiddles,
-        * stage8_twiddles, * stage9_twiddles;
-
-private:
-    fr_t* stage_twiddles(int num_blocks, int block_size, const fr_t& root,
-                         stream_t& s)
-    {
-        fr_t* ret = (fr_t*)s.Dmalloc(num_blocks * block_size * sizeof(fr_t));
-        generate_stage_twiddles<<<16, block_size, 0, s>>>(ret, num_blocks, root);
-        CUDA_OK(cudaGetLastError());
-        return ret;
-    }
+    fr_t (*stageX_twiddles)[512];
 #else
     fr_t (*plus_one_twiddles)[1024];
 #endif
@@ -268,10 +251,12 @@ public:
         CUDA_OK(cudaGetLastError());
 
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-        stage6_twiddles = stage_twiddles(64, 64, roots[12], gpu[1]);
-        stage7_twiddles = stage_twiddles(128, 128, roots[14], gpu[2]);
-        stage8_twiddles = stage_twiddles(256, 256, roots[16], gpu[0]);
-        stage9_twiddles = stage_twiddles(512, 512, roots[18], gpu[1]);
+        stageX_twiddles = reinterpret_cast<decltype(stageX_twiddles)>
+                          (gpu[1].Dmalloc(512 * 512 * sizeof(fr_t)));
+
+        generate_stage_twiddles<<<16, 512, 0, gpu[1]>>>(stageX_twiddles, 512,
+                                                        roots[18]);
+        CUDA_OK(cudaGetLastError());
 #else
         plus_one_twiddles = reinterpret_cast<decltype(plus_one_twiddles)>
                             (gpu[1].Dmalloc((MAX_LG_DOMAIN_SIZE-15) * 1024 * sizeof(fr_t)));
@@ -307,10 +292,7 @@ public:
 
             (void)cudaFreeAsync(partial_twiddles, gpu[2]);
 #if !defined(FEATURE_BABY_BEAR) && !defined(FEATURE_GOLDILOCKS)
-            (void)cudaFreeAsync(stage9_twiddles, gpu[1]);
-            (void)cudaFreeAsync(stage8_twiddles, gpu[0]);
-            (void)cudaFreeAsync(stage7_twiddles, gpu[2]);
-            (void)cudaFreeAsync(stage6_twiddles, gpu[1]);
+            (void)cudaFreeAsync(stageX_twiddles, gpu[1]);
 #else
             (void)cudaFreeAsync(plus_one_twiddles, gpu[1]);
 #endif
