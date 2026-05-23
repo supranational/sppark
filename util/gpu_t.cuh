@@ -271,13 +271,16 @@ template<typename T> class gpu_ptr_t {
         T* ptr;
         std::atomic<size_t> ref_cnt;
         int real_id;
-        inline inner(T* p) : ptr(p), ref_cnt(1)
+        cudaStream_t stream;
+        inline inner(T* p, cudaStream_t s = nullptr)
+            : ptr(p), ref_cnt(1), stream(s)
         {   (void)cudaGetDevice(&real_id);   }
     };
     inner *ptr;
 public:
     gpu_ptr_t() : ptr(nullptr)    {}
     gpu_ptr_t(T* p)               { ptr = new inner(p); }
+    gpu_ptr_t(T* p, cudaStream_t s) { ptr = new inner(p, s); }
     gpu_ptr_t(const gpu_ptr_t& r) { *this = r; }
     ~gpu_ptr_t()
     {
@@ -286,7 +289,10 @@ public:
             (void)cudaGetDevice(&current_id);
             if (current_id != ptr->real_id)
                 (void)cudaSetDevice(ptr->real_id);
-            (void)cudaFreeAsync(ptr->ptr, nullptr);
+            if (ptr->stream)
+                (void)cudaFreeAsync(ptr->ptr, ptr->stream);
+            else
+                (void)cudaFree(ptr->ptr);
             if (current_id != ptr->real_id)
                 (void)cudaSetDevice(current_id);
             delete ptr;
