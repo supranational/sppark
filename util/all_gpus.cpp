@@ -19,7 +19,7 @@ public:
         for (int id = 0; id < n; id++) {
             cudaDeviceProp prop;
             if (cudaGetDeviceProperties(&prop, id) == cudaSuccess &&
-                prop.major >= PROP_MAJOR_MIN && prop.cooperativeLaunch) {
+                prop.major >= PROP_MAJOR_MIN) {
                 (void)cudaSetDevice(id);
                 gpus.push_back(new gpu_t(gpus.size(), id, prop));
             }

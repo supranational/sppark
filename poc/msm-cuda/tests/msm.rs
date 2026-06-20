@@ -38,7 +38,37 @@ fn msm_correctness() {
     assert_eq!(msm_result, arkworks_result);
 }
 
-#[cfg(any(feature = "bls12_381", feature = "bls12_377", feature = "bn254"))]
+// Check the MSM against arkworks across a range of sizes in one run. On GPUs that
+// lack cooperative launch this drives the non-cooperative sort/accumulate fallback;
+// on GPUs that have it, set SPPARK_FORCE_NONCOOP=1 to exercise the same fallback and
+// confirm it agrees with both the cooperative path and arkworks.
+#[test]
+fn msm_correctness_sizes() {
+    for npow in [4usize, 8, 10, 12, 14, 16] {
+        let npoints = 1usize << npow;
+
+        let (points, scalars) =
+            util::generate_points_scalars::<G1Affine>(npoints);
+
+        let msm_result = multi_scalar_mult_arkworks(points.as_slice(), unsafe {
+            std::mem::transmute::<&[_], &[BigInteger256]>(scalars.as_slice())
+        })
+        .into_affine();
+
+        let arkworks_result =
+            VariableBaseMSM::multi_scalar_mul(points.as_slice(), unsafe {
+                std::mem::transmute::<&[_], &[BigInteger256]>(scalars.as_slice())
+            })
+            .into_affine();
+
+        assert_eq!(msm_result, arkworks_result, "npow = {}", npow);
+    }
+}
+
+#[cfg(all(
+    not(feature = "rocm"),
+    any(feature = "bls12_381", feature = "bls12_377", feature = "bn254")
+))]
 #[test]
 fn msm_fp2_correctness() {
     let test_npow = std::env::var("TEST_NPOW").unwrap_or("14".to_string());
