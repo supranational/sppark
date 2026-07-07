@@ -585,16 +585,20 @@ public:
                                    scalar_ptr_t scalars, bool mont = true,
                                    size_t ffi_affine_sz = sizeof(affine_t))
     {
-        const auto* p_ptr = &points[0];
-        if (is_device_ptr<affine_ptr_t>::value) {
-            d_points = (decltype(d_points))p_ptr;
-            p_ptr = nullptr;
+        const affine_t* p_ptr = nullptr;
+        const scalar_t* s_ptr = nullptr;
+
+        if constexpr (is_device_ptr<affine_ptr_t>::value) {
+            d_points = (decltype(d_points))static_cast<const affine_h*>(points);
+        } else {
+            p_ptr = points;
         }
 
-        const auto* s_ptr = &scalars[0];
-        if (is_device_ptr<scalar_ptr_t>::value) {
-            d_scalars = const_cast<decltype(d_scalars)>(s_ptr);
-            s_ptr = nullptr;
+        if constexpr (is_device_ptr<scalar_ptr_t>::value) {
+            d_scalars = const_cast<decltype(d_scalars)>(
+                static_cast<const scalar_t*>(scalars));
+        } else {
+            s_ptr = scalars;
         }
 
         return invoke(out, p_ptr, npoints, s_ptr, mont, ffi_affine_sz);
