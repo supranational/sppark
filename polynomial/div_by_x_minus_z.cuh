@@ -240,6 +240,8 @@ void d_div_by_x_minus_z(fr_t d_inout[], size_t len, fr_t z)
 
                         fr_t temp = xchg[laneid];
 
+                        __syncthreads();
+
                         my::madd_up(temp, z_pow,
                                     (gridDim.x + WARP_SZ - 1)/WARP_SZ);
 
@@ -345,6 +347,8 @@ void d_div_by_x_minus_z(fr_t d_inout[], size_t len, fr_t z)
 
                         acc = xchg[laneid];
 
+                        __syncthreads();
+
                         limit = (gridDim.x + WARP_SZ - 1)/WARP_SZ;
                         adjust = warpid;
                         z_pow_adjust = z_pow_carry[laneid];
@@ -401,6 +405,8 @@ void d_div_by_x_minus_z(fr_t d_inout[], size_t len, fr_t z)
         }
 
         if (N > 1) {
+            __syncthreads();
+
             if (laneid == WARP_SZ-1)
                 xchg[warpid] = coeff[N-1];
 
@@ -419,10 +425,9 @@ void d_div_by_x_minus_z(fr_t d_inout[], size_t len, fr_t z)
                 coeff[i] += (carry *= z_pow);
         }
 
-        if (tail_sync) {
+        if (tail_sync)
             __grid.sync();
-            __syncthreads();
-        }
+        __syncthreads();
 
         #pragma unroll
         for (int i = 0; i < N; i++) {
