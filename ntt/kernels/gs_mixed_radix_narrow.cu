@@ -169,6 +169,12 @@ void _GS_NTT(fr_t* d_inout, const unsigned int lg_domain_size,
     idx1 = (idx1 & ~mask) | (rotw & mask);
 
     if (coalesced) {
+        // The shared-memory stages above end on a read of another warp's row
+        // (xchg[threadIdx.x ^ laneMask], laneMask >= 32) with no barrier after
+        // it, and transpose() writes rows of the same dynamic shared allocation.
+        // A warp that gets here early would overwrite rows a lagging warp has
+        // not read yet. _CT_NTT already ends its shared stages with a barrier.
+        __syncthreads();
         transpose<z_count>(r[0]);
         __syncwarp();
         transpose<z_count>(r[1]);
