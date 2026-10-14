@@ -138,7 +138,7 @@ static inline __device__ void __syncwarp() { __builtin_amdgcn_wave_barrier(); }
  * optimized away.
  */
 
-#define WARP_SZ 32
+#define WARP_SZ 32U
 
 template<typename T> __device__ __forceinline__
 static T __shfl_sync(uint32_t mask, const T& src, uint32_t idx)
