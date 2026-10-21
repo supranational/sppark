@@ -216,7 +216,7 @@ static void mult(point_t& ret, const affine_t& point,
 #include <util/thread_pool_t.hpp>
 
 template <class bucket_t, class point_t, class scalar_t,
-          class affine_t = class bucket_t::affine_t>
+          class affine_t = typename bucket_t::affine_t>
 static void mult_pippenger(point_t& ret, const affine_t points[], size_t npoints,
                            const scalar_t _scalars[], bool mont,
                            thread_pool_t* da_pool = nullptr)
@@ -350,7 +350,7 @@ static void mult_pippenger(point_t& ret, const affine_t points[], size_t npoints
 }
 
 template <class bucket_t, class point_t, class scalar_t,
-          class affine_t = class bucket_t::affine_t>
+          class affine_t = typename bucket_t::affine_t>
 static void mult_pippenger(point_t& ret, const std::vector<affine_t>& points,
                            const std::vector<scalar_t>& scalars, bool mont,
                            thread_pool_t* da_pool = nullptr)
@@ -363,7 +363,7 @@ static void mult_pippenger(point_t& ret, const std::vector<affine_t>& points,
 #include <util/slice_t.hpp>
 
 template <class bucket_t, class point_t, class scalar_t,
-          class affine_t = class bucket_t::affine_t>
+          class affine_t = typename bucket_t::affine_t>
 static void mult_pippenger(point_t& ret, slice_t<affine_t> points,
                            slice_t<scalar_t> scalars, bool mont,
                            thread_pool_t* da_pool = nullptr)

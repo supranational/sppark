@@ -5,7 +5,7 @@
 #ifndef __SPPARK_EC_AFFINE_T_HPP__
 #define __SPPARK_EC_AFFINE_T_HPP__
 
-#ifndef __CUDACC__
+#if !defined(__CUDACC__) && !defined(__HIPCC__)
 # undef  __host__
 # define __host__
 # undef  __device__
@@ -27,7 +27,7 @@ public:
     inline __host__ __device__ Affine_t(const field_t& x, const field_t& y) :
                                                      X(x),             Y(y) {}
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     inline __device__ bool is_inf() const
     {   return (bool)(X.is_zero(Y));   }
 #else
@@ -52,7 +52,7 @@ public:
     friend inline bool operator!=(const Affine_t& p1, const point_t& p2)
     {   return p2 != p1;   }
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
     class mem_t {
         field_h X, Y;
 
@@ -91,7 +91,7 @@ public:
         return affine_t{czero(X, inf), czero(Y, inf)};
     }
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
     class mem_t {
         field_h X, Y;
         int inf[sizeof(field_t)%32 ? (sizeof(field_t)%16 ? 2 : 4) : 8];

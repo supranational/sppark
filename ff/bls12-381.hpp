@@ -50,10 +50,12 @@ namespace device {
     };
     static __device__ __constant__ /*const*/ uint32_t BLS12_381_m0 = 0xffffffff;
 }
-# if defined(__CUDA_ARCH__) || defined(__HIPCC__)   // device-side field types
+# if defined(__CUDA_ARCH__) || \
+     (defined(SPPARK_HIP_HOST_FIELD) && defined(__HIP_DEVICE_COMPILE__)) || \
+     (!defined(SPPARK_HIP_HOST_FIELD) && defined(__HIPCC__))   // device-side field types
 #  if defined(__CUDA_ARCH__)
 #   include "mont_t.cuh"
-#  elif defined(__HIPCC__)
+#  else
 #   include "mont_t.hip"
 typedef uint64_t vec256[4];
 #  endif
@@ -65,8 +67,8 @@ typedef mont_t<381, device::BLS12_381_P, device::BLS12_381_M0,
                     device::BLS12_381_Px8> fp_mont;
 struct fp_t : public fp_mont {
     using mem_t = fp_t;
-    __device__ __forceinline__ fp_t() {}
-    __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
+    __host__ __device__ __forceinline__ fp_t() {}
+    __host__ __device__ __forceinline__ fp_t(const fp_mont& a) : fp_mont(a) {}
     template<typename... Ts> constexpr fp_t(Ts... a)  : fp_mont{a...} {}
 };
 typedef mont_t<255, device::BLS12_381_r, device::BLS12_381_m0,
@@ -74,8 +76,8 @@ typedef mont_t<255, device::BLS12_381_r, device::BLS12_381_m0,
                     device::BLS12_381_rx2> fr_mont;
 struct fr_t : public fr_mont {
     using mem_t = fr_t;
-    __device__ __forceinline__ fr_t() {}
-    __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
+    __host__ __device__ __forceinline__ fr_t() {}
+    __host__ __device__ __forceinline__ fr_t(const fr_mont& a) : fr_mont(a) {}
     template<typename... Ts> constexpr fr_t(Ts... a)  : fr_mont{a...} {}
 #  ifdef __HIPCC__
     __host__   __forceinline__ fr_t(vec256 a)         : fr_mont(a) {}
@@ -87,7 +89,9 @@ struct fr_t : public fr_mont {
 # endif
 #endif
 
-#if !defined(__CUDA_ARCH__) && !defined(__HIPCC__)  // host-side field types
+#if !defined(__CUDA_ARCH__) && \
+    !(defined(SPPARK_HIP_HOST_FIELD) && defined(__HIP_DEVICE_COMPILE__)) && \
+    !(!defined(SPPARK_HIP_HOST_FIELD) && defined(__HIPCC__))  // host-side field types
 # include <blst_t.hpp>
 
 # if defined(__GNUC__) && !defined(__clang__)

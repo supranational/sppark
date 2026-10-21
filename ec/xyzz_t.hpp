@@ -7,7 +7,7 @@
 
 #include "affine_t.hpp"
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 # pragma nv_diag_suppress 284   // NULL reference is not allowed
 #endif
 
@@ -25,7 +25,7 @@ public:
                                                    ZZZ(field_t::one(is_inf)),
                                                    ZZ(ZZZ) {}
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
     class mem_t { friend class xyzz_t;
         field_h X, Y, ZZZ, ZZ;
 
@@ -89,7 +89,7 @@ public:
     {   return jacobian_t<field_t, field_h, a4>{ X*ZZ, Y*ZZZ, ZZ };   }
 #endif
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     inline __device__ bool is_inf() const
     {   return (bool)(ZZZ.is_zero(ZZ));   }
 #else
@@ -99,12 +99,16 @@ public:
     inline __host__ __device__ void inf()          { ZZZ.zero(); ZZ.zero(); }
     inline __host__ __device__ void cneg(bool neg) { ZZZ.cneg(neg); }
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     static inline __device__ void prefetch(const xyzz_t* p_)
     {
         const unsigned char* p = (const unsigned char*)p_;
         for (size_t i = 0; i < sizeof(*p_); i += 128)
+#if defined(__HIP_DEVICE_COMPILE__)
+            __builtin_prefetch(p+i, 0, 1);
+#else
             asm("prefetch.global.L2 [%0];" :: "l"(p+i));
+#endif
     }
 #endif
 
@@ -123,7 +127,7 @@ public:
             return;
         }
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
         xyzz_t p31 = *this;
 #else
         xyzz_t& p31 = *this;
@@ -171,7 +175,7 @@ public:
             M = p31.X^2;
             M = M + M + M;          /* M = 3*X1^2[+a*ZZ1^2] */
             if (a4 != nullptr) {
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
                 U = *a4;
                 U *= p31.ZZ^2;
 #else
@@ -194,12 +198,12 @@ public:
         } else {                    /* X1==X2 && Y1==-Y2 */\
             p31.inf();              /* set |p3| to infinity */\
         }
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
         *this = p31;
 #endif
     }
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     __device__ void uadd(const xyzz_t& p2)
     {
         xyzz_t p31 = *this;
@@ -339,7 +343,7 @@ public:
         *this = p31;
     }
 #else
-    inline void uadd(const xyzz_t& p2) { add(p2); }
+    __host__ __device__ void uadd(const xyzz_t& p2) { add(p2); }
 #endif
 
     /*
@@ -351,7 +355,7 @@ public:
     template<class affine_t>
     __host__ __device__ void add(const affine_t& p2, bool subtract = false)
     {
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
         xyzz_t p31 = *this;
 #else
         xyzz_t& p31 = *this;
@@ -403,7 +407,7 @@ public:
                 M = p2.X^2;
                 M = M + M + M;          /* M = 3*X1^2[+a] */
                 if (a4 != nullptr) {
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
                     M += (U = *a4);
 #else
                     M += *a4;
@@ -423,12 +427,12 @@ public:
                 p31.inf();              /* set |p3| to infinity */
             }
         }
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
         *this = p31;
 #endif
     }
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     template<class affine_t>
     __device__ void uadd(const affine_t& p2, bool subtract = false)
     {
@@ -542,12 +546,12 @@ public:
     }
 #else
     template<class affine_t>
-    inline void uadd(const affine_t& p2, bool subtract = false)
+    __host__ __device__ void uadd(const affine_t& p2, bool subtract = false)
     {   add(p2, subtract);   }
 #endif
 };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 # pragma nv_diag_default 284
 #endif
 #endif

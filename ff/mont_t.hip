@@ -1,6 +1,10 @@
 // Copyright Supranational LLC
+// Copyright (c) 2026 Advanced Micro Devices, Inc.
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
+//
+// ROCm/HIP host+device field arithmetic and MSM support extensions
+// by Jeff Daily <jeff.daily@amd.com>.
 
 #if defined(__HIPCC__) && !defined(__SPPARK_FF_MONT_T_HIP__)
 # define __SPPARK_FF_MONT_T_HIP__
@@ -30,7 +34,14 @@
 # define __MONT_T_XSTR(x) __MONT_T_STR(x)
 # define S_OP(op) "s_" #op "_b" __MONT_T_XSTR(__AMDGCN_WAVEFRONT_SIZE) " "
 
-# define inline __device__ __forceinline__
+// The MSM driver runs its post-kernel point accumulation (collect/integrate)
+// on the CPU using this same field type, so the field must be callable from
+// host as well as device. clang's HIP front end type-checks host functions in
+// the device pass and vice versa, so every method is __host__ __device__ with
+// the GCN-asm fast path guarded by __HIP_DEVICE_COMPILE__ and a portable C++
+// fallback for the host pass. (nvcc tolerates the device-only spelling because
+// it discards unreferenced host code from its device pass; clang does not.)
+# define inline __host__ __device__ __forceinline__
 
 //
 // To instantiate declare modulus as __device__ __constant___ const and
@@ -44,7 +55,7 @@ template<const size_t N, const uint32_t MOD[(N+31)/32], const uint32_t& M0,
 class __align__(((N+63)/64)&1 ? 8 : 16) mont_t {
 public:
     static const size_t nbits = N;
-    static constexpr size_t __device__ bit_length() { return N; }
+    static constexpr __host__ __device__ size_t bit_length() { return N; }
     static const uint32_t degree = 1;
     using mem_t = mont_t;
 protected:
@@ -59,7 +70,11 @@ private:
     using cond_t = uint32_t;
 # endif
 
+#if defined(__HIP_DEVICE_COMPILE__)
     static __device__ __noinline__ void noop()          { asm("");       }
+#else
+    static __host__ void noop()                         {                }
+#endif
 
     inline operator const uint32_t*() const             { return val;    }
     inline operator uint32_t*()                         { return val;    }
@@ -93,15 +108,72 @@ public:
             p[i] = val[i];
     }
 
+    inline mont_t& operator<<=(unsigned l)
+    {
+        while (l--) {
+            cond_t carry;
+#if defined(__HIP_DEVICE_COMPILE__)
+            asm("v_add_co_u32   %0, %1, %0, %0"     : "+v"(val[0]), "=s"(carry));
+            for (size_t i=1; i<n; i++)
+                asm( v_addc_co_u32 "%0, %1, %0, %0, %1" : "+v"(val[i]), "+s"(carry));
+#else
+            uint64_t c = 0;
+            for (size_t i=0; i<n; i++) {
+                uint64_t s = (uint64_t)val[i] + val[i] + c;
+                val[i] = (uint32_t)s;
+                c = s >> 32;
+            }
+            carry = (cond_t)c;
+#endif
+            final_sub(carry);
+        }
+
+        return *this;
+    }
+    friend inline mont_t operator<<(mont_t a, unsigned l)
+    {   return a <<= l;   }
+
+    inline mont_t& operator>>=(unsigned r)
+    {
+        while (r--) {
+            uint32_t mask = 0 - (val[0] & 1);   // all ones if odd
+            uint64_t c = 0;
+            uint32_t tmp[n+1];
+            for (size_t i=0; i<n; i++) {
+                uint64_t s = (uint64_t)val[i] + (MOD[i] & mask) + c;
+                tmp[i] = (uint32_t)s;
+                c = s >> 32;
+            }
+            tmp[n] = (N % 32 == 0) ? (uint32_t)c : 0;
+
+            for (size_t i=0; i<n; i++)
+                val[i] = (tmp[i] >> 1) | (tmp[i+1] << 31);
+        }
+
+        return *this;
+    }
+    friend inline mont_t operator>>(mont_t a, unsigned r)
+    {   return a >>= r;   }
+
     inline mont_t& operator+=(const mont_t& b)
     {
         cond_t carry;
 
+#if defined(__HIP_DEVICE_COMPILE__)
         asm("v_add_co_u32   %0, %1, %0, %2"         : "+v"(val[0]), "=s"(carry)
                                                     : "v"(b[0]));
         for (size_t i=1; i<n; i++)
             asm( v_addc_co_u32 "%0, %1, %0, %2, %1" : "+v"(val[i]), "+s"(carry)
                                                     : "v"(b[i]));
+#else
+        uint64_t c = 0;
+        for (size_t i=0; i<n; i++) {
+            uint64_t s = (uint64_t)val[i] + b[i] + c;
+            val[i] = (uint32_t)s;
+            c = s >> 32;
+        }
+        carry = (cond_t)c;
+#endif
         final_sub(carry);
 
         return *this;
@@ -114,6 +186,7 @@ public:
         cond_t borrow, carry;
         uint32_t tmp[n];
 
+#if defined(__HIP_DEVICE_COMPILE__)
         asm("v_sub_co_u32   %0, %1, %0, %2"         : "+v"(val[0]), "=s"(borrow)
                                                     : "v"(b[0]));
         for (size_t i=1; i<n; i++)
@@ -131,6 +204,22 @@ public:
         asm("v_cndmask_b32  %0, %0, %1, %2"         : "+v"(val[n-1])
                                                     : "v"(tmp[n-1]), "s"(borrow));
         noop();
+#else
+        (void)carry;
+        uint64_t bw = 0;
+        for (size_t i=0; i<n; i++) {
+            uint64_t d = (uint64_t)val[i] - b[i] - bw;
+            val[i] = (uint32_t)d;
+            bw = (d >> 32) & 1;
+        }
+        borrow = (cond_t)(0 - bw);  // all-ones mask when a borrow occurred
+        uint64_t c = 0;
+        for (size_t i=0; i<n; i++) {
+            uint64_t s = (uint64_t)val[i] + (MOD[i] & (uint32_t)borrow) + c;
+            val[i] = (uint32_t)s;
+            c = s >> 32;
+        }
+#endif
 
         return *this;
     }
@@ -163,8 +252,14 @@ public:
             if (N%32 != 0) {
                 ret[n-1] = u[1] + top;
             } else {
+#if defined(__HIP_DEVICE_COMPILE__)
                 asm( v_addc_co_u32 "%0, %1, %2, %3, %1" : "=v"(ret[n-1]), "+s"(carry)
                                                         : "v"(u[1]), "v"(top));
+#else
+                uint64_t s = (uint64_t)u[1] + top + (carry & 1);
+                ret[n-1] = (uint32_t)s;
+                carry = (cond_t)(s >> 32);
+#endif
             }
 
             if (++j == n)
@@ -180,8 +275,14 @@ public:
             if (N%32 != 0) {
                 top = u[1];
             } else {
+#if defined(__HIP_DEVICE_COMPILE__)
                 asm( v_addc_co_u32 "%0, %1, %2, 0, %1"  : "=v"(top), "+s"(carry)
                                                         : "v"(u[1]));
+#else
+                uint64_t s = (uint64_t)u[1] + (carry & 1);
+                top = (uint32_t)s;
+                carry = (cond_t)(s >> 32);
+#endif
             }
         }
 
@@ -220,6 +321,14 @@ public:
     static inline const mont_t& one()
     {   return *reinterpret_cast<const mont_t*>(ONE);   }
 
+    static inline mont_t one(int or_zero)
+    {
+        mont_t ret;
+        for (size_t i = 0; i < n; i++)
+            ret[i] = or_zero ? 0 : ONE[i];
+        return ret;
+    }
+
     inline void zero()
     {
         if (n%4 == 0) {
@@ -236,35 +345,139 @@ public:
     friend inline mont_t czero(const mont_t& a, int set_z)
     {
         mont_t ret;
-        cond_t cond;
 
+#if defined(__HIP_DEVICE_COMPILE__)
+        cond_t cond;
         asm("v_cmp_ne_u32  %0, %1, 0"           : "=s"(cond)
                                                 : "v"(set_z));
         for (size_t i=0; i<n; i++)
             asm("v_cndmask_b32 %0, %1, 0, %2"   : "=v"(ret[i])
                                                 : "v"(a[i]), "s"(cond));
+#else
+        uint32_t keep = set_z ? 0 : 0xffffffff;
+        for (size_t i=0; i<n; i++)
+            ret[i] = a[i] & keep;
+#endif
         return ret;
     }
 
     static inline mont_t csel(const mont_t& a, const mont_t& b, int sel_a)
     {
         mont_t ret;
-        cond_t cond;
 
+#if defined(__HIP_DEVICE_COMPILE__)
+        cond_t cond;
         asm("v_cmp_ne_u32  %0, %1, 0"           : "=s"(cond)
                                                 : "v"(sel_a));
         for (size_t i=0; i<n; i++)
             asm("v_cndmask_b32 %0, %1, %2, %3"  : "=v"(ret[i])
                                                 : "v"(b[i]), "v"(a[i]), "s"(cond));
+#else
+        for (size_t i=0; i<n; i++)
+            ret[i] = sel_a ? a[i] : b[i];
+#endif
         return ret;
     }
 
+    // Cross-lane operations are device-only; the host path never reaches them.
     inline void shfl_bfly(uint32_t laneMask)
     {
+#if defined(__HIP_DEVICE_COMPILE__)
         uint32_t idx = (threadIdx.x ^ laneMask) << 2;
 
         for (size_t i=0; i<n; i++)
             val[i] = __builtin_amdgcn_ds_bpermute(idx, val[i]);
+#else
+        (void)laneMask;
+#endif
+    }
+
+    inline mont_t shfl(uint32_t idx, uint32_t mask = 0xffffffff) const
+    {
+        mont_t ret = *this;
+
+#if defined(__HIP_DEVICE_COMPILE__)
+        for (size_t i = 0; i < n; i++)
+            ret[i] = __shfl_sync(mask, val[i], idx);
+#else
+        (void)idx; (void)mask;
+#endif
+        return ret;
+    }
+
+    inline bool is_zero() const
+    {
+        uint32_t acc = val[0];
+
+        for (size_t i = 1; i < n; i++)
+            acc |= val[i];
+
+        return acc == 0;
+    }
+
+    inline bool is_zero(const mont_t& a) const
+    {
+        uint32_t acc = val[0] | a[0];
+
+        for (size_t i = 1; i < n; i++)
+            acc |= val[i] | a[i];
+
+        return acc == 0;
+    }
+
+    inline bool is_one() const
+    {
+        uint32_t acc = val[0] ^ ONE[0];
+
+        for (size_t i = 1; i < n; i++)
+            acc |= val[i] ^ ONE[i];
+
+        return acc == 0;
+    }
+
+    inline mont_t& cneg(bool flag)
+    {
+        uint32_t tmp[n];
+        bool nz = !is_zero();
+        uint64_t borrow = 0;
+
+        for (size_t i = 0; i < n; i++) {
+            uint64_t d = (uint64_t)MOD[i] - val[i] - borrow;
+            tmp[i] = (uint32_t)d;
+            borrow = (d >> 32) & 1;
+        }
+
+        if (flag && nz)
+            for (size_t i = 0; i < n; i++)
+                val[i] = tmp[i];
+
+        return *this;
+    }
+    static inline mont_t cneg(mont_t a, bool flag)
+    {   return a.cneg(flag);   }
+
+    inline mont_t operator-() const
+    {   return cneg(*this, true);   }
+
+    // make the value "positive" and return the original "sign"
+    inline bool abs()
+    {
+        uint32_t tmp[n];
+        uint64_t borrow = 0;
+
+        for (size_t i = 0; i < n; i++) {
+            uint64_t d = (uint64_t)MOD[i] - val[i] - borrow;
+            tmp[i] = (uint32_t)d;
+            borrow = (d >> 32) & 1;
+        }
+
+        bool sign = tmp[n-1] < val[n-1];
+
+        if (sign)
+            for (size_t i = 0; i < n; i++)
+                val[i] = tmp[i];
+
+        return sign;
     }
 
 private:
@@ -273,6 +486,7 @@ private:
         cond_t borrow;
         uint32_t tmp[n];
 
+#if defined(__HIP_DEVICE_COMPILE__)
         asm("v_sub_co_u32   %0, %1, %2, %3"         : "=v"(tmp[0]), "=s"(borrow)
                                                     : "v"(val[0]), "v"(MOD[0]));
         for (size_t i=1; i<n; i++)
@@ -284,6 +498,19 @@ private:
             asm("v_cndmask_b32  %0, %0, %1, %2"     : "+v"(val[i])
                                                     : "v"(tmp[i]), "s"(carry));
         noop();
+#else
+        uint64_t bw = 0;
+        for (size_t i=0; i<n; i++) {
+            uint64_t d = (uint64_t)val[i] - MOD[i] - bw;
+            tmp[i] = (uint32_t)d;
+            bw = (d >> 32) & 1;
+        }
+        borrow = (cond_t)bw;
+        // subtract MOD when there was an incoming carry OR val >= MOD (no borrow)
+        if ((carry & 1) || !borrow)
+            for (size_t i=0; i<n; i++)
+                val[i] = tmp[i];
+#endif
     }
 
     inline void mul_by_1()
