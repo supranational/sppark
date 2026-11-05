@@ -1,0 +1,101 @@
+name: gpu-sim
+
+# Optional, non-required check. The runners have no GPU, so this runs the
+# poc/ntt-cuda and poc/msm-cuda tests on a simulated NVIDIA H100
+# (https://github.com/pantheongpu/pantheonsim). A simulator cannot reproduce
+# hardware-specific behaviour or timing, so it complements real-GPU testing
+# and does not replace it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+    paths:
+    - '.github/workflows/gpu-sim.yml'
+    - 'ec/**'
+    - 'ff/**'
+    - 'msm/**'
+    - 'ntt/**'
+    - 'poc/msm-cuda/**'
+    - 'poc/ntt-cuda/**'
+    - 'rust/**'
+    - 'util/**'
+
+concurrency:
+  group: gpu-sim-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-test-simulated-gpu:
+    name: cargo test on a simulated H100
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+
+    - name: Set up the simulated GPU and CUDA toolkit
+      uses: pantheongpu/setup-pantheonsim@dda0c8df8d72627c295edbae525354ba2bcb1687 # v0.1.4
+      with:
+        gpu: nvidia/h100
+        cuda-toolkit: "13.0"
+
+    - name: Adjust the build for the simulator
+      shell: bash
+      run: |
+        # The simulator JIT-compiles PTX and does not run SASS, and the build
+        # has to link the shared CUDA runtime. Edit the checkout on the runner
+        # only.
+        sed -i 's|nvcc.flag("-arch=native");|nvcc.flag("-gencode").flag("arch=compute_80,code=compute_80");|;
+                s|nvcc.cuda(true);|nvcc.cuda(true);\n            nvcc.cudart("shared");|' \
+            rust/src/build.rs
+        sed -i 's|nvcc.cuda(true);|nvcc.cuda(true);\n        nvcc.cudart("shared");|' rust/build.rs
+        git diff --stat
+        command -v nvcc
+        cudart=$(ls /usr/local/cuda-*/targets/*/lib/libcudart.so /usr/local/cuda-*/lib64/libcudart.so 2>/dev/null | head -n1)
+        echo "libcudart: $cudart"
+        echo "RUSTFLAGS=-L native=$(dirname "$cudart")" >> "$GITHUB_ENV"
+        # Keep the domain sizes small, the simulated GPU is slow.
+        sed -i 's|1\.\.24 + 4 \* !cfg!(debug_assertions) as i32|1..17|;
+                s|1\.\.20 + 4 \* !cfg!(debug_assertions) as i32|1..14|' \
+            poc/ntt-cuda/tests/ntt.rs
+        git diff --stat
+
+    - name: Build the tests
+      shell: bash
+      run: |
+        ( cd poc/ntt-cuda
+          cargo update
+          cargo test --release --no-run --features=gl64
+          cargo test --release --no-run --features=bb31
+          cargo test --release --no-run --features=bls12_381
+        )
+        ( cd poc/msm-cuda
+          cargo update
+          cargo test --release --no-run --features=bls12_381,quiet --test msm
+        )
+
+    - name: Test poc/ntt-cuda
+      shell: bash
+      run: |
+        cd poc/ntt-cuda
+        vgpu run cargo test --release --features=gl64 -- --nocapture
+        vgpu run cargo test --release --features=bb31 -- --nocapture
+        vgpu run cargo test --release --features=bls12_381 -- --nocapture
+
+    - name: Test poc/msm-cuda
+      shell: bash
+      run: |
+        cd poc/msm-cuda
+        # msm_fp2_correctness (G2) fails on a real RTX 3060 too (CUDA 13.0, bls12_381),
+        # so it is left out here.
+        TEST_NPOW=12 vgpu run cargo test --release --features=bls12_381,quiet --test msm -- --nocapture --skip msm_fp2_correctness
