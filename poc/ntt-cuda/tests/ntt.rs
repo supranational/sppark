@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
 use sppark::NTTInputOutputOrder;
 
 const DEFAULT_GPU: usize = 0;
@@ -16,7 +17,10 @@ fn gl64_self_consistency() {
         fr % 0xffffffff00000001
     }
 
-    for lg_domain_size in 1..24 + 4 * !cfg!(debug_assertions) as i32 {
+    let test_npow = std::env::var("TEST_NPOW").unwrap_or("24".to_string());
+    let test_npow = i32::from_str(&test_npow).unwrap();
+
+    for lg_domain_size in 1..test_npow + 4 * !cfg!(debug_assertions) as i32 {
         let domain_size = 1usize << lg_domain_size;
 
         let v: Vec<u64> = (0..domain_size).map(|_| random_fr()).collect();
@@ -52,7 +56,10 @@ fn bb31_self_consistency() {
         fr % 0x78000001
     }
 
-    for lg_domain_size in 1..24 + 4 * !cfg!(debug_assertions) as i32 {
+    let test_npow = std::env::var("TEST_NPOW").unwrap_or("24".to_string());
+    let test_npow = i32::from_str(&test_npow).unwrap();
+
+    for lg_domain_size in 1..test_npow + 4 * !cfg!(debug_assertions) as i32 {
         let domain_size = 1usize << lg_domain_size;
 
         let v: Vec<u32> = (0..domain_size).map(|_| random_fr()).collect();
@@ -111,7 +118,10 @@ fn test_against_arkworks() {
     >(
         rng: &mut R,
     ) {
-        for lg_domain_size in 1..20 + 4 * !cfg!(debug_assertions) as i32 {
+        let test_npow = std::env::var("TEST_NPOW").unwrap_or("20".to_string());
+        let test_npow = i32::from_str(&test_npow).unwrap();
+
+        for lg_domain_size in 1..test_npow + 4 * !cfg!(debug_assertions) as i32 {
             let domain_size = 1usize << lg_domain_size;
 
             let domain = D::new(domain_size).unwrap();
