@@ -37,6 +37,7 @@ pub fn ccmd() -> cc::Build {
 
             nvcc.cuda(true);
             if cfg!(feature = "build-poc") {
+                nvcc.cudart("shared");
                 nvcc.flag("-arch=native");
             } else {
                 nvcc.flag("-gencode")
@@ -98,9 +99,9 @@ pub fn ccmd() -> cc::Build {
                     hipcc.flag("--offload-arch=gfx950");
                 }
                 hipcc.flag("--offload-arch=gfx942,gfx90a,gfx908");
-                if let Ok(ncpus) = std::thread::available_parallelism() {
-                    hipcc.flag_if_supported(format!("-parallel-jobs={}", ncpus).as_str());
-                }
+            }
+            if let Ok(ncpus) = std::thread::available_parallelism() {
+                hipcc.flag_if_supported(format!("-parallel-jobs={}", ncpus).as_str());
             }
             common_flags(&mut hipcc);
             hipcc.flag("-include").flag("util/cuda2hip.hpp");
