@@ -1,0 +1,170 @@
+name: gpu-sim
+
+on:
+  push:
+    branches:
+    - '**'
+  workflow_dispatch:
+    branches:
+    - '**'
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  gpu-sim-test:
+    runs-on: ubuntu-26.04
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Get date
+      id: get-date
+      run: echo "date=$(date -u +%Y-%m)" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          **/Cargo.lock
+          **/target
+          go/pkg
+        key: ${{ runner.os }}-gpu-sim-${{ steps.get-date.outputs.date }}
+
+    - name: Environment
+      shell: bash
+      run: |
+        lscpu 2>/dev/null && echo --- || true
+        env | sort
+
+    - name: Pull the PantheonSim docker image
+      shell: bash
+      run: |
+        docker pull ghcr.io/pantheongpu/pantheonsim
+        mkdir -p ~/.local/bin
+        echo '#!/bin/bash'                                      >  ~/.local/bin/vgpu
+        echo 'args=()'                                          >> ~/.local/bin/vgpu
+        echo 'for arg in "$@"; do'                              >> ~/.local/bin/vgpu
+        echo '    if [ -f $arg ]; then'                         >> ~/.local/bin/vgpu
+        echo '        arg=`realpath --relative-to=$(pwd) $arg`' >> ~/.local/bin/vgpu
+        echo '    fi'                                           >> ~/.local/bin/vgpu
+        echo '    args+=("$arg")'                               >> ~/.local/bin/vgpu
+        echo 'done'                                             >> ~/.local/bin/vgpu
+        echo 'docker run --volume `pwd`:/pwd --workdir=/pwd \'  >> ~/.local/bin/vgpu
+        echo '       --env TEST_NPOW=${TEST_NPOW:-13} \'        >> ~/.local/bin/vgpu
+        echo '       --rm ghcr.io/pantheongpu/pantheonsim \'    >> ~/.local/bin/vgpu
+        echo '       vgpu "${args[@]}"'                         >> ~/.local/bin/vgpu
+        chmod a+x ~/.local/bin/vgpu
+        vgpu list-gpus
+
+    - name: Install cuda-minimal-build-13-1
+      shell: bash
+      run: |
+        # https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=26.04&target_type=deb_network
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb
+        sudo dpkg -i cuda-keyring_1.1-1_all.deb
+        sudo apt-get update
+        sudo apt-get -y install cuda-minimal-build-13-1
+        [ -d /usr/local/cuda-13.1/bin ]
+
+    - name: Test poc/ntt-cuda with cuda-13.1
+      shell: bash
+      run: |
+        rustc --version --verbose
+        triplet=`rustc -vV | awk '/host:/ {print $2}' | tr 'a-z-' 'A-Z_'`
+        export CARGO_TARGET_${triplet}_RUNNER="vgpu run --gpu nvidia/t4"
+        export PATH=$PATH:/usr/local/cuda-13.1/bin
+        ( cd poc/ntt-cuda
+          cargo update
+          echo ---
+          cargo test --release --features=bls12_381
+          echo ---
+          cargo test --release --features=gl64
+          echo ---
+          cargo test --release --features=bb31
+          echo ---
+          cargo clean -p ntt-cuda
+          cargo clean -p ntt-cuda --release
+          cargo clean -p sppark
+          cargo clean -p sppark --release
+        )
+
+    - name: Test poc/msm-cuda with cuda-13.1
+      shell: bash
+      run: |
+        rustc --version --verbose
+        triplet=`rustc -vV | awk '/host:/ {print $2}' | tr 'a-z-' 'A-Z_'`
+        export CARGO_TARGET_${triplet}_RUNNER="vgpu run --gpu nvidia/t4"
+        export PATH=$PATH:/usr/local/cuda-13.1/bin
+        ( cd poc/msm-cuda
+          sed "s/^crit/#crit/" Cargo.toml > Cargo.$$.toml && \
+          mv Cargo.$$.toml Cargo.toml
+          cargo update
+          echo ---
+          cargo test --release --features=bls12_381,quiet -- --skip msm_fp2_correctness
+          echo ---
+          cargo test --release --features=bn254,quiet -- --skip msm_fp2_correctness
+          echo ---
+          cargo clean -p msm-cuda
+          cargo clean -p msm-cuda --release
+          cargo clean -p sppark
+          cargo clean -p sppark --release
+        )
+
+    - name: Install hipcc
+      shell: bash
+      run: |
+        sudo apt-get -qqq update
+        sudo apt-get -qqq install hipcc
+        echo ---
+        hipcc --version
+        amdgpu_arch=`hipcc -print-prog-name=amdgpu-arch`
+        if [ -f $amdgpu_arch ]; then
+            echo ---
+            sudo rm $amdgpu_arch
+            echo "#!/bin/sh"    | sudo tee $amdgpu_arch    > /dev/null
+            echo "echo gfx1100" | sudo tee -a $amdgpu_arch > /dev/null
+            echo "echo gfx90a"  | sudo tee -a $amdgpu_arch > /dev/null
+            sudo chmod a+x $amdgpu_arch
+            $amdgpu_arch
+        fi
+
+    - name: Test poc/ntt-cuda with hipcc
+      shell: bash
+      run: |
+        rustc --version --verbose
+        triplet=`rustc -vV | awk '/host:/ {print $2}' | tr 'a-z-' 'A-Z_'`
+        export CARGO_TARGET_${triplet}_RUNNER="vgpu run --gpu amd/mi250x"
+        ( cd poc/ntt-cuda
+          cargo update
+          echo ---
+          cargo test --release --features=bls12_381
+          echo ---
+          cargo test --release --features=gl64
+          echo ---
+          cargo test --release --features=bb31
+          echo ---
+          cargo clean -p ntt-cuda
+          cargo clean -p ntt-cuda --release
+          cargo clean -p sppark
+          cargo clean -p sppark --release
+        )
+
+    - name: Clean up
+      shell: bash
+      run: |
+        ( cd poc/ntt-cuda
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
+        )
+        ( cd poc/msm-cuda
+          rm -rf target/.rustc_info.json
+          rm -rf target/package
+          rm -rf target/{debug,release}/incremental
+          rm -rf target/*/{debug,release}/incremental
+        )
+        rm -rf ~/.cargo/registry/src
+        rm -rf ~/.cargo/registry/index/*/.cache
