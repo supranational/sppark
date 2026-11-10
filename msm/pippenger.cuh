@@ -1,12 +1,17 @@
 // Copyright Supranational LLC
+// Copyright (c) 2026 Advanced Micro Devices, Inc.
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef __SPPARK_MSM_PIPPENGER_CUH__
 #define __SPPARK_MSM_PIPPENGER_CUH__
 
-#include <cuda.h>
-#include <cooperative_groups.h>
+#if defined(__HIPCC__)
+# include <hip/hip_runtime.h>
+#else
+# include <cuda.h>
+# include <cooperative_groups.h>
+#endif
 #include <cassert>
 
 #include <util/vec2d_t.hpp>
@@ -28,7 +33,7 @@
  * Break down |scalars| to signed |wbits|-wide digits.
  */
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
 // Transposed scalar_t
 template<class scalar_t>
 class scalar_T {
@@ -76,7 +81,7 @@ void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
 {
     assert(len <= (1U<<31) && wbits < 32);
 
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     extern __shared__ scalar_T<scalar_t> xchange[];
     const uint32_t tid = threadIdx.x;
     const uint32_t tix = threadIdx.x + blockIdx.x*blockDim.x;
@@ -142,22 +147,44 @@ void breakdown(vec2d_t<uint32_t> digits, const scalar_t scalars[], size_t len,
 # error "invalid MSM_NSTREAMS"
 #endif
 
+// Persistent per-stream work-queue counter for accumulate(). Hoisted to namespace
+// scope (it was a function-local static __device__) so the non-cooperative path can
+// zero it from a separate reset kernel before each launch. The cooperative path
+// resets it in-kernel after a grid.sync, exactly as before.
+static __device__ uint32_t accumulate_streams[MSM_NSTREAMS];
+
+// Zero one accumulate work-queue counter. Used only by the non-cooperative path,
+// which cannot reset the counter in-kernel (that needs a grid-wide barrier).
+// Templated so the definition has vague linkage in a header.
+template<bool = true>
+__global__ void reset_accumulate_counter(uint32_t sid)
+{
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+    accumulate_streams[sid % MSM_NSTREAMS] = 0;
+#endif
+}
+
 template<class bucket_t,
          class affine_h,
-         class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         bool COOP = true,
+         class bucket_h = typename bucket_t::mem_t,
+         class affine_t = typename bucket_t::affine_t>
 __launch_bounds__(ACCUMULATE_NTHREADS) __global__
 void accumulate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits,
                 /*const*/ affine_h points_[], const vec2d_t<uint32_t> digits,
                 const vec2d_t<uint32_t> histogram, uint32_t sid = 0)
 {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     vec2d_t<bucket_h> buckets{buckets_, 1U<<--wbits};
     const affine_h* points = points_;
 
-    static __device__ uint32_t streams[MSM_NSTREAMS];
-    uint32_t& current = streams[sid % MSM_NSTREAMS];
+    uint32_t& current = accumulate_streams[sid % MSM_NSTREAMS];
+#if defined(__HIPCC__)
+    uint32_t laneid = threadIdx.x % WARP_SZ;
+#else
     uint32_t laneid;
     asm("mov.u32 %0, %laneid;" : "=r"(laneid));
+#endif
     const uint32_t degree = bucket_t::degree;
     const uint32_t warp_sz = WARP_SZ / degree;
     const uint32_t lane_id = laneid / degree;
@@ -182,10 +209,16 @@ void accumulate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits,
 
         uint32_t idx, len = h[0];
 
+#if defined(__HIPCC__)
+        idx = __shfl_up_sync(0xffffffff, len, degree, WARP_SZ);
+        if ((threadIdx.x % WARP_SZ) < degree)
+            idx = 0;
+#else
         asm("{ .reg.pred %did;"
             "  shfl.sync.up.b32 %0|%did, %1, %2, 0, 0xffffffff;"
             "  @!%did mov.b32 %0, 0;"
             "}" : "=r"(idx) : "r"(len), "r"(degree));
+#endif
 
         if (lane_id == 0 && x != 0)
             idx = h[-1];
@@ -216,16 +249,28 @@ void accumulate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits,
         x = __shfl_sync(0xffffffff, x, 0) + lane_id;
     }
 
-    cooperative_groups::this_grid().sync();
-
-    if (threadIdx.x + blockIdx.x == 0)
-        current = 0;
+    // The grid-wide barrier exists only so every block finishes draining the work
+    // queue before block 0 resets |current| for the next launch. On GPUs without
+    // cooperative launch (COOP == false) the host resets the counter with
+    // reset_accumulate_counter before each launch instead, and the following
+    // integrate kernel's launch boundary fences the bucket writes either way.
+    if constexpr (COOP) {
+#if defined(__HIP_DEVICE_COMPILE__)
+        SPPARK_GRID_SYNC();
+#elif defined(__CUDA_ARCH__)
+        cooperative_groups::this_grid().sync();
+#endif
+        if (threadIdx.x + blockIdx.x == 0)
+            current = 0;
+    }
+#endif
 }
 
-template<class bucket_t, class bucket_h = class bucket_t::mem_t>
+template<class bucket_t, class bucket_h = typename bucket_t::mem_t>
 __launch_bounds__(256) __global__
 void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbits)
 {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     const uint32_t degree = bucket_t::degree;
     uint32_t Nthrbits = 31 - __clz(blockDim.x / degree);
 
@@ -293,6 +338,7 @@ void integrate(bucket_h buckets_[], uint32_t nwins, uint32_t wbits, uint32_t nbi
 
     buckets[bid][2*tid] = p;
     buckets[bid][2*tid+1] = acc;
+#endif
 }
 #undef asm
 
@@ -317,14 +363,15 @@ void breakdown<scalar_t>(vec2d_t<uint32_t> digits, const scalar_t scalars[],
 #endif
 
 #include <vector>
+#include <cstdlib>
 
 #include <util/exception.cuh>
 #include <util/rusterror.h>
 #include <util/gpu_t.cuh>
 
 template<class bucket_t, class point_t, class affine_t, class scalar_t,
-         class affine_h = class affine_t::mem_t,
-         class bucket_h = class bucket_t::mem_t>
+         class affine_h = typename affine_t::mem_t,
+         class bucket_h = typename bucket_t::mem_t>
 class msm_t {
     const gpu_t& gpu;
     size_t npoints;
@@ -333,6 +380,7 @@ class msm_t {
     affine_h *d_points;
     scalar_t *d_scalars;
     vec2d_t<uint32_t> d_hist;
+    bool coop;      // device supports cooperative launch (Global Wave Sync)
 
     template<typename T> using vec_t = slice_t<T>;
 
@@ -352,6 +400,15 @@ public:
           size_t ffi_affine_sz = sizeof(affine_t), int device_id = -1)
         : gpu(select_gpu(device_id)), d_points(nullptr), d_scalars(nullptr)
     {
+        // Cooperative launch (hipLaunchCooperativeKernel / cudaLaunchCooperative-
+        // Kernel) needs Global Wave Sync, which some GPUs/runtimes lack (RDNA4 has
+        // no GWS; Windows ROCm under-reports it on RDNA3). When absent, the MSM
+        // sort/accumulate kernels are driven through the non-cooperative fallback.
+        // SPPARK_FORCE_NONCOOP forces that path for testing on capable GPUs.
+        coop = gpu.props().cooperativeLaunch != 0;
+        if (getenv("SPPARK_FORCE_NONCOOP"))
+            coop = false;
+
         npoints = (np+WARP_SZ-1) & ((size_t)0-WARP_SZ);
 
         wbits = 17;
@@ -395,6 +452,66 @@ public:
     }
 
 private:
+    // Launch one (1- or 2-window) radix sort. With cooperative launch this is the
+    // single persistent `sort` kernel; without it, the two-level pass is split into
+    // sort_upper_count -> sort_upper_scatter -> sort_lower (same grid/block, kernel
+    // boundaries standing in for the grid-wide barriers), and the small single-block
+    // case reuses `sort` with gridDim.x == 1 (it has no barrier).
+    void launch_sort(const stream_t& s, dim3 grid, size_t shared_sz,
+                     vec2d_t<uint32_t> inouts, size_t len, uint32_t win,
+                     vec2d_t<uint2> temps, vec2d_t<uint32_t> histograms,
+                     uint32_t kwbits, uint32_t lsbits0, uint32_t lsbits1)
+    {
+        if (coop) {
+            s.launch_coop(sort, {grid, SORT_BLOCKDIM, shared_sz},
+                          inouts, len, win, temps, histograms,
+                          kwbits, lsbits0, lsbits1);
+            return;
+        }
+
+        int lg = lg2(grid.x);
+        bool two_level = (kwbits > DIGIT_BITS) ||
+                         (lg && kwbits > (uint32_t)lg + 1);
+        if (two_level) {
+            sort_upper_count<<<grid, SORT_BLOCKDIM, shared_sz, s>>>(
+                inouts, len, win, temps, histograms, kwbits, lsbits0, lsbits1);
+            CUDA_OK(cudaGetLastError());
+            sort_upper_scatter<<<grid, SORT_BLOCKDIM, shared_sz, s>>>(
+                inouts, len, win, temps, histograms, kwbits, lsbits0, lsbits1);
+            CUDA_OK(cudaGetLastError());
+            sort_lower<<<grid, SORT_BLOCKDIM, shared_sz, s>>>(
+                inouts, len, win, temps, histograms, kwbits, lsbits0, lsbits1);
+            CUDA_OK(cudaGetLastError());
+        } else {
+            grid.x = 1;
+            sort<<<grid, SORT_BLOCKDIM, shared_sz, s>>>(
+                inouts, len, win, temps, histograms, kwbits, lsbits0, lsbits1);
+            CUDA_OK(cudaGetLastError());
+        }
+    }
+
+    // Launch the bucket accumulation. With cooperative launch it is the persistent
+    // `accumulate` kernel (resets its work queue in-kernel after a grid.sync);
+    // without it, the work-queue counter is zeroed by a tiny reset kernel beforehand
+    // and the COOP=false instantiation drops the trailing barrier/reset.
+    void launch_accumulate(const stream_t& s, uint32_t sid, bucket_h* buckets_,
+                           affine_h* points_, vec2d_t<uint32_t> d_digits)
+    {
+        if (coop) {
+            s.launch_coop(accumulate<bucket_t, affine_h, true>,
+                {gpu.sm_count(), 0},
+                buckets_, nwins, wbits, points_, d_digits, d_hist, sid);
+            return;
+        }
+
+        reset_accumulate_counter<><<<1, 1, 0, s>>>(sid);
+        CUDA_OK(cudaGetLastError());
+        accumulate<bucket_t, affine_h, false>
+            <<<gpu.sm_count(), ACCUMULATE_NTHREADS, 0, s>>>(
+                buckets_, nwins, wbits, points_, d_digits, d_hist, sid);
+        CUDA_OK(cudaGetLastError());
+    }
+
     void digits(const scalar_t d_scalars[], size_t len,
                 vec2d_t<uint32_t>& d_digits, vec2d_t<uint2>&d_temps, bool mont)
     {
@@ -432,14 +549,14 @@ private:
         uint32_t top = scalar_t::bit_length() - wbits * (nwins-1);
         uint32_t win;
         for (win = 0; win < nwins-1; win += 2) {
-            gpu[2].launch_coop(sort, {{grid_size, 2}, SORT_BLOCKDIM, shared_sz},
-                            d_digits, len, win, d_temps, d_hist,
-                            wbits-1, wbits-1, win == nwins-2 ? top-1 : wbits-1);
+            launch_sort(gpu[2], {grid_size, 2}, shared_sz,
+                        d_digits, len, win, d_temps, d_hist,
+                        wbits-1, wbits-1, win == nwins-2 ? top-1 : wbits-1);
         }
         if (win < nwins) {
-            gpu[2].launch_coop(sort, {{grid_size, 1}, SORT_BLOCKDIM, shared_sz},
-                            d_digits, len, win, d_temps, d_hist,
-                            wbits-1, top-1, 0u);
+            launch_sort(gpu[2], {grid_size, 1}, shared_sz,
+                        d_digits, len, win, d_temps, d_hist,
+                        wbits-1, top-1, 0u);
         }
 #endif
     }
@@ -512,10 +629,8 @@ public:
                 );
                 CUDA_OK(cudaGetLastError());
 
-                gpu[i&1].launch_coop(accumulate<bucket_t, affine_h>,
-                    {gpu.sm_count(), 0},
-                    d_buckets, nwins, wbits, &d_points[d_off], d_digits, d_hist, i&1
-                );
+                launch_accumulate(gpu[i&1], i&1, d_buckets, &d_points[d_off],
+                                  d_digits);
                 gpu[i&1].record(ev);
 
                 integrate<bucket_t><<<nwins, MSM_NTHREADS,

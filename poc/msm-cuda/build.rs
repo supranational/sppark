@@ -90,24 +90,58 @@ fn main() {
     if cfg!(target_os = "windows") && !cfg!(target_env = "msvc") {
         return;
     }
-    // Detect if there is CUDA compiler and engage "cuda" feature accordingly
+    // Detect a CUDA (nvcc) or ROCm (hipcc) compiler and compile the GPU MSM
+    // accordingly. nvcc is preferred when both are present; set NVCC=off to
+    // force the ROCm path. The sppark build dependency auto-detects the same
+    // toolchain and exports DEP_SPPARK_TARGET, which sppark::build::ccmd()
+    // reads to return the matching cc::Build (CUDA or ROCm).
+    println!("cargo:rerun-if-env-changed=NVCC");
     let nvcc = match env::var("NVCC") {
         Ok(var) => which::which(var),
         Err(_) => which::which("nvcc"),
     };
+    println!("cargo:rerun-if-env-changed=HIPCC");
+    let hipcc = match env::var("HIPCC") {
+        Ok(var) => which::which(var),
+        Err(_) => which::which("hipcc"),
+    };
 
-    if nvcc.is_ok() {
-        let mut nvcc: cc::Build = sppark::build::ccmd();
-        if cfg!(feature = "quiet") {
-            nvcc.flag("-diag-suppress=177"); // bug in the warning system.
+    let backend = if nvcc.is_ok() {
+        Some("cuda")
+    } else if hipcc.is_ok() {
+        Some("rocm")
+    } else {
+        None
+    };
+
+    if let Some(backend) = backend {
+        // bn254 (alt_bn128) G1 MSM is not yet supported on the ROCm/HIP backend:
+        // the kernel hangs the GPU for this curve (see the project notes for the
+        // deferred bn254-on-ROCm investigation). Refuse the combination up front
+        // so a user never builds a binary that wedges the device. bls12_381 and
+        // bls12_377 G1 MSM are fully supported on ROCm.
+        if backend == "rocm" && cfg!(feature = "bn254") {
+            panic!(
+                "the bn254 curve is not yet supported on the ROCm/HIP MSM backend; \
+                 use bls12_381 or bls12_377, or the CUDA backend for bn254"
+            );
         }
-        nvcc.define(curve, None);
+        let mut ccmd: cc::Build = sppark::build::ccmd();
+        if backend == "cuda" && cfg!(feature = "quiet") {
+            ccmd.flag("-diag-suppress=177"); // bug in the warning system.
+        }
+        ccmd.define(curve, None);
         if let Some(def) = cc_opt {
-            nvcc.define(def, None);
+            ccmd.define(def, None);
         }
-        nvcc.file("cuda/pippenger_inf.cu").compile("blst_cuda_msm");
+        if backend == "rocm" {
+            // The MSM kernels pass CUDA's 32-bit warp mask; suppress ROCm 7's
+            // native 64-bit-mask *_sync builtins so the compat polyfills apply.
+            ccmd.define("SPPARK_DISABLE_NATIVE_WARP_SYNC", None);
+        }
+        ccmd.file("cuda/pippenger_inf.cu").compile("blst_cuda_msm");
 
-        println!("cargo:rustc-cfg=feature=\"cuda\"");
+        println!("cargo:rustc-cfg=feature=\"{}\"", backend);
         println!("cargo:rerun-if-changed=cuda");
         println!("cargo:rerun-if-env-changed=CXXFLAGS");
     }

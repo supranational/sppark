@@ -7,7 +7,7 @@
 
 #include "affine_t.hpp"
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 # pragma nv_diag_suppress 284   // NULL reference is not allowed
 #endif
 
@@ -39,7 +39,7 @@ public:
         return affine_t{xa, ya};
     }
 
-#ifdef __CUDACC__ // mask a warning
+#if defined(__CUDACC__) || defined(__HIPCC__) // mask a warning
     inline jacobian_t& operator=(const affine_t& a)
     {
         X = a.X;
@@ -387,7 +387,7 @@ public:
      */
     void add(const jacobian_t& p2)
     {
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
         jacobian_t p1 = *this;
 #else
         jacobian_t &p1 = *this;
@@ -479,7 +479,7 @@ public:
 
     void add(const affine_t& p2)
     {
-#ifdef __CUDA_ARCH__
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
         jacobian_t p1 = *this;
 #else
         jacobian_t &p1 = *this;
@@ -586,7 +586,7 @@ public:
     {   return !p1.eq(p2);   }
 };
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 # pragma nv_diag_default 284
 #endif
 #endif

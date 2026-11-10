@@ -13,6 +13,16 @@
 # endif
 #endif
 
+// ROCm 7's native __shfl_*_sync / __ballot_sync builtins require a 64-bit lane
+// mask and static_assert on a 32-bit one. The MSM kernels pass CUDA's 32-bit
+// 0xffffffff mask with logical-32-lane-warp semantics, so those translation
+// units suppress the native builtins (-DSPPARK_DISABLE_NATIVE_WARP_SYNC) and use
+// the CUDA-compatible 32-bit-mask polyfills below. NTT does not use the *_sync
+// shuffles but does rely on the native __syncwarp memory ordering, so it keeps
+// the native builtins.
+#if defined(SPPARK_DISABLE_NATIVE_WARP_SYNC)
+# define HIP_DISABLE_WARP_SYNC_BUILTINS
+#endif
 #include <hip/hip_runtime.h>
 #ifdef NDEBUG
 # define assert(e) (void)(e)
@@ -121,9 +131,21 @@ cudaLaunchCooperativeKernel(const T* func, dim3 gridDim, dim3 blockDim,
                                       stream);
 }
 
-#if HIP_VERSION_MAJOR < 7
+#if defined(SPPARK_DISABLE_NATIVE_WARP_SYNC) || HIP_VERSION_MAJOR < 7
 static inline __device__ void __syncwarp() { __builtin_amdgcn_wave_barrier(); }
 #endif
+
+/*
+ * Grid-wide barrier for a cooperative launch. The full ROCm
+ * <hip/hip_cooperative_groups.h> instantiates host-side helpers that reference
+ * __device__-only __ockl_* builtins, so it fails to compile when pulled into a
+ * translation unit that also carries host code (the MSM driver). __ockl_grid_sync
+ * is the underlying builtin and is all the kernels need. NTT includes the real
+ * header directly and is unaffected; this shim is keyed off SPPARK_GRID_SYNC so
+ * it only appears where a source explicitly opts in.
+ */
+extern "C" __device__ __attribute__((convergent)) void __ockl_grid_sync(void);
+#define SPPARK_GRID_SYNC() __ockl_grid_sync()
 
 /*
  * To match CUDA, the 3-argument polyfills below are designed to produce

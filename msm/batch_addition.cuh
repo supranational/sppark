@@ -5,8 +5,12 @@
 #ifndef __SPPARK_MSM_BATCH_ADDITION_CUH__
 #define __SPPARK_MSM_BATCH_ADDITION_CUH__
 
-#include <cuda.h>
-#include <cooperative_groups.h>
+#if defined(__HIPCC__)
+# include <hip/hip_runtime.h>
+#else
+# include <cuda.h>
+# include <cooperative_groups.h>
+#endif
 #include <vector>
 
 #include <ff/shfl.cuh>
@@ -23,13 +27,14 @@
 #endif
 
 template<class bucket_t, class affine_h,
-         class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class bucket_h = typename bucket_t::mem_t,
+         class affine_t = typename bucket_t::affine_t>
 __device__ __forceinline__
 static void add(bucket_h ret[], const affine_h points[], uint32_t npoints,
                 const uint32_t bitmap[], const uint32_t refmap[],
                 bool accumulate, uint32_t sid)
 {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     static __device__ uint32_t streams[BATCH_ADD_NSTREAMS];
     uint32_t& current = streams[sid % BATCH_ADD_NSTREAMS];
 
@@ -38,8 +43,12 @@ static void add(bucket_h ret[], const affine_h points[], uint32_t npoints,
     const uint32_t tid = (threadIdx.x + blockDim.x*blockIdx.x) / degree;
     const uint32_t xid = tid % warp_sz;
 
+#if defined(__HIPCC__)
+    uint32_t laneid = threadIdx.x % WARP_SZ;
+#else
     uint32_t laneid;
     asm("mov.u32 %0, %laneid;" : "=r"(laneid));
+#endif
 
     bucket_t acc;
     acc.inf();
@@ -104,18 +113,23 @@ static void add(bucket_h ret[], const affine_h points[], uint32_t npoints,
             acc.uadd(down); // .add() triggers spills ... in .shfl_down()
     }
 
+#if defined(__HIP_DEVICE_COMPILE__)
+    SPPARK_GRID_SYNC();
+#elif defined(__CUDA_ARCH__)
     cooperative_groups::this_grid().sync();
+#endif
 
     if (xid == 0)
         ret[tid/warp_sz] = acc;
 
     if (threadIdx.x + blockIdx.x == 0)
         current = 0;
+#endif
 }
 
 template<class bucket_t, class affine_h,
-         class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class bucket_h = typename bucket_t::mem_t,
+         class affine_t = typename bucket_t::affine_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
                     const uint32_t bitmap[], bool accumulate = false,
@@ -123,8 +137,8 @@ void batch_addition(bucket_h ret[], const affine_h points[], uint32_t npoints,
 {   add<bucket_t>(ret, points, npoints, bitmap, nullptr, accumulate, sid);   }
 
 template<class bucket_t, class affine_h,
-         class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class bucket_h = typename bucket_t::mem_t,
+         class affine_t = typename bucket_t::affine_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_diff(bucket_h ret[], const affine_h points[], uint32_t npoints,
                 const uint32_t bitmap[], const uint32_t refmap[],
@@ -132,12 +146,13 @@ void batch_diff(bucket_h ret[], const affine_h points[], uint32_t npoints,
 {   add<bucket_t>(ret, points, npoints, bitmap, refmap, accumulate, sid);   }
 
 template<class bucket_t, class affine_h,
-         class bucket_h = class bucket_t::mem_t,
-         class affine_t = class bucket_t::affine_t>
+         class bucket_h = typename bucket_t::mem_t,
+         class affine_t = typename bucket_t::affine_t>
 __launch_bounds__(BATCH_ADD_BLOCK_SIZE) __global__
 void batch_addition(bucket_h ret[], const affine_h points[], size_t npoints,
                     const uint32_t digits[], const uint32_t& ndigits)
 {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     const uint32_t degree = bucket_t::degree;
     const uint32_t warp_sz = WARP_SZ / degree;
     const uint32_t tid = (threadIdx.x + blockDim.x*blockIdx.x) / degree;
@@ -165,6 +180,7 @@ void batch_addition(bucket_h ret[], const affine_h points[], size_t npoints,
 
     if (xid == 0)
         ret[tid/warp_sz] = acc;
+#endif
 }
 
 template<class bucket_t>

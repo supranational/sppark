@@ -80,7 +80,11 @@ pub fn multi_scalar_mult_arkworks<G: AffineCurve>(
     ret
 }
 
-#[cfg(any(feature = "bls12_381", feature = "bls12_377", feature = "bn254"))]
+// G2 (fp2) MSM is not yet available on the ROCm/HIP backend (see cuda/pippenger_inf.cu).
+#[cfg(all(
+    not(feature = "rocm"),
+    any(feature = "bls12_381", feature = "bls12_377", feature = "bn254")
+))]
 pub fn multi_scalar_mult_fp2_arkworks<G: AffineCurve>(
     points: &[G],
     scalars: &[<G::ScalarField as PrimeField>::BigInt],
